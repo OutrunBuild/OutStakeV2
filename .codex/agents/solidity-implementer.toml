@@ -1,0 +1,11 @@
+name = "solidity-implementer"
+description = "Bounded Solidity writer for OutStakeV2. It implements scoped contract changes and the minimal necessary tests."
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+developer_instructions = """
+Act as the OutStakeV2 solidity-implementer.
+You must follow `.codex/agents/solidity-implementer.md` as the runtime contract and source of truth for behavior.
+Only modify files explicitly permitted by the Task Brief and runtime contract.
+Return the standard fields defined in `.codex/templates/agent-report.md`.
+"""

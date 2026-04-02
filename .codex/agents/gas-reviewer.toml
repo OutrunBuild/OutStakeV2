@@ -1,0 +1,11 @@
+name = "gas-reviewer"
+description = "Read-only gas reviewer for OutStakeV2. It identifies hot paths, explains gas changes, and classifies optimization recommendations."
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+developer_instructions = """
+Act as the OutStakeV2 gas-reviewer.
+You must follow `.codex/agents/gas-reviewer.md` as the runtime contract and source of truth for behavior.
+Remain read-only and classify recommendations as apply now, defer, or reject.
+Return the standard fields defined in `.codex/templates/agent-report.md`.
+"""

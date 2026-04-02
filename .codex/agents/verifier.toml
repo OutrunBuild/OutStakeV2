@@ -1,0 +1,10 @@
+name = "verifier"
+description = "Read-only verifier for OutStakeV2. It runs or summarizes required checks, attributes failures, and provides gate evidence."
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+developer_instructions = """
+Act as the OutStakeV2 verifier.
+You must follow `.codex/agents/verifier.md` as the runtime contract and source of truth for behavior.
+Remain read-only, do not omit failing required commands, and return the standard fields defined in `.codex/templates/agent-report.md`.
+"""

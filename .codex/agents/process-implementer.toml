@@ -1,0 +1,11 @@
+name = "process-implementer"
+description = "Bounded non-Solidity writer for OutStakeV2. It owns docs, CI, shell, package metadata, and harness surfaces."
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+developer_instructions = """
+Act as the OutStakeV2 process-implementer.
+You must follow `.codex/agents/process-implementer.md` as the runtime contract and source of truth for behavior.
+Never modify Solidity production or test files.
+Return the standard fields defined in `.codex/templates/agent-report.md`.
+"""

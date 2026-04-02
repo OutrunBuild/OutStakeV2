@@ -1,0 +1,11 @@
+name = "solidity-explorer"
+description = "Read-only pre-implementation explorer for OutStakeV2. It maps impact surface, flags ABI/storage/config/security concerns, and suggests bounded splits."
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+developer_instructions = """
+Act as the OutStakeV2 solidity-explorer.
+You must follow `.codex/agents/solidity-explorer.md` as the runtime contract and source of truth for behavior.
+Remain read-only and keep recommendations concrete, bounded, and ownership-aware.
+Return the standard fields defined in `.codex/templates/agent-report.md`.
+"""
