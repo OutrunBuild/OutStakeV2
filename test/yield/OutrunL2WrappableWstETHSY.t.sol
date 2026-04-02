@@ -16,6 +16,9 @@ contract MockERC20Token is OutrunERC20 {
 }
 
 contract MockL2StETH is OutrunERC20 {
+    error MockWrapTransferFailed();
+    error MockUnwrapTransferFailed();
+
     MockERC20Token internal immutable wstETH;
 
     constructor(address wstETH_) OutrunERC20("L2 stETH", "stETH", 18) {
@@ -23,14 +26,14 @@ contract MockL2StETH is OutrunERC20 {
     }
 
     function wrap(uint256 wrappableTokenAmount) external returns (uint256) {
-        wstETH.transferFrom(msg.sender, address(this), wrappableTokenAmount);
+        if (!wstETH.transferFrom(msg.sender, address(this), wrappableTokenAmount)) revert MockWrapTransferFailed();
         _mint(msg.sender, wrappableTokenAmount);
         return wrappableTokenAmount;
     }
 
     function unwrap(uint256 wrapperTokenAmount) external returns (uint256) {
         _burn(msg.sender, wrapperTokenAmount);
-        wstETH.transfer(msg.sender, wrapperTokenAmount);
+        if (!wstETH.transfer(msg.sender, wrapperTokenAmount)) revert MockUnwrapTransferFailed();
         return wrapperTokenAmount;
     }
 
@@ -108,7 +111,7 @@ contract OutrunL2WrappableWstETHSYTest is Test {
 
     uint256 internal constant AMOUNT = 5 ether;
     uint256 internal constant NORMALIZED_RATE = 15e17;
-    uint256 internal constant RAW_RATE = 15e26;
+    int256 internal constant RAW_RATE = 15e26;
 
     MockERC20Token internal wstETH;
     MockL2StETH internal stETH;
@@ -119,7 +122,7 @@ contract OutrunL2WrappableWstETHSYTest is Test {
     function setUp() external {
         wstETH = new MockERC20Token("Wrapped stETH", "wstETH", 18);
         stETH = new MockL2StETH(address(wstETH));
-        rawOracle = new MockRawTokenRateOracle(int256(RAW_RATE), 27);
+        rawOracle = new MockRawTokenRateOracle(RAW_RATE, 27);
         oracleAdapter = new OutrunExchangeOracleAdapter(address(rawOracle), 18);
         sy = new OutrunL2WrappableWstETHSY(
             OWNER, address(stETH), address(wstETH), address(oracleAdapter), address(stETH), 18

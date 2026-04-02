@@ -124,6 +124,7 @@ contract ReentrantRedeemReceiver {
         sy = sy_;
     }
 
+    // solhint-disable-next-line no-complex-fallback
     receive() external payable {
         uint256 sharesToReenter = reentryShares;
         if (sharesToReenter == 0) return;

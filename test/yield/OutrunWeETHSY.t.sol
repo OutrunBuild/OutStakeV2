@@ -15,6 +15,9 @@ contract MockERC20Token is OutrunERC20 {
 }
 
 contract MockWeETH is OutrunERC20 {
+    error MockWrapTransferFailed();
+    error MockUnwrapTransferFailed();
+
     MockERC20Token internal immutable eETH;
 
     constructor(address eETH_) OutrunERC20("Wrapped eETH", "weETH", 18) {
@@ -22,14 +25,14 @@ contract MockWeETH is OutrunERC20 {
     }
 
     function wrap(uint256 eETHAmount) external returns (uint256 weETHAmount) {
-        require(eETH.transferFrom(msg.sender, address(this), eETHAmount));
+        if (!eETH.transferFrom(msg.sender, address(this), eETHAmount)) revert MockWrapTransferFailed();
         _mint(msg.sender, eETHAmount);
         return eETHAmount;
     }
 
     function unwrap(uint256 weETHAmount) external returns (uint256 eETHAmount) {
         _burn(msg.sender, weETHAmount);
-        require(eETH.transfer(msg.sender, weETHAmount));
+        if (!eETH.transfer(msg.sender, weETHAmount)) revert MockUnwrapTransferFailed();
         return weETHAmount;
     }
 }

@@ -22,6 +22,8 @@ interface IOutrunRouterPrefundless {
 }
 
 contract RouterMockSY is OutrunERC20, IStandardizedYield {
+    error RouterDepositTransferFailed();
+
     address internal immutable underlying;
     uint256 internal rate;
     address internal lastDepositTokenIn;
@@ -50,7 +52,9 @@ contract RouterMockSY is OutrunERC20, IStandardizedYield {
         lastDepositAmount = amountTokenToDeposit;
         lastDepositValue = msg.value;
         if (msg.value == 0) {
-            require(RouterMockERC20(underlying).transferFrom(msg.sender, address(this), amountTokenToDeposit));
+            if (!RouterMockERC20(underlying).transferFrom(msg.sender, address(this), amountTokenToDeposit)) {
+                revert RouterDepositTransferFailed();
+            }
         }
         amountSharesOut = amountTokenToDeposit;
         _mint(receiver, amountSharesOut);
@@ -155,25 +159,29 @@ contract RouterMockUAsset is OutrunERC20, IUniversalAssets {
         _mint(receiver, amount);
     }
 
-    function burn(uint256 amount) external {
-        _burn(msg.sender, amount);
-    }
-
-    function burn(address account, uint256 amount) external {
+    function repay(address account, uint256 amount) external {
         MintingStatus storage status = mintingStatusTable[msg.sender];
         require(status.amountInMinted >= amount, ReachBurnCap());
-        if (msg.sender != account) _spendAllowance(account, msg.sender, amount);
+        _spendAllowance(account, msg.sender, amount);
         status.amountInMinted -= amount;
         _burn(account, amount);
     }
 }
 
 contract RouterMockLauncher {
+    error RouterGenesisTransferFailed();
+
+    RouterMockUAsset internal immutable uAsset;
     uint256 internal lastVerseId;
     uint128 internal lastAmountInUAsset;
     address internal lastUser;
 
+    constructor(address uAsset_) {
+        uAsset = RouterMockUAsset(uAsset_);
+    }
+
     function genesis(uint256 verseId, uint128 amountInUAsset, address user) external {
+        if (!uAsset.transferFrom(msg.sender, address(this), amountInUAsset)) revert RouterGenesisTransferFailed();
         lastVerseId = verseId;
         lastAmountInUAsset = amountInUAsset;
         lastUser = user;
@@ -185,8 +193,6 @@ contract RouterMockLauncher {
 }
 
 contract OutrunRouterTest is Test {
-    bytes4 internal constant INSUFFICIENT_U_ASSET_MINTED_SELECTOR =
-        bytes4(keccak256("InsufficientUAssetMinted(uint256,uint256)"));
     bytes4 internal constant NATIVE_AMOUNT_MISMATCH_SELECTOR = bytes4(keccak256("NativeAmountMismatch()"));
     RouterMockERC20 internal underlying;
     RouterMockSY internal sy;
@@ -203,7 +209,7 @@ contract OutrunRouterTest is Test {
         underlying = new RouterMockERC20("Mock Asset", "mAST");
         sy = new RouterMockSY(address(underlying));
         uAsset = new RouterMockUAsset();
-        launcher = new RouterMockLauncher();
+        launcher = new RouterMockLauncher(address(uAsset));
 
         position = new OutrunStakingPosition(owner, 1, revenuePool, address(sy), address(uAsset));
         router = new OutrunRouter(owner, address(launcher));
@@ -355,8 +361,9 @@ contract OutrunRouterTest is Test {
         assertEq(uAssetMinted, 100e18);
         assertEq(position.syWrapStaking(), 0);
         assertEq(position.syTotalStaking(), 100e18);
-        assertEq(uAsset.balanceOf(owner), 100e18);
-        assertEq(uAsset.balanceOf(address(launcher)), 0);
+        assertEq(uAsset.balanceOf(owner), 0);
+        assertEq(uAsset.balanceOf(address(router)), 0);
+        assertEq(uAsset.balanceOf(address(launcher)), 100e18);
         assertEq(verseId, 1);
         assertEq(launcherUAsset, 100e18);
         assertEq(launcherUser, owner);
@@ -368,7 +375,7 @@ contract OutrunRouterTest is Test {
             IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: 101e18, owner: owner});
 
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(INSUFFICIENT_U_ASSET_MINTED_SELECTOR, 100e18, 101e18));
+        vm.expectRevert(abi.encodeWithSelector(IOutrunRouter.InsufficientUAssetMinted.selector, 100e18, 101e18));
         router.stakeFromSY(address(sy), address(position), 100e18, stakeParam);
     }
 }
