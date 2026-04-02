@@ -23,6 +23,6 @@ The process layer is also wired locally:
 - `npm run process:selftest` runs process-layer selftests for policy, review-note, and gate wiring
 - `npm run quality:quick` runs scoped local checks for the changed surfaces
 - `npm run quality:gate` remains the finish gate, but in-progress unrelated product changes must still be reported separately rather than masked as success
-- `npm run codex:review` runs the manual / high-risk Codex review step; automatic flows only require it before the final verifier verdict for `prod-semantic` / `high-risk` production Solidity changes
+- `npm run codex:review` runs the manual / high-risk Codex review step; local `quality:gate` / `pre-commit` auto-runs it for `prod-semantic` / `high-risk` production Solidity changes, while `pre-push` / CI only validate the evidence chain
 
 Run `npm install && npm run hooks:install` once to configure the local `.githooks/pre-commit` and `.githooks/pre-push` entrypoints.

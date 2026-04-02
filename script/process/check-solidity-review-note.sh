@@ -201,8 +201,8 @@ codex_review_summary_field="$(read_policy_value solidity_review_note.codex_revie
 codex_review_evidence_field="$(read_policy_value solidity_review_note.codex_review_evidence_field 'Codex review evidence source')"
 codex_review_task_brief_token="$(read_policy_value verifier.codex_review.task_brief_token 'npm run codex:review')"
 codex_review_command_tokens_json="$(read_policy_value verifier.codex_review.command_tokens '["npm run codex:review","bash ./script/process/run-codex-review.sh","codex review --uncommitted","codex review"]')"
-codex_auto_required_classifications_json="$(read_policy_value verifier.auto_codex_review.required_classifications '["prod-semantic","high-risk"]')"
-codex_auto_force_env="$(read_policy_value verifier.auto_codex_review.force_env 'FORCE_CODEX_REVIEW')"
+codex_local_required_classifications_json="$(read_policy_value verifier.local_codex_review.required_classifications '["prod-semantic","high-risk"]')"
+codex_local_force_env="$(read_policy_value verifier.local_codex_review.force_env 'FORCE_CODEX_REVIEW')"
 
 REVIEW_FIELD_OWNERS="$field_owners_json" \
 REVIEW_OWNER_PREFIXED_FIELDS="$owner_prefixed_fields_json" \
@@ -247,8 +247,8 @@ CODEX_REVIEW_SUMMARY_FIELD="$codex_review_summary_field" \
 CODEX_REVIEW_EVIDENCE_FIELD="$codex_review_evidence_field" \
 CODEX_REVIEW_TASK_BRIEF_TOKEN="$codex_review_task_brief_token" \
 CODEX_REVIEW_COMMAND_TOKENS="$codex_review_command_tokens_json" \
-CODEX_AUTO_REQUIRED_CLASSIFICATIONS="$codex_auto_required_classifications_json" \
-CODEX_AUTO_FORCE_ENV="$codex_auto_force_env" \
+CODEX_LOCAL_REQUIRED_CLASSIFICATIONS="$codex_local_required_classifications_json" \
+CODEX_LOCAL_FORCE_ENV="$codex_local_force_env" \
 CLASSIFICATION_RESULT="$classification_json" \
 TASK_BRIEF_CHANGE_CLASSIFICATION_FIELD="$task_brief_change_classification_field" \
 TASK_BRIEF_VERIFIER_PROFILE_FIELD="$task_brief_verifier_profile_field" \
@@ -325,8 +325,8 @@ const agentReportFilesField = process.env.AGENT_REPORT_FILES_FIELD || 'Files tou
 const codexReviewSummaryField = process.env.CODEX_REVIEW_SUMMARY_FIELD || 'Codex review summary';
 const codexReviewEvidenceField = process.env.CODEX_REVIEW_EVIDENCE_FIELD || 'Codex review evidence source';
 const codexReviewTaskBriefToken = process.env.CODEX_REVIEW_TASK_BRIEF_TOKEN || 'npm run codex:review';
-const codexAutoRequiredClassifications = JSON.parse(process.env.CODEX_AUTO_REQUIRED_CLASSIFICATIONS || '["prod-semantic","high-risk"]');
-const codexAutoForceEnv = process.env.CODEX_AUTO_FORCE_ENV || 'FORCE_CODEX_REVIEW';
+const codexLocalRequiredClassifications = JSON.parse(process.env.CODEX_LOCAL_REQUIRED_CLASSIFICATIONS || '["prod-semantic","high-risk"]');
+const codexLocalForceEnv = process.env.CODEX_LOCAL_FORCE_ENV || 'FORCE_CODEX_REVIEW';
 const classifierRequiredRoles = Array.isArray(classificationResult.required_roles) ? classificationResult.required_roles : [];
 const classifierClassification = classificationResult.classification || 'none';
 const classifierVerifierProfile = classificationResult.verifier_profile || 'none';
@@ -429,9 +429,9 @@ const requiresTaskBrief = solidityRequiredFields.includes(taskBriefField);
 const requiresAgentReport = solidityRequiredFields.includes(agentReportField);
 const codexReviewFields = new Set([codexReviewSummaryField, codexReviewEvidenceField]);
 const requiredSolidityFields = solidityRequiredFields.filter((field) => !codexReviewFields.has(field));
-const autoCodexReviewRequired =
-  Array.isArray(codexAutoRequiredClassifications) && codexAutoRequiredClassifications.includes(classifierClassification) ||
-  isTruthy(process.env[codexAutoForceEnv]);
+const localCodexReviewRequired =
+  Array.isArray(codexLocalRequiredClassifications) && codexLocalRequiredClassifications.includes(classifierClassification) ||
+  isTruthy(process.env[codexLocalForceEnv]);
 
 for (const field of ownerPrefixedFields) {
   if (typeof field !== 'string' || field.trim() === '') {
@@ -633,7 +633,7 @@ if (taskBrief !== '') {
 
   if (isNoneLike(taskBriefRequiredVerifierCommands)) {
     fail(`${taskBriefRequiredVerifierCommandsField}: cannot be 'none' for Solidity changes.`);
-  } else if (autoCodexReviewRequired) {
+  } else if (localCodexReviewRequired) {
     ensureTokensPresent(taskBriefRequiredVerifierCommandsField, [codexReviewTaskBriefToken], taskBriefRequiredVerifierCommands, 'verifier.codex_review.task_brief_token', failures);
   }
 
@@ -664,7 +664,7 @@ const reviewMentionsCodexReview =
 const shouldRequireCodexReview =
   changedProductionSolidityFiles.length > 0 &&
   (
-    autoCodexReviewRequired ||
+    localCodexReviewRequired ||
     (
       taskBrief !== '' &&
       extractField(taskBrief, taskBriefRequiredVerifierCommandsField).trim().toLowerCase().includes(codexReviewTaskBriefToken.toLowerCase())
