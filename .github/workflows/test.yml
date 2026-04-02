@@ -1,0 +1,75 @@
+name: CI
+
+permissions: {}
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  check:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Install Slither
+        run: python3 -m pip install slither-analyzer==0.11.5
+
+      - name: Show Forge version
+        run: forge --version
+
+      - name: Collect changed files
+        id: changed-files
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="${RUNNER_TEMP}/changed-files.txt"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.sha }}"
+          else
+            base="${{ github.event.before }}"
+            head="${{ github.sha }}"
+          fi
+
+          if [ -z "${base}" ] || [ "${base}" = "0000000000000000000000000000000000000000" ]; then
+            git ls-files > "${output}"
+          else
+            git diff --name-only "${base}" "${head}" > "${output}"
+          fi
+
+          echo "file_list=${output}" >> "$GITHUB_OUTPUT"
+
+      - name: Run local finish gate in CI mode
+        env:
+          QUALITY_GATE_MODE: ci
+          QUALITY_GATE_FILE_LIST: ${{ steps.changed-files.outputs.file_list }}
+        run: npm run quality:gate

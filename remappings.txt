@@ -1,0 +1,9 @@
+@openzeppelin/contracts/=node_modules/@openzeppelin/contracts/
+@chainlink/contracts/=node_modules/@chainlink/contracts/src/v0.8/
+erc4626-tests/=node_modules/@openzeppelin/contracts-upgradeable/
+openzeppelin-contracts/=node_modules/@openzeppelin/contracts/
+ds-test/=node_modules/@layerzerolabs/toolbox-foundry/lib/ds-test
+forge-std/=node_modules/@layerzerolabs/toolbox-foundry/lib/forge-std
+@layerzerolabs/=node_modules/@layerzerolabs/
+@pythnetwork/pyth-sdk-solidity/=node_modules/@pythnetwork/pyth-sdk-solidity
+solmate/=node_modules/solmate/

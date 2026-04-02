@@ -1,0 +1,50 @@
+# Compiler files
+cache/
+out/
+
+
+node_modules
+coverage
+coverage.json
+typechain
+typechain-types
+
+# Ignores development broadcast logs
+broadcast
+
+# Docs
+docs/superpowers
+docs/task-briefs/*.md
+!docs/task-briefs/README.md
+docs/agent-reports/*.md
+!docs/agent-reports/README.md
+docs/reviews/*.md
+!docs/reviews/README.md
+!docs/reviews/TEMPLATE.md
+!docs/reviews/CI_REVIEW_NOTE.md
+
+# Dotenv file
+.env
+
+# LayerZero specific files
+.layerzero
+
+# pnpm
+pnpm-error.log
+
+# Editor and OS files
+.DS_Store
+.idea
+
+# Vscode file
+.vscode
+.history
+
+#node.js
+.deps
+node_modules/
+package-lock.json
+
+.worktrees/
+
+skills/
