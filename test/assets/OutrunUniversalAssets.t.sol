@@ -170,14 +170,8 @@ contract OutrunUniversalAssetsTest is Test {
     }
 
     function testConstructorInitializesFlashFeeReceiver() external {
-        OutrunUniversalAssets configured = new OutrunUniversalAssets(
-            "Outrun UAsset",
-            "UAsset",
-            18,
-            address(endpoint),
-            owner,
-            flashFeeReceiver
-        );
+        OutrunUniversalAssets configured =
+            new OutrunUniversalAssets("Outrun UAsset", "UAsset", 18, address(endpoint), owner, flashFeeReceiver);
 
         assertEq(configured.flashFeeReceiver(), flashFeeReceiver);
     }
