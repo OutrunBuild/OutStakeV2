@@ -14,7 +14,7 @@
 - `npm run quality:gate` 是唯一 finish gate。
 - 如果仓库启用了额外流程真源（例如 `docs/process/rule-map.json`），`quality:quick` / `quality:gate` 接通后的证据要求也要一并满足。
 
-## `src/**/*.sol`
+## `src/**/*.sol`、`script/**/*.sol`
 
 分类驱动角色：
 
@@ -30,24 +30,24 @@
 
 必须满足：
 
-- 命中 `src/**/*.sol` 的任务，必须先有 `Task Brief`，且其中明确 `Default writer role` 与 `Write permissions`。
+- 命中 `src/**/*.sol` 或 `script/**/*.sol` 的任务，必须先有 `Task Brief`，且其中明确 `Default writer role` 与 `Write permissions`。
 - `Task Brief` 必须同时写出 `Implementation owner`、`Writer dispatch backend`、`Writer dispatch target`、`Writer dispatch scope`、`Required verifier commands` 与 `Required artifacts`。
-- `Task Brief` 的 `Files in scope` 与 `Write permissions` 必须真实覆盖当前 gate 正在验证的 changed `src/**/*.sol` 集合；不能借用无关 brief 通过 gate。
+- `Task Brief` 的 `Files in scope` 与 `Write permissions` 必须真实覆盖当前 gate 正在验证的 changed Solidity 集合；不能借用无关 brief 通过 gate。
 - 主会话必须先派发对应 writer role；writer role 未成功派发时不得继续实现。
 - 复杂或非直观方法必须补充适量的方法内注释，重点解释状态迁移、金额计算、权限前提与外部调用意图。
 - 测试不能只停留在 happy path；至少覆盖正常路径、失败路径与关键边界，高风险路径补齐适用的 fuzz、invariant、adversarial、integration 或 upgrade tests。
-- 命中 `src/**/*.sol` 后，准备 review、收尾、`git add` / commit 或运行 finish gate 前，必须补齐 review note。
+- 命中 `src/**/*.sol` 或 `script/**/*.sol` 后，准备 review、收尾、`git add` / commit 或运行 finish gate 前，必须补齐 review note。
 - 必须先运行 classifier，再按分类决定是否派 `logic-reviewer` / `security-reviewer` / `gas-reviewer`；不再允许只按路径一刀切全派 reviewer。
 - 当分类为 `test-semantic`、`prod-semantic`、`high-risk` 时，`logic-reviewer` 必须在实现后先行。
 - 当分类为 `prod-semantic` 或 `high-risk` 时，`security-reviewer` / `gas-reviewer` 才是默认 required roles。
-- 对 `prod-semantic` / `high-risk` 的 `src/**/*.sol` 变更，writer 与 specialist review 完成后、进入最终 verifier verdict 前，自动流程必须执行一次 `npm run codex:review`；其他分类或流程面默认按需手动触发，并把 findings 收口到 review note / verifier evidence。
+- 对 `prod-semantic` / `high-risk` 的 `src/**/*.sol` 或 `script/**/*.sol` 变更，writer 与 specialist review 完成后、进入最终 verifier verdict 前，自动流程必须执行一次 `npm run codex:review`；其他分类或流程面默认按需手动触发，并把 findings 收口到 review note / verifier evidence。
 - 需要通过当前仓库 `quality:gate` 所要求的全部检查；精确命令与阈值以 `docs/process/policy.json`、`script/process/*` 与 `AGENTS.md` 为准。
 
 额外说明：
 
 - `OutStakeV2` 的核心 Solidity 面默认包含 `src/assets/**`、`src/position/**`、`src/yield/**`、`src/router/**`、`src/integrations/**`、`src/libraries/**`（含 `src/libraries/IWETH.sol`）。
 - 若改动命中 router settlement、reward/accounting、oracle assumption、position lifecycle、权限边界、升级或外部资金流，不能跳过 source-of-truth、external facts 与 critical assumptions 收敛。
-- 对任意 `src/**/*.sol` 变更，只要 `Task Brief` 显式声明 `Semantic review dimensions`、`Source-of-truth docs`、`External sources required` 或 `Critical assumptions to prove or reject`，review note 对齐校验就会被收紧，不依赖该路径是否命中窄语义 pattern。
+- 对任意 `src/**/*.sol` 或 `script/**/*.sol` 变更，只要 `Task Brief` 显式声明 `Semantic review dimensions`、`Source-of-truth docs`、`External sources required` 或 `Critical assumptions to prove or reject`，review note 对齐校验就会被收紧，不依赖该路径是否命中窄语义 pattern。
 
 ## `test/**/*.sol`
 

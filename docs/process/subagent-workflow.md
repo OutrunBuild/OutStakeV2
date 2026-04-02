@@ -54,7 +54,7 @@
   - 主会话角色
   - 负责 intake、任务拆分、ownership、block 判定、证据汇总
   - 除 `docs/task-briefs/*` 等 orchestration artifact 外，不直接写 product/process surface
-  - 不写 `src/**/*.sol`、`test/**/*.sol`、`script/**/*.sh`、`script/process/**`、`.githooks/*`
+  - 不写 `src/**/*.sol`、`script/**/*.sol`、`test/**/*.sol`、`script/**/*.sh`、`script/process/**`、`.githooks/*`
 - `solidity-implementer`
   - 唯一默认 Solidity 写入者
   - 负责 assets / position / yield / router / integrations / libraries Solidity surface 的实现代码、适量的方法内注释与足以证明行为的测试
@@ -89,9 +89,9 @@
 - `Task Brief` 是 Base Brief：必须让未继承主会话历史的下游角色也能独立理解目标、边界、已知事实、未决假设与阻断条件
 - `main-orchestrator` 还必须为每个下游角色生成一份 `Role Delta Brief`，只补该角色执行所需的最小上下文
 - 对语义敏感改动，`Task Brief` 必须显式写出 `Semantic review dimensions`、`Source-of-truth docs`、`External sources required` 与 `Critical assumptions to prove or reject`
-- 对任意 `src/**/*.sol` 改动，只要 `Task Brief` 显式声明了这些字段，对应的 review-note alignment 校验就会被强制收紧，即使路径不在窄语义 pattern 内
+- 对任意 `src/**/*.sol` 或 `script/**/*.sol` 改动，只要 `Task Brief` 显式声明了这些字段，对应的 review-note alignment 校验就会被强制收紧，即使路径不在窄语义 pattern 内
 - `Task Brief` 必须显式写出 `Implementation owner`、`Writer dispatch backend`、`Writer dispatch target`、`Writer dispatch scope`、`Required verifier commands` 与 `Required artifacts`
-- 命中 `src/**/*.sol` 或 `test/**/*.sol` 的任务，`Task Brief` 必须先明确 `Default writer role` 与 `Write permissions`
+- 命中 `src/**/*.sol`、`script/**/*.sol` 或 `test/**/*.sol` 的任务，`Task Brief` 必须先明确 `Default writer role` 与 `Write permissions`
 - 如影响面不清、跨 `src/assets/**`、`src/position/**`、`src/yield/**`、`src/router/**`、`src/integrations/**`、`src/libraries/**`（含 `src/libraries/IWETH.sol`），或涉及 ABI、storage、config、access control、external call，可按需启用 `solidity-explorer`
 
 ### Phase 2: Baseline Analysis
@@ -108,7 +108,7 @@
 - `solidity-implementer` 在明确 ownership 下修改实现，补充非直观方法的适量方法内注释，并完成足以证明行为的测试
 - `test/**/*.sol` helper / support surface 只有在 brief 显式授权时才允许被实现型角色写入
 - 非 Solidity 的 process、docs、CI、shell、`.githooks/*`、package metadata、Harness 变更由 `process-implementer` 在明确 ownership 下修改
-- 命中 `src/**/*.sol`、`test/**/*.sol`、`script/**/*.sh`、`script/process/**`、`.githooks/*` 时，必须先派发对应 writer role
+- 命中 `src/**/*.sol`、`script/**/*.sol`、`test/**/*.sol`、`script/**/*.sh`、`script/process/**`、`.githooks/*` 时，必须先派发对应 writer role
 - `main-orchestrator` 不得降级为 product/process surface 的直接实现者；除 `docs/task-briefs/*` 这类 orchestration artifact 外，writer role 派发失败时只能停止并请求人工决策
 - 不得未经派发扩大文件边界
 
@@ -142,13 +142,13 @@
 - `verifier` 按 classifier 运行 `light` / `full` 两档验证
 - `verifier` 运行或汇总验证命令
 - `verifier` 必须先识别 required command set，再执行验证；不得把“只跑一个 gate 命令”伪装成完成验证
-- 对 `prod-semantic` / `high-risk` 的 `src/**/*.sol` 变更，writer 与 logic review / specialist review 完成后、进入最终 verifier verdict 前，自动流程必须补跑一次 `npm run codex:review`；其他分类或流程面默认按需手动触发。若当前交互会话支持 `/review`，可视为同义入口，但落盘证据仍以 wrapper / CLI 命令为准
+- 对 `prod-semantic` / `high-risk` 的 `src/**/*.sol`、`script/**/*.sol` 变更，writer 与 logic review / specialist review 完成后、进入最终 verifier verdict 前，自动流程必须补跑一次 `npm run codex:review`；其他分类或流程面默认按需手动触发。若当前交互会话支持 `/review`，可视为同义入口，但落盘证据仍以 wrapper / CLI 命令为准
 - `verifier` 必须独立检查 `Task Brief`、`Agent Report`、review note、required commands 与 failure attribution，不能由主会话口头替代
 - `verifier` 必须把早于当前 writer `Agent Report` 的 review note、reviewer evidence 与 verifier evidence 视为 stale，并阻断进入最终 verdict
 - 当 stale evidence 被 gate 检出时，`quality:gate` 会自动运行 `npm run stale-evidence:loop`（wrapper 为 `script/process/run-stale-evidence-loop.sh`）生成 follow-up brief；`main-orchestrator` 必须按其中的 rerun order 重新派发 writer / reviewer / verifier
 - 对需要 review note 的语义敏感改动，`verifier` 还要确认 review note 中的语义对齐字段、外部事实与关键假设结论已经落盘，并与 `Task Brief` 中声明的语义维度、source-of-truth 与 external sources 对齐
 - `verifier(light)` 只负责轻量 required commands、artifact chain、codex review 与必要的 review-note freshness；`verifier(full)` 还要确认 coverage、static analysis、gas 与其他 full gate 已收敛
-- 命中 `src/**/*.sol` 或 `test/**/*.sol` 时，`verifier` 还要确认当前分类对应的 required checks 已收敛
+- 命中 `src/**/*.sol`、`script/**/*.sol` 或 `test/**/*.sol` 时，`verifier` 还要确认当前分类对应的 required checks 已收敛
 - required command 失败时必须记录失败归因
 
 ### Phase 8: Decision
@@ -177,7 +177,7 @@
 - `review note` 是唯一统一审阅记录
 - `quality:gate` 是唯一 finish gate
 - CI 只负责验证，不负责编排 agent
-- 命中 `src/**/*.sol` 时，`review note` 必须能回溯到 `Task Brief path`、`Agent Report path`、`Implementation owner` 与 `Writer dispatch confirmed`
+- 命中 `src/**/*.sol`、`script/**/*.sol` 时，`review note` 必须能回溯到 `Task Brief path`、`Agent Report path`、`Implementation owner` 与 `Writer dispatch confirmed`
 - 命中流程面文件时，`verifier` 结论必须能回溯到 `Task Brief path`、`Agent Report path`、实际 required commands 与 failure attribution
 - 未显式指定 `QUALITY_GATE_REVIEW_NOTE` 时，execution-plane 只允许自动选择一份 `Files reviewed` 能唯一匹配当前 Solidity 变更的 review note；否则必须人工指定
 - 对仅命中 `test/**/*.sol` 的任务，除非 `Task Brief`、repo-specific 证据映射或后续 gate 脚本另行要求，默认不以 review note 存在与否作为 hard-block
@@ -186,23 +186,23 @@
 - `docs/superpowers/specs/` 与 `docs/superpowers/plans/` 只保留 design、plan、draft 文档
 - 已确认结论必须同时具备本地前提证据与必要的外部主来源证据；缺少任一项时只能维持为假设、待验证项或测试缺口
 - 若仓库启用了 repo-specific 证据映射，review note 也必须同步满足其要求
-- 对 `src/**/*.sol` 变更，当前 writer `Agent Report` 是 freshness anchor：review note、`Logic evidence source`、`Security evidence source`、`Gas evidence source`、`Verification evidence source` 都不得早于它
+- 对 `src/**/*.sol`、`script/**/*.sol` 变更，当前 writer `Agent Report` 是 freshness anchor：review note、`Logic evidence source`、`Security evidence source`、`Gas evidence source`、`Verification evidence source` 都不得早于它
 
 ## 8. Block 规则
 
 ### Hard-block
 
 - `verifier` 任一 required command fail
-- `main-orchestrator` 直接写入受限 product/process surface；除 `docs/task-briefs/*` 外，`src/**/*.sol`、`test/**/*.sol`、`script/**/*.sh`、`script/process/**`、`.githooks/*`、`AGENTS.md`、`docs/process/**`、`.codex/**`、`.github/**`、`package.json`、`package-lock.json` 都不允许由主会话直接落盘
+- `main-orchestrator` 直接写入受限 product/process surface；除 `docs/task-briefs/*` 外，`src/**/*.sol`、`script/**/*.sol`、`test/**/*.sol`、`script/**/*.sh`、`script/process/**`、`.githooks/*`、`AGENTS.md`、`docs/process/**`、`.codex/**`、`.github/**`、`package.json`、`package-lock.json` 都不允许由主会话直接落盘
 - 命中受限路径但未成功派发对应 writer role
-- 缺少 `Task Brief` 就开始 `src/**/*.sol` / `test/**/*.sol` 实现
+- 缺少 `Task Brief` 就开始 `src/**/*.sol` / `script/**/*.sol` / `test/**/*.sol` 实现
 - 流程面改动缺少 `Task Brief`、`Agent Report`、`docs:check` 或 `process:selftest` 证据
 - `security-reviewer` 存在未关闭的 `high` finding
 - Solidity 变更但缺 `logic-reviewer`、`security-reviewer` 或 `gas-reviewer` 结论
-- 命中 `src/**/*.sol` 或 `test/**/*.sol` 时，coverage 或其他 required checks 未达标
+- 命中 `src/**/*.sol`、`script/**/*.sol` 或 `test/**/*.sol` 时，coverage 或其他 required checks 未达标
 - 任一已确认 finding 缺少本地前提证据，或依赖外部语义却缺少主来源证据
 - review note 或 reviewer / verifier evidence 早于当前 writer `Agent Report`
-- `src/**/*.sol` 变更但 review note 缺字段、缺 writer ownership / `Agent Report` 工件链证据，或仍为占位值
+- `src/**/*.sol`、`script/**/*.sol` 变更但 review note 缺字段、缺 writer ownership / `Agent Report` 工件链证据，或仍为占位值
 
 ### Soft-block
 

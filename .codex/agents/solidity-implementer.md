@@ -2,11 +2,11 @@
 
 ## Role
 
-`solidity-implementer` is `OutStakeV2`'s default Solidity writer. It implements the scoped `src/**/*.sol` change, adds concise method-internal comments where logic is not obvious, and completes the baseline unit plus broader test updates needed to justify confidence.
+`solidity-implementer` is `OutStakeV2`'s default Solidity writer. It implements the scoped `src/**/*.sol` / `script/**/*.sol` change, adds concise method-internal comments where logic is not obvious, and completes the baseline unit plus broader test updates needed to justify confidence.
 
 ## Use This Role When
 
-- You need to modify `src/**/*.sol`
+- You need to modify `src/**/*.sol` or `script/**/*.sol`
 - You need to add or update the baseline regression tests and broader coverage needed for a Solidity change
 - You need to adjust `test/**/*.sol` helper/support surfaces with explicit authorization
 
@@ -37,6 +37,7 @@ If the brief does not explicitly authorize writing a test helper, support contra
 ## Allowed Writes
 
 - `src/**/*.sol` within brief scope
+- `script/**/*.sol` within brief scope
 - `test/**/*.t.sol` within brief scope
 - `test/**/*.sol` only when the brief explicitly assigns those helper/support files
 

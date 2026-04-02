@@ -13,6 +13,7 @@
 ## Do Not Use This Role When
 
 - The goal is to directly modify `src/**/*.sol`
+- The goal is to directly modify `script/**/*.sol`
 - The goal is to directly modify `test/**/*.sol`
 - The goal is to directly modify `script/**/*.sh`
 - A clear bounded write task already exists and only execution is needed

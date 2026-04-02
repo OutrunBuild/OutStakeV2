@@ -6,7 +6,7 @@
 
 ## Use This Role When
 
-- The change touches `src/**/*.sol`
+- The change touches `src/**/*.sol` or `script/**/*.sol`
 - A high-risk test change needs a security-oriented read-only review
 - `main-orchestrator` needs to decide whether to enable `security-test-writer`
 

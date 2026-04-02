@@ -227,6 +227,7 @@ const classifierConfig = readPolicyValue(policy, 'change_classifier', {});
 const qualityGateConfig = readPolicyValue(policy, 'quality_gate', {});
 
 const srcPattern = new RegExp(readPolicyValue(qualityGateConfig, 'src_sol_pattern', '^src/.*\\.sol$'));
+const scriptPattern = new RegExp(readPolicyValue(qualityGateConfig, 'script_sol_pattern', '^script/.*\\.sol$'));
 const testTsolPattern = new RegExp(readPolicyValue(qualityGateConfig, 'test_tsol_pattern', '^test/.*\\.t\\.sol$'));
 const testSolPattern = new RegExp(readPolicyValue(qualityGateConfig, 'test_sol_pattern', '^test/.*\\.sol$'));
 const highRiskPathPatterns = readPolicyValue(classifierConfig, 'high_risk_path_patterns', []);
@@ -234,15 +235,15 @@ const highRiskTokenPatterns = readPolicyValue(classifierConfig, 'high_risk_token
 const roleMatrix = readPolicyValue(classifierConfig, 'role_matrix', {});
 
 const changedFiles = loadChangedFiles(mode);
-const changedSolidityFiles = changedFiles.filter((file) => srcPattern.test(file) || testTsolPattern.test(file) || testSolPattern.test(file));
-const srcSolidityFiles = changedSolidityFiles.filter((file) => srcPattern.test(file));
-const testSolidityFiles = changedSolidityFiles.filter((file) => !srcPattern.test(file) && (testTsolPattern.test(file) || testSolPattern.test(file)));
+const changedSolidityFiles = changedFiles.filter((file) => srcPattern.test(file) || scriptPattern.test(file) || testTsolPattern.test(file) || testSolPattern.test(file));
+const productionSolidityFiles = changedSolidityFiles.filter((file) => srcPattern.test(file) || scriptPattern.test(file));
+const testSolidityFiles = changedSolidityFiles.filter((file) => !srcPattern.test(file) && !scriptPattern.test(file) && (testTsolPattern.test(file) || testSolPattern.test(file)));
 const patch = loadPatch(mode, changedSolidityFiles);
 const patchAnalysis = parsePatch(patch, changedSolidityFiles, highRiskTokenPatterns);
 
-const semanticSrcFiles = srcSolidityFiles.filter((file) => patchAnalysis.get(file)?.semantic);
+const semanticSrcFiles = productionSolidityFiles.filter((file) => patchAnalysis.get(file)?.semantic);
 const semanticTestFiles = testSolidityFiles.filter((file) => patchAnalysis.get(file)?.semantic);
-const nonSemanticSrcFiles = srcSolidityFiles.filter((file) => !patchAnalysis.get(file)?.semantic);
+const nonSemanticSrcFiles = productionSolidityFiles.filter((file) => !patchAnalysis.get(file)?.semantic);
 const nonSemanticTestFiles = testSolidityFiles.filter((file) => !patchAnalysis.get(file)?.semantic);
 
 const highRiskReasons = [];
@@ -281,7 +282,7 @@ const matrixEntry = roleMatrix[classification] || {
   verifier_profile: 'none',
 };
 
-const reviewNoteRequired = srcSolidityFiles.length > 0 ? 'yes' : 'no';
+const reviewNoteRequired = productionSolidityFiles.length > 0 ? 'yes' : 'no';
 const result = {
   classification,
   rationale: forcedClassification
@@ -291,14 +292,14 @@ const result = {
         semanticSrcFiles,
         semanticTestFiles,
         highRiskReasons,
-        srcFiles: srcSolidityFiles,
+        srcFiles: productionSolidityFiles,
         testFiles: testSolidityFiles,
       }),
   verifier_profile: matrixEntry.verifier_profile || 'none',
   required_roles: matrixEntry.required_roles || [],
   optional_roles: matrixEntry.optional_roles || [],
   review_note_required: reviewNoteRequired,
-  has_src_solidity: srcSolidityFiles.length > 0,
+  has_src_solidity: productionSolidityFiles.length > 0,
   has_test_solidity: testSolidityFiles.length > 0,
   semantic_src_files: semanticSrcFiles,
   semantic_test_files: semanticTestFiles,

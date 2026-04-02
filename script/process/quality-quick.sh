@@ -41,6 +41,7 @@ if [ -z "$changed_files" ]; then
 fi
 
 src_sol_pattern="$(node ./script/process/read-process-config.js policy quality_gate.src_sol_pattern)"
+script_sol_pattern="$(node ./script/process/read-process-config.js policy quality_gate.script_sol_pattern 2>/dev/null || printf '%s' '^script/.*\.sol$')"
 test_tsol_pattern="$(node ./script/process/read-process-config.js policy quality_gate.test_tsol_pattern)"
 test_sol_pattern="$(node ./script/process/read-process-config.js policy quality_gate.test_sol_pattern)"
 shell_pattern="$(node ./script/process/read-process-config.js policy quality_gate.shell_pattern)"
@@ -145,6 +146,7 @@ is_truthy() {
 }
 
 has_src_sol=0
+has_script_sol=0
 has_sol_tests=0
 has_package_metadata=0
 has_docs_contract=0
@@ -166,6 +168,9 @@ while IFS= read -r file; do
 
     if [[ "$file" =~ $src_sol_pattern ]]; then
         has_src_sol=1
+        src_solidity_candidates+=("$file")
+    elif [[ "$file" =~ $script_sol_pattern ]]; then
+        has_script_sol=1
         src_solidity_candidates+=("$file")
     elif [[ "$file" =~ $test_tsol_pattern ]]; then
         has_sol_tests=1
@@ -239,7 +244,7 @@ for file in "${process_js_candidates[@]}"; do
     fi
 done
 
-if [ "$has_src_sol" -eq 1 ] || [ "$has_sol_tests" -eq 1 ]; then
+if [ "$has_src_sol" -eq 1 ] || [ "$has_script_sol" -eq 1 ] || [ "$has_sol_tests" -eq 1 ]; then
     auto_codex_review_required=0
     if is_truthy "${!auto_codex_review_force_env:-}"; then
         auto_codex_review_required=1

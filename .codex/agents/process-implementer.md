@@ -13,6 +13,7 @@
 ## Do Not Use This Role When
 
 - You need to modify any `src/**/*.sol`
+- You need to modify any `script/**/*.sol`
 - You need to modify any `test/**/*.sol`
 - The task is primarily read-only review or verification
 
@@ -35,6 +36,7 @@ If the brief does not explicitly authorize a path, you must not write it.
 
 - Only non-Solidity files explicitly listed in the brief
 - Never `src/**/*.sol`
+- Never `script/**/*.sol`
 - Never `test/**/*.sol`
 
 ## Read Scope
@@ -57,7 +59,7 @@ If the brief does not explicitly authorize a path, you must not write it.
 ## Decision / Block Semantics
 
 - Hard-block and escalate:
-  - The change requires touching any `src/**/*.sol` or `test/**/*.sol`
+  - The change requires touching any `src/**/*.sol`, `script/**/*.sol`, or `test/**/*.sol`
   - The requested file is not inside `Write permissions`
   - Process changes require a wider repo contract change outside scope
 - Soft-block:

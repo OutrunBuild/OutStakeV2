@@ -76,9 +76,9 @@
 - `main-orchestrator` 是默认主会话角色
 - `main-orchestrator` 负责 intake、拆任务、划定 file ownership、汇总证据、判定 block
 - `main-orchestrator` 不是 product/process surface 的默认写入者；除 orchestration artifact（例如 `docs/task-briefs/*`）外，不直接写仓库文件
-- `main-orchestrator` 不写 `src/**/*.sol`、`test/**/*.sol`、`script/**/*.sh`、`script/process/**`、`.githooks/*`
+- `main-orchestrator` 不写 `src/**/*.sol`、`script/**/*.sol`、`test/**/*.sol`、`script/**/*.sh`、`script/process/**`、`.githooks/*`
 - `main-orchestrator` 不写 `AGENTS.md`、`docs/process/**`、`.codex/**`、`.github/**`、`package.json`、`package-lock.json`
-- 命中 `src/**/*.sol`、`test/**/*.sol`、`script/**/*.sh`、`script/process/**`、`.githooks/*` 或其他流程面文件时，必须先派发对应 writer role
+- 命中 `src/**/*.sol`、`script/**/*.sol`、`test/**/*.sol`、`script/**/*.sh`、`script/process/**`、`.githooks/*` 或其他流程面文件时，必须先派发对应 writer role
 - 若 writer role 未成功派发，主会话必须停止并请求人工决策，不能降级为直接实现者
 - 主会话可按本文件自主使用 subagents，但仍必须遵守角色边界、单写 owner、证据链和 block 规则
 
@@ -86,7 +86,7 @@
 
 - `solidity-implementer`
   - Solidity surface 的唯一默认写入者
-  - 负责 `src/**/*.sol`、适量的方法内注释与与风险匹配的测试
+  - 负责 `src/**/*.sol`、`script/**/*.sol`、适量的方法内注释与与风险匹配的测试
 - `process-implementer`
   - 非 Solidity surface 的默认写入者
   - 负责流程、文档、CI、`script/process/**`、shell、`.githooks/*`、package metadata 与 Harness 文件
@@ -116,7 +116,7 @@
 
 `process-implementer` -> `codex review` -> `verifier`
 
-对于 `src/**/*.sol` / `test/**/*.sol` 变更，必须先运行 `npm run classify:change` 或等价 classifier，再按分类选择评审顺序：
+对于 `src/**/*.sol` / `script/**/*.sol` / `test/**/*.sol` 变更，必须先运行 `npm run classify:change` 或等价 classifier，再按分类选择评审顺序：
 
 - `non-semantic`：`solidity-implementer` -> `codex review` -> `verifier(light)`
 - `test-semantic`：`solidity-implementer` -> `logic-reviewer` -> `codex review` -> `verifier(light)`
@@ -140,8 +140,8 @@
 ## 5. Workflow Summary
 
 - `npm run quality:gate` 是唯一 finish gate；`npm run quality:quick` 只用于本地快速反馈
-- 对 `src/**/*.sol` / `test/**/*.sol` 变更，`Task Brief` 必须记录 `Change classification`、`Change classification rationale`、`Verifier profile`，并与 `npm run classify:change` 的结果一致。
-- 对 `src/**/*.sol` 变更，`Task Brief` 必须真实覆盖当前 gate 正在验证的 changed `src/**/*.sol` 范围；至少 `Files in scope` 与 `Write permissions` 要落到当前变更集合。
+- 对 `src/**/*.sol` / `script/**/*.sol` / `test/**/*.sol` 变更，`Task Brief` 必须记录 `Change classification`、`Change classification rationale`、`Verifier profile`，并与 `npm run classify:change` 的结果一致。
+- 对 `src/**/*.sol`、`script/**/*.sol` 变更，`Task Brief` 必须真实覆盖当前 gate 正在验证的 changed Solidity 范围；至少 `Files in scope` 与 `Write permissions` 要落到当前变更集合。
 - 标准 artifact chain：
   - Solidity surface：`Task Brief -> Agent Report -> codex review -> review note -> verifier evidence -> quality:gate -> CI`
   - Process surface：`Task Brief -> Agent Report -> codex review -> verifier evidence -> docs:check / process:selftest`
@@ -176,7 +176,7 @@
 ## 8. Review Note Contract
 
 - 模板文件：`docs/reviews/TEMPLATE.md`
-- 当命中 `src/**/*.sol` 变更时，本地与 CI 的 `quality:gate` 都必须能找到一份有效 review note
+- 当命中 `src/**/*.sol`、`script/**/*.sol` 变更时，本地与 CI 的 `quality:gate` 都必须能找到一份有效 review note
 - 字段、布尔值约束、owner-prefixed source 规则与 artifact 路径要求，以 `docs/process/review-notes.md` 和 `docs/process/policy.json` 为准
 
 ## 9. Local-Only Files

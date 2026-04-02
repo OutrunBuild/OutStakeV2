@@ -152,6 +152,7 @@
       "^src/.*\\.sol$",
       "^test/.*\\.sol$",
       "^test/.*\\.t\\.sol$",
+      "^script/.*\\.sol$",
       "^script/.*\\.sh$",
       "^script/process/.*$"
     ],
@@ -159,6 +160,7 @@
       "^src/.*\\.sol$",
       "^test/.*\\.sol$",
       "^test/.*\\.t\\.sol$",
+      "^script/.*\\.sol$",
       "^AGENTS\\.md$",
       "^docs/process/.*$",
       "^\\.codex/.*$",
@@ -174,7 +176,8 @@
       "^(script/.*\\.sh|\\.githooks/.*)$": "process-implementer",
       "^script/process/.*$": "process-implementer",
       "^package\\.json$": "process-implementer",
-      "^package-lock\\.json$": "process-implementer"
+      "^package-lock\\.json$": "process-implementer",
+      "^script/.*\\.sol$": "solidity-implementer"
     },
     "default_roles": [
       "solidity-implementer",
@@ -241,7 +244,8 @@
       "^src/yield/.*\\.sol$",
       "^src/router/.*\\.sol$",
       "^src/integrations/.*\\.sol$",
-      "^src/libraries/.*\\.sol$"
+      "^src/libraries/.*\\.sol$",
+      "^script/.*\\.sol$"
     ],
     "freshness_source_fields": [
       "Logic evidence source",
@@ -411,7 +415,15 @@
       "non_blocking_docs_follow_up"
     ],
     "stale_evidence_remediation_command": "npm run stale-evidence:loop",
-    "stale_evidence_exit_code": 2
+    "stale_evidence_exit_code": 2,
+    "script_sol_pattern": "^script/.*\\.sol$",
+    "script_default_roles": [
+      "solidity-implementer",
+      "logic-reviewer",
+      "security-reviewer",
+      "gas-reviewer",
+      "verifier"
+    ]
   },
   "workflow": {
     "workflow_index": ".codex/workflows/solidity-subagent-workflow.json",
@@ -549,6 +561,14 @@
         "npm ci",
         "npm run docs:check",
         "npm run process:selftest"
+      ],
+      "script_solidity": [
+        "npm run codex:review",
+        "forge fmt --check",
+        "forge build",
+        "forge test -vvv",
+        "bash ./script/process/check-solidity-review-note.sh",
+        "npm run docs:check"
       ]
     },
     "codex_review": {
@@ -598,7 +618,8 @@
     ],
     "high_risk_path_patterns": [
       "^src/(router|position|yield|vault|lending|loan|oracle|oracles|integrations|markets|core|pool|pol|assets)/.*\\.sol$",
-      "^src/libraries/.*\\.sol$"
+      "^src/libraries/.*\\.sol$",
+      "^script/.*\\.sol$"
     ],
     "high_risk_token_patterns": [
       "\\b(delegatecall|call\\(|staticcall|safeTransfer|transferFrom|approve|permit|mint|burn|deposit|withdraw|redeem|borrow|repay|liquidat|oracle|price|reward|fee|claim|settle|swap|rebalance|owner|admin|guardian|role|upgrade|initialize|share|asset|balance)\\b"

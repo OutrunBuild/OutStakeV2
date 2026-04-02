@@ -6,7 +6,7 @@
 
 ## Use This Role When
 
-- The change touches `src/**/*.sol` or a semantic-sensitive `test/**/*.sol`
+- The change touches `src/**/*.sol`, `script/**/*.sol`, or a semantic-sensitive `test/**/*.sol`
 - The main writer pass is complete and the task needs a correctness-oriented read-only review before specialist review
 - `main-orchestrator` needs an explicit logic pass focused on product semantics, invariants, and missed edge cases
 

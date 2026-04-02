@@ -82,6 +82,19 @@
         "verifier"
       ],
       "optional_roles": []
+    },
+    "script_solidity": {
+      "default_writer_role": "solidity-implementer",
+      "required_roles": [
+        "logic-reviewer",
+        "security-reviewer",
+        "gas-reviewer",
+        "verifier"
+      ],
+      "optional_roles": [
+        "solidity-explorer",
+        "security-test-writer"
+      ]
     }
   },
   "authoritative_sources": {

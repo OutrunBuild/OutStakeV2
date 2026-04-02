@@ -67,9 +67,9 @@ const fs = require('fs');
 
 const [, , changedFilesPath, ...candidates] = process.argv;
 const changedFiles = fs.readFileSync(changedFilesPath, 'utf8').split(/\r?\n/).filter(Boolean);
-const changedSolidityFiles = changedFiles.filter((file) => /^(src|test)\/.*\.sol$/.test(file));
-const changedSrcSolidityFiles = changedFiles.filter((file) => /^src\/.*\.sol$/.test(file));
-const targetSolidityFiles = changedSrcSolidityFiles.length > 0 ? changedSrcSolidityFiles : changedSolidityFiles;
+const changedSolidityFiles = changedFiles.filter((file) => /^(src|script|test)\/.*\.sol$/.test(file));
+const changedProductionSolidityFiles = changedFiles.filter((file) => /^(src|script)\/.*\.sol$/.test(file));
+const targetSolidityFiles = changedProductionSolidityFiles.length > 0 ? changedProductionSolidityFiles : changedSolidityFiles;
 
 function extractField(document, field) {
   const prefix = `- ${field}:`;
@@ -240,9 +240,9 @@ if (!agentReportPath || !fs.existsSync(agentReportPath)) {
 
 const taskBrief = fs.readFileSync(taskBriefPath, 'utf8');
 const agentReport = fs.readFileSync(agentReportPath, 'utf8');
-const changedSolidityFiles = changedFiles.filter((file) => /^(src|test)\/.*\.sol$/.test(file));
-const changedSrcSolidityFiles = changedFiles.filter((file) => /^src\/.*\.sol$/.test(file));
-const targetSolidityFiles = changedSrcSolidityFiles.length > 0 ? changedSrcSolidityFiles : changedSolidityFiles;
+const changedSolidityFiles = changedFiles.filter((file) => /^(src|script|test)\/.*\.sol$/.test(file));
+const changedProductionSolidityFiles = changedFiles.filter((file) => /^(src|script)\/.*\.sol$/.test(file));
+const targetSolidityFiles = changedProductionSolidityFiles.length > 0 ? changedProductionSolidityFiles : changedSolidityFiles;
 
 const originalRequiredRoles = tokenizeField(extractField(taskBrief, 'Required roles'));
 const originalOptionalRoles = extractField(taskBrief, 'Optional roles') || 'none';
@@ -255,7 +255,7 @@ const dispatchScope = extractField(taskBrief, 'Writer dispatch scope') || filesI
 const requiredVerifierCommands = extractField(taskBrief, 'Required verifier commands') || 'npm run codex:review';
 const requiresCodexReview = String(requiredVerifierCommands).toLowerCase().includes(codexReviewTaskBriefToken.toLowerCase());
 const originalRequiredArtifacts = extractField(taskBrief, 'Required artifacts') || 'Task Brief, Agent Report, review note';
-const reviewNoteRequired = extractField(taskBrief, 'Review note required') || (changedSrcSolidityFiles.length > 0 ? 'yes' : 'no');
+const reviewNoteRequired = extractField(taskBrief, 'Review note required') || (changedProductionSolidityFiles.length > 0 ? 'yes' : 'no');
 const semanticDimensions = extractField(taskBrief, 'Semantic review dimensions') || 'none';
 const sourceOfTruthDocs = extractField(taskBrief, 'Source-of-truth docs') || 'none';
 const externalSources = extractField(taskBrief, 'External sources required') || 'none';

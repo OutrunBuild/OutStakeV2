@@ -601,8 +601,8 @@ if [ "$path_status" -eq 0 ]; then
     exit 1
 fi
 
-if ! printf '%s\n' "$path_output" | grep -q "changed src Solidity path"; then
-    echo "Expected changed-path output to reference the missing changed src Solidity path linkage"
+if ! printf '%s\n' "$path_output" | grep -q "changed production Solidity path"; then
+    echo "Expected changed-path output to reference the missing changed production Solidity path linkage"
     printf '%s\n' "$path_output"
     exit 1
 fi
@@ -621,8 +621,8 @@ if [ "$mixed_linkage_status" -eq 0 ]; then
     exit 1
 fi
 
-if ! printf '%s\n' "$mixed_linkage_output" | grep -q "changed src Solidity path"; then
-    echo "Expected mixed src+test linkage output to reference the changed src Solidity path requirement"
+if ! printf '%s\n' "$mixed_linkage_output" | grep -q "changed production Solidity path"; then
+    echo "Expected mixed src+test linkage output to reference the changed production Solidity path requirement"
     printf '%s\n' "$mixed_linkage_output"
     exit 1
 fi
@@ -641,8 +641,8 @@ if [ "$mixed_discovery_status" -eq 0 ]; then
     exit 1
 fi
 
-if ! printf '%s\n' "$mixed_discovery_output" | grep -q "changed src Solidity paths"; then
-    echo "Expected mixed src+test discovery output to reference changed src Solidity paths"
+if ! printf '%s\n' "$mixed_discovery_output" | grep -q "changed production Solidity paths"; then
+    echo "Expected mixed src+test discovery output to reference changed production Solidity paths"
     printf '%s\n' "$mixed_discovery_output"
     exit 1
 fi
@@ -661,8 +661,8 @@ if [ "$bak_explicit_status" -eq 0 ]; then
     exit 1
 fi
 
-if ! printf '%s\n' "$bak_explicit_output" | grep -q "changed src Solidity path"; then
-    echo "Expected .bak explicit output to reference the changed src Solidity path requirement"
+if ! printf '%s\n' "$bak_explicit_output" | grep -q "changed production Solidity path"; then
+    echo "Expected .bak explicit output to reference the changed production Solidity path requirement"
     printf '%s\n' "$bak_explicit_output"
     exit 1
 fi
@@ -681,8 +681,8 @@ if [ "$bak_discovery_status" -eq 0 ]; then
     exit 1
 fi
 
-if ! printf '%s\n' "$bak_discovery_output" | grep -q "changed src Solidity paths"; then
-    echo "Expected .bak discovery output to reference changed src Solidity paths"
+if ! printf '%s\n' "$bak_discovery_output" | grep -q "changed production Solidity paths"; then
+    echo "Expected .bak discovery output to reference changed production Solidity paths"
     printf '%s\n' "$bak_discovery_output"
     exit 1
 fi
@@ -735,7 +735,7 @@ brief_scope_status=$?
 set -e
 
 if [ "$brief_scope_status" -eq 0 ]; then
-    echo "Expected check-solidity-review-note to fail when Task Brief Files in scope does not match the changed src Solidity file"
+    echo "Expected check-solidity-review-note to fail when Task Brief Files in scope does not match the changed production Solidity file"
     exit 1
 fi
 

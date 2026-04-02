@@ -1,6 +1,6 @@
 # Review Note 规范
 
-`docs/reviews/*.md` 默认是本地 review 草稿目录。命中 `src/**/*.sol` 时，本地与 CI 的 `quality:gate` 都要求至少有一份有效 review note，作为安全、简化、Gas 与验证证据。
+`docs/reviews/*.md` 默认是本地 review 草稿目录。命中 `src/**/*.sol`、`script/**/*.sol` 时，本地与 CI 的 `quality:gate` 都要求至少有一份有效 review note，作为安全、简化、Gas 与验证证据。
 
 前置说明：
 
@@ -121,8 +121,8 @@
 - 若结论依赖第三方协议、外部合约、SDK、API 或系统行为，`External facts checked` 必须写明主来源；没有主来源时只能写成 `needs verification`、假设或待确认决策点。
 - `Evidence chain complete` 只有在“本地前提已复核”且“必要时外部主来源已核验”同时满足时才允许填写 `yes`。
 - 若某条结论只来自 subagent 摘要而主会话未复核关键代码行，该条结论不得在 review note 中写成已确认 finding。
-- 对 `prod-semantic` / `high-risk` 的 `src/**/*.sol` 写面，writer 与 specialist review 完成后、进入最终 verifier verdict 前，自动流程必须再执行一次 `npm run codex:review`；`non-semantic` / `test-semantic` 与流程面默认按需手动触发。若当前交互会话支持 `/review`，可视为同义入口，但落盘 evidence 仍以 wrapper / CLI 命令为准。
-- 对 `src/**/*.sol` 写面，`Logic evidence source`、`Security evidence source`、`Gas evidence source`、`Verification evidence source` 必须指向可落盘、可回溯的具体 artifact path；不能只写命令名、聊天结论或模糊描述。
+- 对 `prod-semantic` / `high-risk` 的 `src/**/*.sol`、`script/**/*.sol` 写面，writer 与 specialist review 完成后、进入最终 verifier verdict 前，自动流程必须再执行一次 `npm run codex:review`；`non-semantic` / `test-semantic` 与流程面默认按需手动触发。若当前交互会话支持 `/review`，可视为同义入口，但落盘 evidence 仍以 wrapper / CLI 命令为准。
+- 对 `src/**/*.sol`、`script/**/*.sol` 写面，`Logic evidence source`、`Security evidence source`、`Gas evidence source`、`Verification evidence source` 必须指向可落盘、可回溯的具体 artifact path；不能只写命令名、聊天结论或模糊描述。
 - 如果 `solidity-implementer` 在 review finding 之后再次写入受影响的 Solidity scope，上一轮 review note 与上述 reviewer / verifier evidence 都会被视为 stale；它们必须在最新 writer `Agent Report` 之后重新生成。
 - `Codex review evidence source` 可以继续记录 wrapper / CLI 命令，但承载该字段的 review note 必须晚于当前 writer `Agent Report`。
 - 当某个 reviewer 没有被 classifier 选中时，对应 review-note 字段应保留 owner-prefixed 说明，例如 `security-reviewer: skipped by classifier (non-semantic)`；不得伪造不存在的 reviewer artifact path。
@@ -131,7 +131,7 @@
 - 当路径命中 `src/assets/**`、`src/position/**`、`src/yield/**`、`src/router/**`、`src/integrations/**` 或 `src/libraries/**`（含 `src/libraries/IWETH.sol`）的语义敏感表面时，review note 还应显式交代 reward/accounting、router settlement、oracle assumption、position lifecycle 或外部依赖语义中哪几项被审阅过。
 - 当 `Task Brief` 已声明 `Semantic review dimensions`、`Source-of-truth docs`、`External sources required` 时，`check-solidity-review-note.sh` 会把这些声明与 review note 对应字段做对齐校验；语义敏感表面不允许把这些字段写成 `none`，且 `Evidence chain complete` 必须为 `yes`。
 - 当 `Task Brief` 声明了 `Critical assumptions to prove or reject` 时，machine policy 会要求配置指定的 review-note 字段同步反映这些假设；当前仓库复用 `Semantic alignment summary` 作为该对齐字段。
-- 对任意 `src/**/*.sol` 变更，只要 `Task Brief` 显式声明了这些字段，semantic-alignment gate 都会被收紧；`semantic_sensitive_patterns` 只在没有显式 brief 声明时提供额外兜底。
+- 对任意 `src/**/*.sol` 或 `script/**/*.sol` 变更，只要 `Task Brief` 显式声明了这些字段，semantic-alignment gate 都会被收紧；`semantic_sensitive_patterns` 只在没有显式 brief 声明时提供额外兜底。
 
 ## 7. 禁止内容
 
@@ -148,7 +148,7 @@
 ## 8. 使用方式
 
 - 需要本地记录审阅结论时，可基于 `docs/reviews/TEMPLATE.md` 新建草稿。
-- 命中 `src/**/*.sol` 变更且准备运行本地或 CI `quality:gate` 时，必须先准备好一份可通过校验的 review note。
+- 命中 `src/**/*.sol`、`script/**/*.sol` 变更且准备运行本地或 CI `quality:gate` 时，必须先准备好一份可通过校验的 review note。
 - 仅检查草稿结构可运行：`bash ./script/process/check-review-note.sh <review-note>`
 - 需要在 Solidity gate 中联动检查时，可运行：`bash ./script/process/check-solidity-review-note.sh`
 - 若未显式设置 `QUALITY_GATE_REVIEW_NOTE`，Solidity gate 只会自动选择一份 `Files reviewed` 能唯一匹配当前变更 Solidity 路径的 review note；若存在歧义或没有匹配，必须显式指定。

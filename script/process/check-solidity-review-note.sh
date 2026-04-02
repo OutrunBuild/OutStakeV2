@@ -65,9 +65,9 @@ const fs = require('fs');
 
 const [, , changedFilesPath, ...candidates] = process.argv;
 const changedFiles = fs.readFileSync(changedFilesPath, 'utf8').split(/\r?\n/).filter(Boolean);
-const changedSolidityFiles = changedFiles.filter((file) => /^(src|test)\/.*\.sol$/.test(file));
-const changedSrcSolidityFiles = changedFiles.filter((file) => /^src\/.*\.sol$/.test(file));
-const targetSolidityFiles = changedSrcSolidityFiles.length > 0 ? changedSrcSolidityFiles : changedSolidityFiles;
+const changedSolidityFiles = changedFiles.filter((file) => /^(src|script|test)\/.*\.sol$/.test(file));
+const changedProductionSolidityFiles = changedFiles.filter((file) => /^(src|script)\/.*\.sol$/.test(file));
+const targetSolidityFiles = changedProductionSolidityFiles.length > 0 ? changedProductionSolidityFiles : changedSolidityFiles;
 
 function extractField(document, field) {
   const prefix = `- ${field}:`;
@@ -101,7 +101,7 @@ if (matching.length === 1) {
 if (matching.length === 0) {
   console.error(
     '[check-solidity-review-note] ERROR: review note discovery found no candidate whose Files reviewed field references the changed Solidity paths. Set QUALITY_GATE_REVIEW_NOTE explicitly.'
-      .replace('changed Solidity paths', changedSrcSolidityFiles.length > 0 ? 'changed src Solidity paths' : 'changed Solidity paths')
+      .replace('changed Solidity paths', changedProductionSolidityFiles.length > 0 ? 'changed production Solidity paths' : 'changed Solidity paths')
   );
   process.exit(2);
 }
@@ -267,9 +267,9 @@ const path = require('path');
 const [, , reviewNotePath, changedFilesPath] = process.argv;
 const reviewNote = fs.readFileSync(reviewNotePath, 'utf8');
 const changedFiles = fs.readFileSync(changedFilesPath, 'utf8').split(/\r?\n/).filter(Boolean);
-const changedSolidityFiles = changedFiles.filter((file) => /^(src|test)\/.*\.sol$/.test(file));
-const changedSrcSolidityFiles = changedFiles.filter((file) => /^src\/.*\.sol$/.test(file));
-const targetSolidityFiles = changedSrcSolidityFiles.length > 0 ? changedSrcSolidityFiles : changedSolidityFiles;
+const changedSolidityFiles = changedFiles.filter((file) => /^(src|script|test)\/.*\.sol$/.test(file));
+const changedProductionSolidityFiles = changedFiles.filter((file) => /^(src|script)\/.*\.sol$/.test(file));
+const targetSolidityFiles = changedProductionSolidityFiles.length > 0 ? changedProductionSolidityFiles : changedSolidityFiles;
 const reviewFieldOwners = JSON.parse(process.env.REVIEW_FIELD_OWNERS || '{}');
 const ownerPrefixedFields = JSON.parse(process.env.REVIEW_OWNER_PREFIXED_FIELDS || '[]');
 const solidityRequiredFields = JSON.parse(process.env.SOLIDITY_REQUIRED_FIELDS || '[]');
@@ -457,7 +457,7 @@ for (const field of requiredSolidityFields) {
 const reviewFilesValue = extractField(reviewNote, 'Files reviewed').trim();
 const reviewFileTokens = new Set(extractPathTokens(reviewFilesValue));
 if (!targetSolidityFiles.some((changedFile) => reviewFileTokens.has(changedFile))) {
-  fail(`Files reviewed: review note does not reference any changed ${changedSrcSolidityFiles.length > 0 ? 'src Solidity' : 'Solidity'} path.`);
+  fail(`Files reviewed: review note does not reference any changed ${changedProductionSolidityFiles.length > 0 ? 'production Solidity' : 'Solidity'} path.`);
 }
 
 const taskBriefPath = extractField(reviewNote, taskBriefField).trim();
@@ -530,7 +530,7 @@ if (agentReport !== '') {
   if (agentReportFiles === '') {
     fail(`${agentReportField}: missing '- ${agentReportFilesField}:' in agent report.`);
   } else if (!targetSolidityFiles.some((changedFile) => agentReportFileTokens.has(changedFile))) {
-    fail(`${agentReportField}: agent report files do not reference any changed ${changedSrcSolidityFiles.length > 0 ? 'src Solidity' : 'Solidity'} path.`);
+    fail(`${agentReportField}: agent report files do not reference any changed ${changedProductionSolidityFiles.length > 0 ? 'production Solidity' : 'Solidity'} path.`);
   }
 
   if (agentReportMustPostdateChangedFiles) {
@@ -603,7 +603,7 @@ if (taskBrief !== '') {
 
   const expectedDefaultRoles = classifierRequiredRoles.length > 0
     ? classifierRequiredRoles
-    : (changedSrcSolidityFiles.length > 0 ? srcDefaultRoles : testDefaultRoles);
+    : (changedProductionSolidityFiles.length > 0 ? srcDefaultRoles : testDefaultRoles);
   if (taskBriefRequiredRoles !== '') {
     ensureTokensPresent(taskBriefRequiredRolesField, expectedDefaultRoles, taskBriefRequiredRoles, 'quality_gate default roles', failures);
   }
@@ -619,8 +619,8 @@ if (taskBrief !== '') {
     fail(`${taskBriefVerifierProfileField}: task brief verifier profile '${taskBriefVerifierProfile}' does not match classifier result '${classifierVerifierProfile}'.`);
   }
 
-  if (changedSrcSolidityFiles.length > 0 && taskBriefReviewNoteRequired !== 'yes') {
-    fail(`${taskBriefReviewNoteRequiredField}: must be 'yes' for src Solidity changes.`);
+  if (changedProductionSolidityFiles.length > 0 && taskBriefReviewNoteRequired !== 'yes') {
+    fail(`${taskBriefReviewNoteRequiredField}: must be 'yes' for production Solidity changes.`);
   }
 
   if (isNoneLike(taskBriefDispatchBackend)) {
@@ -638,7 +638,7 @@ if (taskBrief !== '') {
   }
 
   if (!targetSolidityFiles.every((changedFile) => taskBriefFilesInScopeTokens.has(changedFile))) {
-    fail(`${taskBriefFilesInScopeField}: task brief does not scope the changed ${changedSrcSolidityFiles.length > 0 ? 'src Solidity' : 'Solidity'} path set.`);
+    fail(`${taskBriefFilesInScopeField}: task brief does not scope the changed ${changedProductionSolidityFiles.length > 0 ? 'production Solidity' : 'Solidity'} path set.`);
   }
 
   if (matchedRequiredOwnersForTargetFiles.size > 0) {
@@ -650,7 +650,7 @@ if (taskBrief !== '') {
   }
 
   if (!targetSolidityFiles.every((changedFile) => taskBriefWritePermissionTokens.has(changedFile))) {
-    fail(`${taskBriefWritePermissionsField}: task brief does not authorize the changed ${changedSrcSolidityFiles.length > 0 ? 'src Solidity' : 'Solidity'} path set.`);
+    fail(`${taskBriefWritePermissionsField}: task brief does not authorize the changed ${changedProductionSolidityFiles.length > 0 ? 'production Solidity' : 'Solidity'} path set.`);
   }
 }
 
@@ -662,7 +662,7 @@ const reviewMentionsCodexReview =
   reviewCodexEvidence !== '' ||
   codexReviewCommandTokens.some((token) => reviewCommandsRun.toLowerCase().includes(String(token).toLowerCase()));
 const shouldRequireCodexReview =
-  changedSrcSolidityFiles.length > 0 &&
+  changedProductionSolidityFiles.length > 0 &&
   (
     autoCodexReviewRequired ||
     (
@@ -671,7 +671,7 @@ const shouldRequireCodexReview =
     )
   );
 
-if (changedSrcSolidityFiles.length > 0 && (shouldRequireCodexReview || reviewMentionsCodexReview)) {
+if (changedProductionSolidityFiles.length > 0 && (shouldRequireCodexReview || reviewMentionsCodexReview)) {
   if (shouldRequireCodexReview && reviewCodexSummary === '') {
     fail(`${codexReviewSummaryField}: missing required Solidity review-note field.`);
   }
@@ -681,11 +681,11 @@ if (changedSrcSolidityFiles.length > 0 && (shouldRequireCodexReview || reviewMen
   }
 
   if (reviewCodexSummary !== '' && isNoneLike(reviewCodexSummary)) {
-    fail(`${codexReviewSummaryField}: cannot be 'none' for src Solidity changes.`);
+    fail(`${codexReviewSummaryField}: cannot be 'none' for production Solidity changes.`);
   }
 
   if (reviewCodexEvidence !== '' && isNoneLike(reviewCodexEvidence)) {
-    fail(`${codexReviewEvidenceField}: cannot be 'none' for src Solidity changes.`);
+    fail(`${codexReviewEvidenceField}: cannot be 'none' for production Solidity changes.`);
   }
 
   if (shouldRequireCodexReview || reviewCommandsRun !== '') {
@@ -702,7 +702,7 @@ const hasSemanticSensitiveChange = (classifierClassification === 'prod-semantic'
 );
 
 const hasExplicitBriefAlignmentRequirements =
-  changedSrcSolidityFiles.length > 0 &&
+  changedProductionSolidityFiles.length > 0 &&
   (
     taskBriefSemanticDimensions.length > 0 ||
     taskBriefSourceDocs.length > 0 ||
@@ -720,23 +720,23 @@ if ((hasSemanticSensitiveChange || hasExplicitBriefAlignmentRequirements) && tas
   const reviewCriticalAssumptions = extractField(reviewNote, criticalAssumptionsField).trim();
 
   if (isNoneLike(reviewSemanticDimensions)) {
-    fail(`${semanticDimensionsField}: cannot be 'none' when semantic alignment is required for the current src Solidity change.`);
+    fail(`${semanticDimensionsField}: cannot be 'none' when semantic alignment is required for the current production Solidity change.`);
   }
 
   if (isNoneLike(reviewSourceOfTruth)) {
-    fail(`${sourceOfTruthField}: cannot be 'none' when semantic alignment is required for the current src Solidity change.`);
+    fail(`${sourceOfTruthField}: cannot be 'none' when semantic alignment is required for the current production Solidity change.`);
   }
 
   if (isNoneLike(reviewLocalControlFlow)) {
-    fail(`${localControlFlowField}: cannot be 'none' when semantic alignment is required for the current src Solidity change.`);
+    fail(`${localControlFlowField}: cannot be 'none' when semantic alignment is required for the current production Solidity change.`);
   }
 
   if (isNoneLike(reviewSemanticAlignment)) {
-    fail(`${semanticAlignmentSummaryField}: cannot be 'none' when semantic alignment is required for the current src Solidity change.`);
+    fail(`${semanticAlignmentSummaryField}: cannot be 'none' when semantic alignment is required for the current production Solidity change.`);
   }
 
   if (reviewEvidenceChain !== 'yes') {
-    fail(`${evidenceChainField}: must be 'yes' when semantic alignment is required for the current src Solidity change.`);
+    fail(`${evidenceChainField}: must be 'yes' when semantic alignment is required for the current production Solidity change.`);
   }
 
   if (taskBriefSemanticDimensions.length > 0) {
@@ -768,7 +768,7 @@ if ((hasSemanticSensitiveChange || hasExplicitBriefAlignmentRequirements) && tas
   }
 }
 
-if (changedSrcSolidityFiles.length > 0 && agentReportMtimeMs !== null) {
+if (changedProductionSolidityFiles.length > 0 && agentReportMtimeMs !== null) {
   const reviewNoteMtimeMs = fs.statSync(reviewNotePath).mtimeMs;
   if (reviewNoteMustPostdateAgentReport && reviewNoteMtimeMs < agentReportMtimeMs) {
     fail(`review note: stale reviewer summary. '${path.relative(process.cwd(), reviewNotePath)}' must be regenerated after the current writer Agent Report.`);
@@ -779,7 +779,7 @@ if (changedSrcSolidityFiles.length > 0 && agentReportMtimeMs !== null) {
     const fieldIsRequired = solidityRequiredFields.includes(field);
     if (rawValue === '' || isNoneLike(rawValue)) {
       if (fieldIsRequired) {
-        fail(`${field}: stale-evidence check requires a concrete artifact path for src Solidity changes.`);
+        fail(`${field}: stale-evidence check requires a concrete artifact path for production Solidity changes.`);
       }
       continue;
     }

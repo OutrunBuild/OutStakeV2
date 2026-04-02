@@ -6,7 +6,7 @@
 
 ## Use This Role When
 
-- The change touches `src/**/*.sol`
+- The change touches `src/**/*.sol` or `script/**/*.sol`
 - You need to interpret a gas snapshot, hot-path deltas, or optimization opportunities
 - `main-orchestrator` needs to decide whether a gas recommendation justifies a bounded implementation follow-up
 

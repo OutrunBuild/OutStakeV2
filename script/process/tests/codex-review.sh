@@ -24,14 +24,14 @@ chmod +x "$fake_bin_dir/codex"
 
 PATH="$fake_bin_dir:$PATH" CODEX_REVIEW_BIN=codex bash ./script/process/run-codex-review.sh
 
-if ! grep -q "^review --uncommitted " "$codex_log"; then
+if ! grep -q "^review --uncommitted\( \|$\)" "$codex_log"; then
     echo "Expected run-codex-review.sh to invoke 'codex review --uncommitted'"
     cat "$codex_log"
     exit 1
 fi
 
-if ! grep -qi "logic bugs" "$codex_log"; then
-    echo "Expected run-codex-review.sh to provide a bug-finding review prompt"
+if grep -qi "logic bugs" "$codex_log"; then
+    echo "Expected run-codex-review.sh to avoid passing a positional prompt with --uncommitted"
     cat "$codex_log"
     exit 1
 fi

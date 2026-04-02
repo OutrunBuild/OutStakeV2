@@ -12,4 +12,8 @@ if ! command -v "$codex_bin" >/dev/null 2>&1; then
     exit 1
 fi
 
-"$codex_bin" review --uncommitted "$prompt" "$@"
+if [ -n "${prompt}" ]; then
+    echo "[run-codex-review] INFO: current codex CLI rejects --uncommitted with a positional prompt; CODEX_REVIEW_PROMPT is ignored." >&2
+fi
+
+"$codex_bin" review --uncommitted "$@"
