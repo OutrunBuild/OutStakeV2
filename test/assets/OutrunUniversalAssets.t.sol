@@ -50,7 +50,7 @@ contract OutrunUniversalAssetsTest is Test {
 
     function setUp() external {
         endpoint = new MockLzEndpoint();
-        uAsset = new OutrunUniversalAssets("Outrun UAsset", "UAsset", 18, address(endpoint), owner);
+        uAsset = new OutrunUniversalAssets("Outrun UAsset", "UAsset", 18, address(endpoint), owner, address(0));
         borrower = new MockFlashBorrower(uAsset);
     }
 
@@ -167,6 +167,19 @@ contract OutrunUniversalAssetsTest is Test {
         assertEq(uAsset.totalSupply(), fee);
         assertEq(uAsset.balanceOf(address(borrower)), 0);
         assertEq(uAsset.balanceOf(flashFeeReceiver), fee);
+    }
+
+    function testConstructorInitializesFlashFeeReceiver() external {
+        OutrunUniversalAssets configured = new OutrunUniversalAssets(
+            "Outrun UAsset",
+            "UAsset",
+            18,
+            address(endpoint),
+            owner,
+            flashFeeReceiver
+        );
+
+        assertEq(configured.flashFeeReceiver(), flashFeeReceiver);
     }
 
     function testSetFlashFeeReceiverOnlyOwner() external {
