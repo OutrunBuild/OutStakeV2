@@ -3,7 +3,8 @@ pragma solidity ^0.8.28;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-import {NativeAmountMismatch, TokenHelper} from "../libraries/TokenHelper.sol";
+import {NativeAmountMismatch} from "../libraries/CommonErrors.sol";
+import {TokenHelper} from "../libraries/TokenHelper.sol";
 import {IStandardizedYield} from "./interfaces/IStandardizedYield.sol";
 import {OutrunERC20, IERC20Metadata} from "../assets/base/OutrunERC20.sol";
 import {OutrunERC20Pausable} from "../assets/base/OutrunERC20Pausable.sol";
