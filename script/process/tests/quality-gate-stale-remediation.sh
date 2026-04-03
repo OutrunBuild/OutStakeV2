@@ -28,6 +28,7 @@ restore_file() {
 }
 
 cleanup() {
+    restore_file "script/process/check-solhint.sh"
     restore_file "script/process/check-natspec.sh"
     restore_file "script/process/check-coverage.sh"
     restore_file "script/process/check-slither.sh"
@@ -61,10 +62,17 @@ EOF
 chmod +x "$bin_dir/forge"
 
 backup_file "script/process/check-natspec.sh"
+backup_file "script/process/check-solhint.sh"
 backup_file "script/process/check-coverage.sh"
 backup_file "script/process/check-slither.sh"
 backup_file "script/process/check-gas-report.sh"
 backup_file "script/process/check-solidity-review-note.sh"
+
+cat > "script/process/check-solhint.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+exit 0
+EOF
 
 cat > "script/process/check-natspec.sh" <<'EOF'
 #!/usr/bin/env bash
@@ -98,6 +106,7 @@ exit 1
 EOF
 
 chmod +x \
+    "script/process/check-solhint.sh" \
     "script/process/check-natspec.sh" \
     "script/process/check-coverage.sh" \
     "script/process/check-slither.sh" \

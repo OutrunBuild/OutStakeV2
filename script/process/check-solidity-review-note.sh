@@ -119,7 +119,7 @@ if [ -z "$changed_files" ]; then
     exit 0
 fi
 
-if ! printf '%s\n' "$changed_files" | grep -Eq '^(src|test)/.*\.sol$'; then
+if ! printf '%s\n' "$changed_files" | grep -Eq '^(src|test|script)/.*\.sol$'; then
     exit 0
 fi
 

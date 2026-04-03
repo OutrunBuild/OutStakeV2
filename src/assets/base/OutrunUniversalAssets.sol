@@ -19,9 +19,7 @@ contract OutrunUniversalAssets is IUniversalAssets, OutrunOFT {
         address _lzEndpoint,
         address _owner,
         address _flashFeeReceiver
-    ) OutrunOFT(_name, _symbol, _decimals, _lzEndpoint, _owner, _flashFeeReceiver)
-        Ownable(_owner)
-    {}
+    ) OutrunOFT(_name, _symbol, _decimals, _lzEndpoint, _owner, _flashFeeReceiver) Ownable(_owner) {}
 
     /**
      * @notice Returns the remaining minting allowance for a minter.

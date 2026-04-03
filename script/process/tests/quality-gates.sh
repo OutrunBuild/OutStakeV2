@@ -28,6 +28,7 @@ trap cleanup EXIT
 
 existing_src_file="$(rg --files src -g '*.sol' 2>/dev/null | head -n 1 || true)"
 existing_test_file="$(rg --files test -g '*.sol' 2>/dev/null | head -n 1 || true)"
+existing_script_file="$(rg --files script -g '*.sol' 2>/dev/null | head -n 1 || true)"
 
 if [ -z "$existing_src_file" ]; then
     mkdir -p src
@@ -86,7 +87,7 @@ if [ "\${1:-}" = "-n" ]; then
 fi
 
 case "\${1:-}" in
-  ./script/process/check-natspec.sh|./script/process/check-coverage.sh|./script/process/check-slither.sh|./script/process/check-gas-report.sh|./script/process/check-solidity-review-note.sh|./script/process/run-stale-evidence-loop.sh|./script/process/check-rule-map.sh)
+  ./script/process/check-solhint.sh|./script/process/check-natspec.sh|./script/process/check-coverage.sh|./script/process/check-slither.sh|./script/process/check-gas-report.sh|./script/process/check-solidity-review-note.sh|./script/process/run-stale-evidence-loop.sh|./script/process/check-rule-map.sh)
     printf 'bash %s\n' "\$1" >> "$command_log"
     if [ "\$1" = "./script/process/check-solidity-review-note.sh" ]; then
       printf '[check-solidity-review-note] PASS\n'
@@ -133,6 +134,14 @@ assert_contains() {
     fi
 }
 
+if [ ! -f "./script/process/lib/quality-common.sh" ]; then
+    echo "Expected shared helper ./script/process/lib/quality-common.sh"
+    exit 1
+fi
+
+assert_contains "source ./script/process/lib/quality-common.sh" "./script/process/quality-quick.sh" "quality-quick implementation"
+assert_contains "source ./script/process/lib/quality-common.sh" "./script/process/quality-gate.sh" "quality-gate implementation"
+
 run_quality_script "quality-quick.sh" "script/process/check-coverage.js" "$quick_output"
 assert_contains "[quality-quick] node --check (changed process JS files)" "$quick_output" "quality-quick output for process JS change"
 assert_contains "run docs:check" "$npm_log" "quality-quick npm log for process JS change"
@@ -157,6 +166,17 @@ assert_contains "ci" "$npm_log" "quality-gate npm log for package change"
 assert_contains "run docs:check" "$npm_log" "quality-gate npm log for package change"
 assert_contains "run process:selftest" "$npm_log" "quality-gate npm log for package change"
 
+run_quality_script "quality-quick.sh" "$existing_src_file" "$quick_output" "non-semantic" "diff --git a/$existing_src_file b/$existing_src_file
+--- a/$existing_src_file
++++ b/$existing_src_file
+@@ -1 +1 @@
+-// old
++// new"
+assert_contains "change classification: non-semantic" "$quick_output" "quality-quick output for non-semantic Solidity change"
+assert_contains "bash ./script/process/check-solhint.sh" "$command_log" "quality-quick command log for non-semantic Solidity change"
+assert_contains "forge fmt --check $existing_src_file" "$command_log" "quality-quick command log for non-semantic Solidity change"
+assert_contains "forge build" "$command_log" "quality-quick command log for non-semantic Solidity change"
+
 run_quality_script "quality-gate.sh" "$existing_src_file" "$gate_output" "non-semantic" "diff --git a/$existing_src_file b/$existing_src_file
 --- a/$existing_src_file
 +++ b/$existing_src_file
@@ -165,6 +185,7 @@ run_quality_script "quality-gate.sh" "$existing_src_file" "$gate_output" "non-se
 +// new"
 assert_contains "change classification: non-semantic" "$gate_output" "quality-gate output for non-semantic Solidity change"
 assert_contains "verifier profile: light" "$gate_output" "quality-gate output for non-semantic Solidity change"
+assert_contains "bash ./script/process/check-solhint.sh" "$command_log" "quality-gate command log for non-semantic Solidity change"
 assert_contains "forge fmt --check $existing_src_file" "$command_log" "quality-gate command log for non-semantic Solidity change"
 assert_contains "forge build" "$command_log" "quality-gate command log for non-semantic Solidity change"
 assert_contains "bash ./script/process/check-natspec.sh" "$command_log" "quality-gate command log for non-semantic Solidity change"
@@ -208,6 +229,29 @@ assert_contains "bash ./script/process/check-coverage.sh" "$command_log" "qualit
 assert_contains "bash ./script/process/check-slither.sh" "$command_log" "quality-gate command log for prod-semantic change"
 assert_contains "bash ./script/process/check-gas-report.sh" "$command_log" "quality-gate command log for prod-semantic change"
 assert_contains "run codex:review" "$npm_log" "quality-gate npm log for staged prod-semantic change"
+
+run_quality_script "quality-gate.sh" "$existing_script_file" "$gate_output" "prod-semantic" "diff --git a/$existing_script_file b/$existing_script_file
+--- a/$existing_script_file
++++ b/$existing_script_file
+@@ -10 +10 @@
+-        return amount;
++        return amount + 1;" "staged"
+assert_contains "change classification: prod-semantic" "$gate_output" "quality-gate output for script-only prod-semantic Solidity change"
+assert_contains "verifier profile: full" "$gate_output" "quality-gate output for script-only prod-semantic Solidity change"
+assert_contains "forge test -vvv" "$command_log" "quality-gate command log for script-only prod-semantic change"
+assert_contains "bash ./script/process/check-coverage.sh" "$command_log" "quality-gate command log for script-only prod-semantic change"
+assert_contains "skip slither / gas (script Solidity surface; no src Solidity files in scope)" "$gate_output" "quality-gate output for script-only prod-semantic Solidity change"
+if grep -q "check-slither" "$command_log"; then
+    echo "Did not expect slither for script-only prod-semantic Solidity change"
+    cat "$command_log"
+    exit 1
+fi
+if grep -q "check-gas-report" "$command_log"; then
+    echo "Did not expect gas report for script-only prod-semantic Solidity change"
+    cat "$command_log"
+    exit 1
+fi
+assert_contains "run codex:review" "$npm_log" "quality-gate npm log for staged script-only prod-semantic change"
 
 run_quality_script "quality-gate.sh" "$existing_src_file" "$gate_output" "prod-semantic" "diff --git a/$existing_src_file b/$existing_src_file
 --- a/$existing_src_file

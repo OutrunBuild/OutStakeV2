@@ -150,7 +150,8 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         StakeParam calldata stakeParam
     ) public payable returns (uint256 positionId, uint256 UAssetMinted) {
         uint256 amountInSY = _mintSY(SY, tokenIn, address(this), tokenAmount, 0);
-        (positionId, UAssetMinted) = _stakeFromSYBalance(SY, SP, amountInSY, stakeParam.lockupDays, stakeParam.owner);
+        (positionId, UAssetMinted) =
+            _stakeFromSYBalance(SY, SP, amountInSY, stakeParam.lockupDays, stakeParam.owner, stakeParam.owner);
         require(
             UAssetMinted >= stakeParam.minUAssetMinted,
             InsufficientUAssetMinted(UAssetMinted, stakeParam.minUAssetMinted)
@@ -172,7 +173,8 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         returns (uint256 positionId, uint256 UAssetMinted)
     {
         _transferFrom(IERC20(SY), msg.sender, address(this), amountInSY);
-        (positionId, UAssetMinted) = _stakeFromSYBalance(SY, SP, amountInSY, stakeParam.lockupDays, stakeParam.owner);
+        (positionId, UAssetMinted) =
+            _stakeFromSYBalance(SY, SP, amountInSY, stakeParam.lockupDays, stakeParam.owner, stakeParam.owner);
         require(
             UAssetMinted >= stakeParam.minUAssetMinted,
             InsufficientUAssetMinted(UAssetMinted, stakeParam.minUAssetMinted)
@@ -235,12 +237,17 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         amountTokenOut = IOutrunStakeManager(SP).previewWrapRedeem(amountInUAsset, tokenOut);
     }
 
-    function _stakeFromSYBalance(address SY, address SP, uint256 amountInSY, uint128 lockupDays, address owner_)
-        internal
-        returns (uint256 positionId, uint256 UAssetMinted)
-    {
+    function _stakeFromSYBalance(
+        address SY,
+        address SP,
+        uint256 amountInSY,
+        uint128 lockupDays,
+        address positionOwner,
+        address uAssetReceiver
+    ) internal returns (uint256 positionId, uint256 UAssetMinted) {
         _safeApproveInf(SY, SP);
-        (positionId, UAssetMinted) = IOutrunStakeManager(SP).stake(amountInSY, lockupDays, owner_);
+        (positionId, UAssetMinted) =
+            IOutrunStakeManager(SP).stake(amountInSY, lockupDays, positionOwner, uAssetReceiver);
     }
 
     /**
@@ -283,8 +290,10 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
     ) external payable {
         address SY = IOutrunStakeManager(SP).SY();
         uint256 amountInSY = _mintSY(SY, tokenIn, address(this), tokenAmount, 0);
-        (, uint256 amountInUAsset) = _stakeFromSYBalance(SY, SP, amountInSY, lockupDays, genesisUser);
+        address uAsset = IOutrunStakeManager(SP).uAsset();
+        (, uint256 amountInUAsset) = _stakeFromSYBalance(SY, SP, amountInSY, lockupDays, genesisUser, address(this));
         if (amountInUAsset > type(uint128).max) revert InvalidParam();
+        _safeApproveInf(uAsset, memeverseLauncher);
         // amountInUAsset is bounded by type(uint128).max immediately before this cast.
         // forge-lint: disable-next-line(unsafe-typecast)
         IMemeverseLauncher(memeverseLauncher).genesis(verseId, uint128(amountInUAsset), genesisUser);
@@ -309,8 +318,10 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         address genesisUser
     ) external {
         _transferFrom(IERC20(SY), msg.sender, address(this), amountInSY);
-        (, uint256 amountInUAsset) = _stakeFromSYBalance(SY, SP, amountInSY, lockupDays, genesisUser);
+        address uAsset = IOutrunStakeManager(SP).uAsset();
+        (, uint256 amountInUAsset) = _stakeFromSYBalance(SY, SP, amountInSY, lockupDays, genesisUser, address(this));
         if (amountInUAsset > type(uint128).max) revert InvalidParam();
+        _safeApproveInf(uAsset, memeverseLauncher);
         // amountInUAsset is bounded by type(uint128).max immediately before this cast.
         // forge-lint: disable-next-line(unsafe-typecast)
         IMemeverseLauncher(memeverseLauncher).genesis(verseId, uint128(amountInUAsset), genesisUser);
