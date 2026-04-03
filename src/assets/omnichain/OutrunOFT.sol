@@ -14,6 +14,8 @@ import { OutrunERC20FlashMint } from "../base/OutrunERC20FlashMint.sol";
 abstract contract OutrunOFT is OutrunERC20FlashMint, OutrunERC20Pausable, OFTCore {
     address public flashFeeReceiver;
 
+    error AmountSDOverflowed(uint256 amountSD);
+
     /**
      * @dev Constructor for the OFT contract.
      * @param name_ The name of the OFT.
@@ -71,6 +73,16 @@ abstract contract OutrunOFT is OutrunERC20FlashMint, OutrunERC20Pausable, OFTCor
 
     function _flashFeeReceiver() internal view virtual override returns (address) {
         return flashFeeReceiver;
+    }
+
+    /**
+     * @dev Converts a local-decimal amount into the shared-decimal uint64 payload used by OFT messages.
+     * Reverts instead of truncating when the amount cannot fit in the OFT shared-decimal envelope.
+     */
+    function _toSD(uint256 _amountLD) internal view virtual override returns (uint64 amountSD) {
+        uint256 amountSD256 = _amountLD / decimalConversionRate;
+        if (amountSD256 > type(uint64).max) revert AmountSDOverflowed(amountSD256);
+        return uint64(amountSD256);
     }
 
     /**

@@ -4,15 +4,31 @@ pragma solidity ^0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {IERC3156FlashBorrower} from "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {
+    MessagingFee,
+    MessagingParams
+} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
+import {SendParam} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
 
 import {OutrunUniversalAssets} from "../../src/assets/base/OutrunUniversalAssets.sol";
 import {IUniversalAssets} from "../../src/assets/interfaces/IUniversalAssets.sol";
 
+error AmountSDOverflowed(uint256 amountSD);
+
 contract MockLzEndpoint {
     address internal delegate;
+    uint256 internal quoteNativeFee;
 
     function setDelegate(address delegate_) external {
         delegate = delegate_;
+    }
+
+    function setQuoteNativeFee(uint256 nativeFee_) external {
+        quoteNativeFee = nativeFee_;
+    }
+
+    function quote(MessagingParams calldata, address) external view returns (MessagingFee memory fee) {
+        fee = MessagingFee({nativeFee: quoteNativeFee, lzTokenFee: 0});
     }
 }
 
@@ -52,6 +68,9 @@ contract OutrunUniversalAssetsTest is Test {
         endpoint = new MockLzEndpoint();
         uAsset = new OutrunUniversalAssets("Outrun UAsset", "UAsset", 18, address(endpoint), owner, address(0));
         borrower = new MockFlashBorrower(uAsset);
+
+        vm.prank(owner);
+        uAsset.setPeer(101, bytes32(uint256(uint160(address(0xBEEF)))));
     }
 
     function testSetMintingCapControlsMintability() external {
@@ -185,5 +204,23 @@ contract OutrunUniversalAssetsTest is Test {
         uAsset.setFlashFeeReceiver(flashFeeReceiver);
 
         assertEq(uAsset.flashFeeReceiver(), flashFeeReceiver);
+    }
+
+    function testQuoteSendRevertsWhenAmountSDOverflows() external {
+        endpoint.setQuoteNativeFee(0.1 ether);
+
+        uint256 overflowAmountLD = (uint256(type(uint64).max) + 1) * uAsset.decimalConversionRate();
+        SendParam memory sendParam = SendParam({
+            dstEid: 101,
+            to: bytes32(uint256(uint160(address(0xBEEF)))),
+            amountLD: overflowAmountLD,
+            minAmountLD: 0,
+            extraOptions: bytes("opts"),
+            composeMsg: bytes(""),
+            oftCmd: bytes("")
+        });
+
+        vm.expectRevert(abi.encodeWithSelector(AmountSDOverflowed.selector, uint256(type(uint64).max) + 1));
+        uAsset.quoteSend(sendParam, false);
     }
 }
