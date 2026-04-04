@@ -21,7 +21,6 @@ contract YieldDeployScript is BaseScript {
     address internal owner;
     address internal revenuePool;
     address internal keeper;
-    address internal outrunDeployer;
 
     function run() public broadcaster {
         UETH = vm.envAddress("UETH");
@@ -30,7 +29,6 @@ contract YieldDeployScript is BaseScript {
         owner = vm.envAddress("OWNER");
         revenuePool = vm.envAddress("REVENUE_POOL");
         keeper = vm.envAddress("KEEPER");
-        outrunDeployer = vm.envAddress("OUTRUN_DEPLOYER");
 
         // 20000 runs
         // _supportWstETHOnSepolia();

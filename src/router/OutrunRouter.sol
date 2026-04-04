@@ -150,8 +150,10 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         StakeParam calldata stakeParam
     ) public payable returns (uint256 positionId, uint256 UAssetMinted) {
         uint256 amountInSY = _mintSY(SY, tokenIn, address(this), tokenAmount, 0);
+        // receiver defaults to owner when not specified (address(0))
+        address uAssetReceiver = stakeParam.receiver == address(0) ? stakeParam.owner : stakeParam.receiver;
         (positionId, UAssetMinted) =
-            _stakeFromSYBalance(SY, SP, amountInSY, stakeParam.lockupDays, stakeParam.owner, stakeParam.owner);
+            _stakeFromSYBalance(SY, SP, amountInSY, stakeParam.lockupDays, stakeParam.owner, uAssetReceiver);
         require(
             UAssetMinted >= stakeParam.minUAssetMinted,
             InsufficientUAssetMinted(UAssetMinted, stakeParam.minUAssetMinted)
@@ -173,8 +175,10 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         returns (uint256 positionId, uint256 UAssetMinted)
     {
         _transferFrom(IERC20(SY), msg.sender, address(this), amountInSY);
+        // receiver defaults to owner when not specified (address(0))
+        address uAssetReceiver = stakeParam.receiver == address(0) ? stakeParam.owner : stakeParam.receiver;
         (positionId, UAssetMinted) =
-            _stakeFromSYBalance(SY, SP, amountInSY, stakeParam.lockupDays, stakeParam.owner, stakeParam.owner);
+            _stakeFromSYBalance(SY, SP, amountInSY, stakeParam.lockupDays, stakeParam.owner, uAssetReceiver);
         require(
             UAssetMinted >= stakeParam.minUAssetMinted,
             InsufficientUAssetMinted(UAssetMinted, stakeParam.minUAssetMinted)

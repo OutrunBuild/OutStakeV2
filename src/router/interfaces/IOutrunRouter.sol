@@ -6,6 +6,7 @@ interface IOutrunRouter {
         uint128 lockupDays;
         uint256 minUAssetMinted;
         address owner;
+        address receiver; // uAsset receiver; falls back to owner when address(0)
     }
 
     /**

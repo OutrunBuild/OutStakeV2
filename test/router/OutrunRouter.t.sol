@@ -372,10 +372,98 @@ contract OutrunRouterTest is Test {
 
     function testStakeFromSYRevertsWhenMintedBelowMinimumUAsset() external {
         IOutrunRouter.StakeParam memory stakeParam =
-            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: 101e18, owner: owner});
+            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: 101e18, owner: owner, receiver: address(0)});
 
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSelector(IOutrunRouter.InsufficientUAssetMinted.selector, 100e18, 101e18));
         router.stakeFromSY(address(sy), address(position), 100e18, stakeParam);
+    }
+
+    function testStakeFromSYMintsUAssetToReceiverWhenSpecified() external {
+        address receiver = address(0xBEEF);
+
+        IOutrunRouter.StakeParam memory stakeParam =
+            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: 0, owner: owner, receiver: receiver});
+
+        vm.prank(owner);
+        (uint256 positionId, uint256 uAssetMinted) =
+            router.stakeFromSY(address(sy), address(position), 100e18, stakeParam);
+
+        (address positionOwner, uint256 syStaked, uint256 positionUAssetMinted,, uint128 deadline) =
+            position.positions(positionId);
+
+        // Position is owned by owner
+        assertEq(positionOwner, owner);
+        assertEq(syStaked, 100e18);
+        assertEq(positionUAssetMinted, 100e18);
+        // uAsset is minted to receiver
+        assertEq(uAsset.balanceOf(receiver), 100e18);
+        assertEq(uAsset.balanceOf(owner), 0);
+        assertEq(uAssetMinted, 100e18);
+        assertEq(deadline, block.timestamp + 30 days);
+    }
+
+    function testStakeFromSYDefaultsReceiverToOwnerWhenZero() external {
+        // receiver = address(0) should behave like the old code: uAsset goes to owner
+        IOutrunRouter.StakeParam memory stakeParam =
+            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: 0, owner: owner, receiver: address(0)});
+
+        vm.prank(owner);
+        (uint256 positionId, uint256 uAssetMinted) =
+            router.stakeFromSY(address(sy), address(position), 100e18, stakeParam);
+
+        (address positionOwner, uint256 syStaked, uint256 positionUAssetMinted,,) = position.positions(positionId);
+
+        // Position is owned by owner
+        assertEq(positionOwner, owner);
+        assertEq(syStaked, 100e18);
+        assertEq(positionUAssetMinted, 100e18);
+        // uAsset is minted to owner since receiver is address(0)
+        assertEq(uAsset.balanceOf(owner), 100e18);
+        assertEq(uAssetMinted, 100e18);
+    }
+
+    function testStakeFromTokenMintsUAssetToReceiverWhenSpecified() external {
+        address receiver = address(0xBEEF);
+
+        IOutrunRouter.StakeParam memory stakeParam =
+            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: 0, owner: owner, receiver: receiver});
+
+        vm.prank(owner);
+        (uint256 positionId, uint256 uAssetMinted) =
+            router.stakeFromToken(address(sy), address(position), address(underlying), 100e18, stakeParam);
+
+        (address positionOwner, uint256 syStaked, uint256 positionUAssetMinted,, uint128 deadline) =
+            position.positions(positionId);
+
+        // Position is owned by owner
+        assertEq(positionOwner, owner);
+        assertEq(syStaked, 100e18);
+        assertEq(positionUAssetMinted, 100e18);
+        // uAsset is minted to receiver
+        assertEq(uAsset.balanceOf(receiver), 100e18);
+        assertEq(uAsset.balanceOf(owner), 0);
+        assertEq(uAssetMinted, 100e18);
+        assertEq(deadline, block.timestamp + 30 days);
+    }
+
+    function testStakeFromTokenDefaultsReceiverToOwnerWhenZero() external {
+        // receiver = address(0) should behave like the old code: uAsset goes to owner
+        IOutrunRouter.StakeParam memory stakeParam =
+            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: 0, owner: owner, receiver: address(0)});
+
+        vm.prank(owner);
+        (uint256 positionId, uint256 uAssetMinted) =
+            router.stakeFromToken(address(sy), address(position), address(underlying), 100e18, stakeParam);
+
+        (address positionOwner, uint256 syStaked, uint256 positionUAssetMinted,,) = position.positions(positionId);
+
+        // Position is owned by owner
+        assertEq(positionOwner, owner);
+        assertEq(syStaked, 100e18);
+        assertEq(positionUAssetMinted, 100e18);
+        // uAsset is minted to owner since receiver is address(0)
+        assertEq(uAsset.balanceOf(owner), 100e18);
+        assertEq(uAssetMinted, 100e18);
     }
 }

@@ -1,0 +1,206 @@
+# OutStakeV2 Router And User Flows
+
+## 1. 文档目的
+
+本文档整理 `OutrunRouter`、`OutrunStakingPosition` 与 `SYBase` 当前已经实现的用户流程，覆盖 token / native、`SY`、locked stake、wrap stake、wrap redeem、genesis 与 preview 语义。本文只记录本地代码和现有测试能直接证明的行为，不讨论 roadmap。
+
+## 2. token / native -> SY
+
+`mintSYFromToken(SY, tokenIn, receiver, amountInput, minSyOut)` 是 router 的 token 或 native 入金入口。
+
+- router 先校验：如果 `tokenIn != NATIVE`，则 `msg.value` 必须为 0，否则回退 `NativeAmountMismatch()`。
+- router 总是从 `msg.sender` 拉取 `tokenIn`，不会消费 router 自己预存的同名余额。测试也证明 router 即使事先有 prefund，实际入金仍来自调用者。
+- 之后 router 调用 `IStandardizedYield(SY).deposit(receiver, tokenIn, amountInput, minSyOut)`。
+- `SYBase.deposit(...)` 会再次校验：
+  - `tokenIn` 必须是 `isValidTokenIn(tokenIn)` 支持的资产。
+  - `amountTokenToDeposit` 不能为 0。
+  - 若 `tokenIn != NATIVE`，`msg.value` 也必须为 0。
+- `SYBase.deposit(...)` 成功后，`SY` 份额直接 mint 给 `receiver`，不是留在 router。
+- native 路径下，router 会把 `amountInput` 作为 `value` 传给 `SY.deposit(...)`；测试证明这一路径会把 `tokenIn` 记录为 `address(0)`，并把相同数额的 `msg.value` 透传给 `SY`。
+
+## 3. SY -> token
+
+`redeemSyToToken(SY, receiver, tokenOut, amountInSY, minTokenOut)` 是 router 的 `SY` 赎回入口。
+
+- router 会先把 `amountInSY` 从调用者转到 `SY` 合约地址本身，而不是转到 router 自己。
+- 然后 router 调用 `IStandardizedYield(SY).redeem(receiver, amountInSY, tokenOut, minTokenOut, true)`。
+- `burnFromInternalBalance = true` 的含义是：`SYBase.redeem(...)` 会从 `address(this)`，也就是 `SY` 合约自身余额里烧份额。
+- `SYBase.redeem(...)` 会校验：
+  - `tokenOut` 必须是 `isValidTokenOut(tokenOut)` 支持的资产。
+  - `amountSharesToRedeem` 不能为 0。
+  - 实际产出的 `amountTokenOut` 不能低于 `minTokenOut`。
+- 测试证明这一路径也不会动用 `SY` 合约里已有的 prefund internal balance；调用者的 `SY` 仍然会被先转入，再按本次数量烧掉。
+
+## 4. token -> locked stake
+
+`stakeFromToken(SY, SP, tokenIn, tokenAmount, stakeParam)` 当前实现是”先 mint `SY`，再创建 locked position”。
+
+`StakeParam` 结构体包含以下字段：
+- `lockupDays`：锁仓天数
+- `minUAssetMinted`：最小 uAsset 输出（滑点保护）
+- `owner`：position owner，拥有仓位控制权
+- `receiver`：uAsset 接收地址；当 `receiver == address(0)` 时回退到 `owner`
+
+当前路由行为：
+- router 先调用 `_mintSY(..., address(this), tokenAmount, 0)`，把新 mint 的 `SY` 留在 router。
+- router 解析 uAsset 接收地址：`uAssetReceiver = stakeParam.receiver == address(0) ? stakeParam.owner : stakeParam.receiver`。
+- 然后 router 调用 `SP.stake(amountInSY, stakeParam.lockupDays, stakeParam.owner, uAssetReceiver)`。
+- `OutrunStakingPosition.stake(...)` 的行为是：
+  - `positionOwner` 和 `uAssetReceiver` 不能为零地址。
+  - `amountInSY` 必须满足 `minStake`。
+  - 把 `SY` 从 router 拉入 position 合约。
+  - 按当前 `SY.exchangeRate()` 把 `amountInSY` 折算成 `principalValue`。
+  - 用这个 `principalValue` 作为初始 `UAssetMinted`。
+  - 新建 `positionId`，写入 `owner`、`syStaked`、`UAssetMinted`、`startTime`、`deadline`。
+  - 向 `uAssetReceiver` mint 等额 `uAsset`。
+- router 在 stake 完成后才检查 `UAssetMinted >= stakeParam.minUAssetMinted`；不足时整笔交易回退并报 `InsufficientUAssetMinted(...)`。
+
+## 5. SY -> locked stake
+
+`stakeFromSY(SY, SP, amountInSY, stakeParam)` 与上一路径的差别，只在于输入资产已经是 `SY`。
+
+- router 先把 `amountInSY` 从调用者拉到自己地址。
+- 之后走和 `token -> locked stake` 一样的 `_stakeFromSYBalance(...)` 路径。
+- router 根据 `stakeParam.receiver` 决定 uAsset 接收地址：若 `receiver == address(0)` 则回退到 `stakeParam.owner`。
+- locked position 创建后的核心语义不变：
+  - `deadline = block.timestamp + lockupDays * 1 days`
+  - 初始 debt 由当前 `exchangeRate()` 定价，不是固定 1:1
+  - position 赎回必须等到 `deadline` 到期
+- 测试证明：若实际铸出的 `uAsset` 低于 `stakeParam.minUAssetMinted`，router 会整笔回退。
+
+## 6. token / SY -> wrap stake
+
+当前 wrap stake 走的是共享 wrap 池，不会生成 `positionId`。
+
+### 6.1 token -> wrap stake
+
+`wrapStakeFromToken(SP, tokenIn, tokenAmount, uAssetRecipient)` 的流程是：
+
+- router 先从 `SP.SY()` 读取 stake manager 绑定的 `SY`。
+- router 调用 `_mintSY(SY, tokenIn, address(this), tokenAmount, 0)`，先把 token / native 转成 `SY`。
+- router 再调用 `SP.wrapStake(amountInSY, uAssetRecipient)`。
+
+### 6.2 SY -> wrap stake
+
+`wrapStakeFromSY(SY, SP, amountInSY, uAssetRecipient)` 的流程是：
+
+- router 先把 `SY` 从调用者拉到自己地址。
+- router 再调用 `SP.wrapStake(amountInSY, uAssetRecipient)`。
+
+### 6.3 wrap stake 落到 position 合约后的语义
+
+`OutrunStakingPosition.wrapStake(...)` 当前行为是：
+
+- `amountInSY` 不能为 0，`uAssetRecipient` 不能为零地址。
+- 把 `SY` 拉入 position 合约。
+- 按当前 `exchangeRate()` 把 `amountInSY` 折算成 `principalValue`。
+- 更新共享账务：
+  - `syTotalStaking += amountInSY`
+  - `syWrapStaking += amountInSY`
+  - `wrapUAssetDebt += principalValue`
+- 给 `uAssetRecipient` mint `principalValue` 数量的 `uAsset`。
+
+测试证明：
+
+- wrap stake 返回值是本次 mint 的 `uAsset` 数量。
+- `wrapStakeFromSY(...)` 会直接把 `uAsset` 打给 `uAssetRecipient`。
+- wrap stake 不产生独立 `positionId`。
+
+## 7. wrap redeem
+
+`wrapRedeem(SP, amountInUAsset, receiver, tokenOut)` 是 router 的 wrap 池赎回入口。
+
+- router 会先读取 `SP.uAsset()`，把 `amountInUAsset` 从调用者拉到 router。
+- router 给 `SP` 授权后，调用 `SP.wrapRedeem(amountInUAsset, receiver, tokenOut)`。
+- `OutrunStakingPosition.wrapRedeem(...)` 当前行为是：
+  - `receiver` 不能为零地址，`amountInUAsset` 不能为 0。
+  - `amountInUAsset` 不能大于 `wrapUAssetDebt`。
+  - 先按当前 `exchangeRate()` 用 `_assetToSy(...)` 把 `uAsset` 数量换算成 `amountInSY`。
+  - 若 `amountInSY > syWrapStaking`，则回退 `ExceedsWrapPoolBalance(...)`。
+  - position 合约对调用者执行 `uAsset.repay(msg.sender, amountInUAsset)`，也就是烧掉 router 此次代收的 `uAsset`。
+  - 然后减少：
+    - `syTotalStaking`
+    - `syWrapStaking`
+    - `wrapUAssetDebt`
+  - 若 `tokenOut == SY`，直接转出 `SY`；否则调用 `SY.redeem(receiver, amountInSY, tokenOut, 0, false)`。
+
+测试证明：
+
+- router 的 `wrapRedeem(...)` 确实会先代收 `uAsset`，再把 `SY` 或目标 token 发给 `receiver`。
+- 当 `exchangeRate` 上升时，用户赎回同样数量的 `uAsset`，拿回的 `SY` 会减少，因为 wrap 池按 principal debt 运行。
+- wrap 池若升值过高，也可能出现 `amountInSY > syWrapStaking`，此时会直接回退，而不是部分成交。
+
+## 8. genesis flows
+
+当前 router 提供两个 genesis 入口：`genesisByToken(...)` 和 `genesisBySY(...)`。
+
+### 8.1 genesisByToken
+
+- router 先读取 `SP.SY()`，把 `tokenIn` 转成 `SY`。
+- 然后调用 `SP.stake(amountInSY, lockupDays, genesisUser, address(this))`。
+- 这里走的是 locked stake，不是 wrap stake。
+- stake 产出的 `uAsset` 先 mint 给 router 自己。
+- router 校验 `amountInUAsset <= type(uint128).max`。
+- 之后 router 授权 `memeverseLauncher`，再调用 `memeverseLauncher.genesis(verseId, uint128(amountInUAsset), genesisUser)`。
+
+### 8.2 genesisBySY
+
+- router 先从调用者拉取 `SY`。
+- 后续和 `genesisByToken(...)` 一样，仍然调用 `SP.stake(...)` 创建 locked position。
+- 最终也是由 launcher 拉走本次 stake 产出的 `uAsset`。
+
+### 8.3 当前实现可确认的 genesis 语义
+
+- genesis 当前一定会生成 locked position，并写入 `deadline`。
+- genesis 当前不会走 wrap 池，所以不会增加 `syWrapStaking`。
+- 测试明确证明：`genesisBySY(...)` 后 `syWrapStaking == 0`，`syTotalStaking` 增加，`uAsset` 最终留在 launcher，不留在用户或 router。
+- 两个 genesis 入口都没有 `minSyOut`、`minUAssetMinted` 或 preview 参数。
+
+## 9. preview 语义与 slippage 边界
+
+当前 router 暴露的 preview 入口有：
+
+- `previewStakeFromToken(...)`
+- `previewStakeFromSY(...)`
+- `previewWrapStakeFromToken(...)`
+- `previewWrapRedeem(...)`
+
+当前实现里，这些 preview 的语义边界很明确：
+
+- `previewStakeFromToken(...)` 只做两步静态组合：
+  - `SY.previewDeposit(tokenIn, tokenAmount)`
+  - `SP.previewStake(amountInSY)`
+- `previewStakeFromSY(...)` 只调用 `SP.previewStake(amountInSY)`。
+- `previewWrapStakeFromToken(...)` 只做两步静态组合：
+  - `SY.previewDeposit(tokenIn, tokenAmount)`
+  - `SP.previewWrapStake(amountInSY)`
+- `previewWrapRedeem(...)` 只是转发到 `SP.previewWrapRedeem(amountInUAsset, tokenOut)`。
+
+当前 preview 不是完整成交保护，主要有这些边界：
+
+- `previewStakeFromToken(...)` 和 `previewStakeFromSY(...)` 接收 `stakeParam` 参数，但只使用 `stakeParam.lockupDays` 来消除未使用变量告警；preview 结果不反映：
+  - `minUAssetMinted`
+  - `owner`
+  - `receiver`
+  - 不同 `lockupDays` 的差异对 exchangeRate 的影响（如果有的话）
+- `stakeFromToken(...)` / `stakeFromSY(...)` 的真实滑点保护只体现在 `minUAssetMinted`，并且是在 stake 完成后检查。
+- `wrapStakeFromToken(...)` / `wrapStakeFromSY(...)` 当前没有任何最小 `uAsset` 输出参数。
+- `mintSYFromToken(...)` 有 `minSyOut`，`redeemSyToToken(...)` 有 `minTokenOut`，但 router 内部复合路径：
+  - `stakeFromToken(...)`
+  - `wrapStakeFromToken(...)`
+  - `genesisByToken(...)`
+  都把 `_mintSY(..., minSyOut = 0)` 写死，没有 router 级 `SY` 最小输出保护。
+- `wrapRedeem(...)` 当前也没有 router 级 `minTokenOut`；进入 position 后，对非 `SY` 输出调用的 `SY.redeem(...)` 也是 `minTokenOut = 0`。
+- `previewWrapRedeem(...)` 与实际 `wrapRedeem(...)` 一样都依赖当前 `exchangeRate()`；测试证明两者在给定汇率下可对齐，但这不等于执行时一定锁定该结果。
+
+## 10. 当前实现提醒
+
+- locked stake 与 wrap stake 是两套不同表面：
+  - locked stake 生成 `positionId`，受 `deadline` 约束。
+  - wrap stake 不生成 position，走共享池账务，可随时 `wrapRedeem`。
+- router 的 locked stake 路径现在通过 `StakeParam` 支持分离 position owner 和 uAsset receiver：
+  - `stakeParam.owner` 是 position owner
+  - `stakeParam.receiver` 是 uAsset 接收地址，当 `receiver == address(0)` 时回退到 `owner`
+- genesis 当前不是”wrap 后再 launch”，而是”先建 locked position，再把 stake 产出的 `uAsset` 交给 launcher”。
+- wrap 池按 principal debt 记账，不会因为汇率上涨自动给用户补发更多 `uAsset`；多出来的价值体现在更少的 `SY` 可对应同样 debt，以及 `harvestWrapYield(...)` 可收走的超额部分。
+- 任何 token / native 与 tokenOut 是否可用，最终都取决于具体 `SY` 实现的 `isValidTokenIn` / `isValidTokenOut`。

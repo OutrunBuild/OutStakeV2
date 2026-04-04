@@ -56,6 +56,18 @@ required_files=(
     "docs/reviews/TEMPLATE.md"
     "docs/task-briefs/README.md"
     "docs/agent-reports/README.md"
+    # spec documents
+    "docs/spec/protocol.md"
+    "docs/spec/state-machines.md"
+    "docs/spec/accounting.md"
+    "docs/spec/access-control.md"
+    "docs/spec/common-foundations.md"
+    "docs/spec/router-and-user-flows.md"
+    "docs/spec/deployment.md"
+    "docs/spec/yield-adapters.md"
+    "docs/spec/oracles-and-integrations.md"
+    "docs/spec/testing-and-evidence.md"
+    "docs/spec/implementation-map.md"
     "package.json"
     "package-lock.json"
 )
