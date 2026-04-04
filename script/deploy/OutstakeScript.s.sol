@@ -34,7 +34,6 @@ contract OutstakeScript is BaseScript {
 
     address internal owner;
     address internal keeper;
-    address internal blastGovernor;
     address internal slisBNB;
     address internal revenuePool;
     address internal outrunDeployer;
@@ -52,7 +51,6 @@ contract OutstakeScript is BaseScript {
         keeper = vm.envAddress("KEEPER");
         revenuePool = vm.envAddress("REVENUE_POOL");
         outrunDeployer = vm.envAddress("OUTRUN_DEPLOYER");
-        blastGovernor = vm.envAddress("BLAST_GOVERNOR");
         outrunRouter = vm.envAddress("OUTRUN_ROUTER");
         memeverseLauncher = vm.envAddress("MEMEVERSE_LAUNCHER");
 
@@ -113,8 +111,9 @@ contract OutstakeScript is BaseScript {
     }
 
     function _deployUETH(uint256 nonce) internal {
-        bytes memory encodedArgs =
-            abi.encode("Omnichain Universal Assets ETH", "UETH", 18, endpoints[uint32(block.chainid)], owner, address(0));
+        bytes memory encodedArgs = abi.encode(
+            "Omnichain Universal Assets ETH", "UETH", 18, endpoints[uint32(block.chainid)], owner, address(0)
+        );
         bytes memory creationCode = abi.encodePacked(type(OutrunUniversalAssets).creationCode, encodedArgs);
         bytes32 salt = keccak256(abi.encodePacked("OmnichainUniversalAssetsETH", nonce));
 
@@ -152,8 +151,9 @@ contract OutstakeScript is BaseScript {
     }
 
     function _deployUUSD(uint256 nonce) internal {
-        bytes memory encodedArgs =
-            abi.encode("Omnichain Universal Assets USD", "UUSD", 18, endpoints[uint32(block.chainid)], owner, address(0));
+        bytes memory encodedArgs = abi.encode(
+            "Omnichain Universal Assets USD", "UUSD", 18, endpoints[uint32(block.chainid)], owner, address(0)
+        );
         bytes memory creationCode = abi.encodePacked(type(OutrunUniversalAssets).creationCode, encodedArgs);
         bytes32 salt = keccak256(abi.encodePacked("OmnichainUniversalAssetsUSD", nonce));
 
@@ -191,8 +191,9 @@ contract OutstakeScript is BaseScript {
     }
 
     function _deployUBNB(uint256 nonce) internal {
-        bytes memory encodedArgs =
-            abi.encode("Omnichain Universal Assets BNB", "UBNB", 18, endpoints[uint32(block.chainid)], owner, address(0));
+        bytes memory encodedArgs = abi.encode(
+            "Omnichain Universal Assets BNB", "UBNB", 18, endpoints[uint32(block.chainid)], owner, address(0)
+        );
         bytes memory creationCode = abi.encodePacked(type(OutrunUniversalAssets).creationCode, encodedArgs);
         bytes32 salt = keccak256(abi.encodePacked("OmnichainUniversalAssetsBNB", nonce));
 

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.28;
 
-import { OutrunERC20 } from "./OutrunERC20.sol";
-import { IERC3156FlashLender } from "@openzeppelin/contracts/interfaces/IERC3156FlashLender.sol";
-import { IERC3156FlashBorrower } from "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
+import {OutrunERC20} from "./OutrunERC20.sol";
+import {IERC3156FlashLender} from "@openzeppelin/contracts/interfaces/IERC3156FlashLender.sol";
+import {IERC3156FlashBorrower} from "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
 
 /**
  * @dev Implementation of the ERC-3156 Flash loans extension, as defined in
@@ -11,7 +11,7 @@ import { IERC3156FlashBorrower } from "@openzeppelin/contracts/interfaces/IERC31
  */
 abstract contract OutrunERC20FlashMint is OutrunERC20, IERC3156FlashLender {
     bytes32 private constant RETURN_VALUE = keccak256("ERC3156FlashBorrower.onFlashLoan");
-    uint256 public constant FLASHLOAN_FEE_RATE = 25;   // 0.25 %.
+    uint256 public constant FLASHLOAN_FEE_RATE = 25; // 0.25 %.
 
     /**
      * @dev The loan token is not valid.
@@ -59,8 +59,8 @@ abstract contract OutrunERC20FlashMint is OutrunERC20, IERC3156FlashLender {
     }
 
     /**
-     * @dev Performs a flash loan. New tokens are minted and sent to the `receiver`, who is required to 
-     * implement the {IERC3156FlashBorrower} interface. By the end of the flash loan, the receiver is 
+     * @dev Performs a flash loan. New tokens are minted and sent to the `receiver`, who is required to
+     * implement the {IERC3156FlashBorrower} interface. By the end of the flash loan, the receiver is
      * expected to own value + fee tokens so they can be burned.
      * @param receiver The receiver of the flash loan. Should implement the {IERC3156FlashBorrower-onFlashLoan} interface.
      * @param token The token to be flash loaned. Only `address(this)` is supported.
@@ -68,19 +68,18 @@ abstract contract OutrunERC20FlashMint is OutrunERC20, IERC3156FlashLender {
      * @param data An arbitrary datafield that is passed to the receiver.
      * @return `true` if the flash loan was successful.
      */
-    function flashLoan(
-        IERC3156FlashBorrower receiver,
-        address token,
-        uint256 value,
-        bytes calldata data
-    ) public virtual returns (bool) {
+    function flashLoan(IERC3156FlashBorrower receiver, address token, uint256 value, bytes calldata data)
+        public
+        virtual
+        returns (bool)
+    {
         uint256 maxLoan = maxFlashLoan(token);
         require(value <= maxLoan, ERC3156ExceededMaxLoan(maxLoan));
 
         uint256 fee = flashFee(token, value);
         _mint(address(receiver), value);
         require(
-            receiver.onFlashLoan(msg.sender, token, value, fee, data) == RETURN_VALUE, 
+            receiver.onFlashLoan(msg.sender, token, value, fee, data) == RETURN_VALUE,
             ERC3156InvalidReceiver(address(receiver))
         );
 

@@ -241,9 +241,8 @@ contract OutrunStakingPositionTest is Test {
             bool ok,
             bytes memory data
             // solhint-disable-next-line avoid-low-level-calls
-        ) = address(position).call(
-            abi.encodeWithSelector(IOutrunStakeManager.stake.selector, LARGE_AMOUNT, uint128(30), owner, owner)
-        );
+        ) = address(position)
+            .call(abi.encodeWithSelector(IOutrunStakeManager.stake.selector, LARGE_AMOUNT, uint128(30), owner, owner));
 
         assertTrue(ok, "stake missing");
 
@@ -262,9 +261,8 @@ contract OutrunStakingPositionTest is Test {
 
         vm.prank(owner);
         // solhint-disable-next-line avoid-low-level-calls
-        (bool staked, bytes memory stakeData) = address(position).call(
-            abi.encodeWithSelector(IOutrunStakeManager.stake.selector, LARGE_AMOUNT, uint128(30), owner, owner)
-        );
+        (bool staked, bytes memory stakeData) = address(position)
+            .call(abi.encodeWithSelector(IOutrunStakeManager.stake.selector, LARGE_AMOUNT, uint128(30), owner, owner));
         assertTrue(staked, "stake missing");
 
         (uint256 positionId,) = abi.decode(stakeData, (uint256, uint256));
