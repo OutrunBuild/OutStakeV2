@@ -1,0 +1,39 @@
+# OutStakeV2 术语表
+
+- **uAsset (Universal Asset)**：统一债务与流通资产层代币，按 minter 维度的 mint cap 约束铸造，通过 repay 路径回收对应债务。
+- **SY (Standardized Yield)**：标准化收益份额代币，将不同外部收益资产包装为统一的 deposit / redeem / preview / exchangeRate 接口。
+- **SY Adapter**：针对特定外部收益协议（Aave、Lido、Etherfi 等）的 SY 适配器实现，负责将协议份额映射到统一的 SY 份额语义。
+- **OutrunStakingPosition**：仓位管理合约，维护锁仓仓位账本与公共 wrap 池，支持 stake、draw、redeem、keepRedeem、wrapStake、wrapRedeem、harvestWrapYield。
+- **OutrunRouter**：聚合路由入口，把 token <-> SY <-> position/uAsset 的组合路径收敛为单次调用。
+- **Underlying**：SY adapter 对应的基础资产，如 USDS（Sky）、aUSDC（Aave）、USDE（Ethena）。
+- **Yield Bearing Token**：SY adapter 对应的收益产生型代币，如 sUSDS、aUSDC、wstETH。
+- **Canonical Asset**：adapter 对外声明的"真实底层资产"元数据（地址 + 精度），L2 adapter 中指向 Ethereum 上的 canonical underlying 而非 L2 token。
+- **exchangeRate()**：SY 的汇率函数，返回 asset per SY。用于将 SY 份额数量与资产值双向换算。
+- **SYUtils.syToAsset**：按 exchangeRate 将 SY 份额换算为资产值（向下取整）。
+- **SYUtils.syToAssetUp**：按 exchangeRate 将 SY 份额换算为资产值（向上取整）。
+- **SYUtils.assetToSy**：按 exchangeRate 将资产值换算为 SY 份额（向下取整）。
+- **SYUtils.assetToSyUp**：按 exchangeRate 将资产值换算为 SY 份额（向上取整）。
+- **Position**：锁仓仓位记录，包含 owner（仓位控制权）、syStaked（质押 SY 数量）、UAssetMinted（已铸造 uAsset 债务）、startTime、deadline。
+- **principalValue**：仓位初始资产值，由 syStaked 通过 exchangeRate 按 syToAsset 折算。
+- **Wrap Pool**：公共 wrap 池，不建立独立 positionId，维护全池聚合账务（syTotalStaking、syWrapStaking、wrapUAssetDebt）。
+- **syTotalStaking**：position 合约中所有 SY 质押总量（含锁仓仓位与 wrap 池）。
+- **syWrapStaking**：wrap 池中的 SY 本金量。
+- **wrapUAssetDebt**：wrap 池的 uAsset 总债务。
+- **drawUAsset**：提取仓位升值部分对应的 uAsset 债务。
+- **keepRedeem**：keeper 代偿已到期的锁仓仓位债务。
+- **harvestWrapYield**：提取 wrap 池中超出债务等值 SY 的超额收益至 revenuePool。
+- **NATIVE**：address(0) 的别名，用于统一标识 chain native coin（如 ETH、BNB）。
+- **Position Owner**：锁仓仓位的拥有者，拥有 drawUAsset 和 redeem 权限。注意：仓位 owner 和初始 uAsset receiver 可以是不同地址。
+- **Keeper**：由 owner 设置的单一地址，拥有 keepRedeem 权限。
+- **Revenue Pool**：接收 wrap 池超额收益的地址。
+- **Minter**：在 uAsset 合约中被 owner 授予 mintingCap 的地址，可在额度内铸造 uAsset。
+- **mintingCap**：minter 的铸造上限。
+- **amountInMinted**：minter 的已铸造债务。
+- **repay**：冲减 minter 自身的 amountInMinted，同时从目标账户转移 uAsset 并 burn。
+- **Genesis**：通过 router 将 locked position 生成的 uAsset 授权并交给 memeverseLauncher 的集成路径。
+- **OFT (Omnichain Fungible Token)**：基于 LayerZero 的跨链代币标准，OutrunOFT 继承 OFTCore 实现跨链铸烧。
+- **_toSD**：将本地精度数量压缩到 uint64 共享精度的转换函数，溢出时回退 AmountSDOverflowed。
+- **_debit**：OFT 源链侧 burn 本地 token 的函数。
+- **_credit**：OFT 目标链侧 mint 本地 token 的函数。
+- **L2 Oracle-backed Adapter**：通过外部 oracle 读取 exchangeRate 的 L2 SY adapter，deposit/redeem 严格 1:1，不进行 wrap/unwrap/swap。
+- **DAY (测试时间单位)**：部分部署脚本中的时间常量单位可能以秒计，不等同于自然日 86400 秒。
