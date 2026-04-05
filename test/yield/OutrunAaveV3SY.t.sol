@@ -6,6 +6,7 @@ import {Test} from "forge-std/Test.sol";
 import {OutrunERC20} from "../../src/assets/base/OutrunERC20.sol";
 import {IAToken} from "../../src/integrations/aave/interfaces/IAToken.sol";
 import {AaveAdapterLib} from "../../src/libraries/AaveAdapterLib.sol";
+import {IStandardizedYield} from "../../src/yield/interfaces/IStandardizedYield.sol";
 import {OutrunAaveV3SY} from "../../src/yield/adapters/aave/OutrunAaveV3SY.sol";
 
 contract MockAaveUnderlyingToken is OutrunERC20 {
@@ -110,5 +111,49 @@ contract OutrunAaveV3SYTest is Test {
         assertEq(redeemedAssetsOut, expectedAssetsOut);
         assertEq(previewAssetsOut, redeemedAssetsOut);
         assertEq(aToken.balanceOf(RECEIVER), expectedAssetsOut);
+    }
+
+    function testDepositUnderlyingRevertsOnSlippage() external {
+        uint256 depositAmount = 10 ether;
+        uint256 expectedShares = AaveAdapterLib.calcSharesFromAssetUp(depositAmount, NORMALIZED_INCOME);
+        deal(address(underlying), USER, depositAmount);
+
+        uint256 slippageMinShares = expectedShares + 1;
+
+        vm.startPrank(USER);
+        underlying.approve(address(sy), depositAmount);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IStandardizedYield.SYInsufficientSharesOut.selector, expectedShares, slippageMinShares
+            )
+        );
+        sy.deposit(RECEIVER, address(underlying), depositAmount, slippageMinShares);
+        vm.stopPrank();
+    }
+
+    function testRedeemRevertsOnSlippage() external {
+        uint256 expectedAssetsOut = AaveAdapterLib.calcSharesToAssetDown(SHARES_TO_REDEEM, NORMALIZED_INCOME);
+        uint256 minTokenOut = expectedAssetsOut + 1;
+
+        vm.prank(USER);
+        vm.expectRevert(
+            abi.encodeWithSelector(IStandardizedYield.SYInsufficientTokenOut.selector, expectedAssetsOut, minTokenOut)
+        );
+        sy.redeem(RECEIVER, SHARES_TO_REDEEM, address(underlying), minTokenOut, false);
+    }
+
+    function testDepositZeroReverts() external {
+        deal(address(underlying), USER, 1 ether);
+        vm.startPrank(USER);
+        underlying.approve(address(sy), 1 ether);
+        vm.expectRevert(IStandardizedYield.SYZeroDeposit.selector);
+        sy.deposit(RECEIVER, address(underlying), 0, 0);
+        vm.stopPrank();
+    }
+
+    function testRedeemZeroReverts() external {
+        vm.prank(USER);
+        vm.expectRevert(IStandardizedYield.SYZeroRedeem.selector);
+        sy.redeem(RECEIVER, 0, address(underlying), 0, false);
     }
 }

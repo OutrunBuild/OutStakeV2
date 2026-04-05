@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import {Test} from "forge-std/Test.sol";
 
 import {OutrunERC20} from "../../src/assets/base/OutrunERC20.sol";
+import {IStandardizedYield} from "../../src/yield/interfaces/IStandardizedYield.sol";
 import {OutrunExchangeOracleAdapter} from "../../src/libraries/oracle/OutrunExchangeOracleAdapter.sol";
 import {OutrunL2WrappableWstETHSY} from "../../src/yield/adapters/lido/OutrunL2WrappableWstETHSY.sol";
 
@@ -155,5 +156,37 @@ contract OutrunL2WrappableWstETHSYTest is Test {
 
     function testExchangeRateUsesNormalizedOracleValue() external {
         assertEq(sy.exchangeRate(), NORMALIZED_RATE);
+    }
+
+    function testDepositWstETHSlippageReverts() external {
+        uint256 slippageMinShares = AMOUNT + 1;
+
+        vm.startPrank(USER);
+        wstETH.approve(address(sy), AMOUNT);
+        vm.expectRevert(
+            abi.encodeWithSelector(IStandardizedYield.SYInsufficientSharesOut.selector, AMOUNT, slippageMinShares)
+        );
+        sy.deposit(USER, address(wstETH), AMOUNT, slippageMinShares);
+        vm.stopPrank();
+    }
+
+    function testDepositStETHWhenNotApprovedReverts() external {
+        vm.prank(USER);
+        vm.expectRevert();
+        sy.deposit(USER, address(stETH), AMOUNT, 0);
+    }
+
+    function testDepositZeroReverts() external {
+        vm.startPrank(USER);
+        wstETH.approve(address(sy), 1 ether);
+        vm.expectRevert(IStandardizedYield.SYZeroDeposit.selector);
+        sy.deposit(USER, address(wstETH), 0, 0);
+        vm.stopPrank();
+    }
+
+    function testRedeemZeroReverts() external {
+        vm.prank(USER);
+        vm.expectRevert(IStandardizedYield.SYZeroRedeem.selector);
+        sy.redeem(RECEIVER, 0, address(stETH), 0, false);
     }
 }
