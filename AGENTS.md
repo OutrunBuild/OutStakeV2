@@ -19,18 +19,23 @@
 - `docs/task-briefs/`：本地 `Task Brief` 工件
 - `docs/agent-reports/`：本地 `Agent Report` 工件（独立 workflow artifact，不并入 `docs/plans/`；字段真源以 `.codex/templates/agent-report.md` 和 `docs/process/policy.json` 为准）
 - `docs/reviews/`：本地 review 草稿模板与草稿
-- `.codex/agents/`：项目级 subagent manifest（`*.toml`）与运行时契约（`*.md`）
-- `.codex/runtime/`：subagent runtime 入口索引
+- `.claude/agents/`：Claude Code subagent 定义（`.md`，含 YAML frontmatter）
+- `.claude/rules/`：Claude Code 路径触发规则（`paths:` frontmatter）
+- `.codex/agents/`：项目级 subagent manifest（`*.toml`）与运行时契约（`*.md`）（历史参考）
+- `.codex/runtime/`：subagent runtime 入口索引（历史参考）
+- `.codex/workflows/`：workflow index（历史参考）
 - `.codex/templates/`：`Task Brief` 与 `Agent Report` 模板
 
 ## 1.5 Subagent Runtime Entry
 
 - 原生 dispatch backend：平台原生 subagent 派发 + `.codex/agents/*.toml`
-- 角色运行时契约：`.codex/agents/*.md`
+- Claude Code dispatch：Claude Code Agent tool + `.claude/agents/*.md`（`.codex/agents/*.toml` 元数据和 `*.md` 运行时契约的合并版）
+- 角色运行时契约：`.codex/agents/*.md` / `.claude/agents/*.md`
 - workflow index：`.codex/workflows/solidity-subagent-workflow.json`
 - runtime index：`.codex/runtime/subagent-runtime.json`
 - `.codex/workflows/*.json` 与 `.codex/runtime/*.json` 只负责索引、角色目录与工件位置，不承载机器规则细节
-- 机器规则真源：`AGENTS.md`、`docs/process/subagent-workflow.md`、`docs/process/policy.json`、`script/process/*` 与 `.codex/agents/*.md`
+- `script/process/` 是 execution-plane 的验证与 gate 脚本，不是 subagent dispatch backend
+- 机器规则真源：`AGENTS.md`、`docs/process/subagent-workflow.md`、`docs/process/policy.json`、`script/process/*`、`.claude/agents/*.md`、`.codex/agents/*.md`
 
 ## 2. Required Commands
 
@@ -53,9 +58,9 @@
 
 ### Main Session
 
-- `main-orchestrator` 是默认主会话角色，负责 intake、拆任务、划定 file ownership、汇总证据、判定 block
+- `main-orchestrator` 是默认主会话角色（Claude Code 主会话直接承担），负责 intake、拆任务、划定 file ownership、汇总证据、判定 block
 - 不是 product / process / config surface 的默认写入者；除 orchestration artifact（如 `docs/task-briefs/*`）外，不直接改仓库文件
-- 不写：`src/**/*.sol`、`script/**/*.sol`、`test/**/*.sol`、`script/**/*.sh`、`script/process/**`、`AGENTS.md`、`docs/process/**`、`.codex/**`、`.github/**`、`.githooks/*`、`package.json`、`package-lock.json`
+- 不写：`src/**/*.sol`、`script/**/*.sol`、`test/**/*.sol`、`script/**/*.sh`、`script/process/**`、`AGENTS.md`、`docs/process/**`、`.claude/**`、`.codex/**`、`.github/**`、`.githooks/*`、`package.json`、`package-lock.json`
 - 命中上述路径或其他流程面文件时，必须先派发对应 writer role；若派发失败，必须停止并请求人工决策，不能降级为直接实现者
 - 自主委派仍必须遵守角色边界、单写 owner、证据链和 block 规则
 
@@ -77,7 +82,7 @@
 
 ### Required Review Order
 
-**流程面变更**（`AGENTS.md`、`docs/process/**`、`.codex/**`、`script/process/**`）：`process-implementer` → `codex review` → `verifier`
+**流程面变更**（`AGENTS.md`、`docs/process/**`、`.claude/**`、`.codex/**`、`script/process/**`）：`process-implementer` → `codex review` → `verifier`
 
 **Solidity 变更**（`src/**/*.sol` / `script/**/*.sol` / `test/**/*.sol`）：必须先运行 `npm run classify:change`，再按分类选择审阅流程：
 
@@ -105,6 +110,7 @@
   - Solidity：`Task Brief → Agent Report → codex review → review note → verifier evidence → quality:gate → CI`
   - Process：`Task Brief → Agent Report → codex review → verifier evidence → docs:check / process:selftest`
 - 工件目录：`docs/superpowers/specs/` 与 `docs/superpowers/plans/`（design/plan/draft）、`docs/task-briefs/`（Task Brief）、`docs/agent-reports/`（Agent Report）、`docs/reviews/`（review note/模板）
+- `.codex/workflows/solidity-subagent-workflow.json` 是 workflow index；`.codex/runtime/subagent-runtime.json` 是 runtime index；两者都不是 dispatch backend
 - 结构化阶段流、通信模型、证据链、block 规则以 `docs/process/subagent-workflow.md` 为准
 - 新建文档前必须先校验目标目录是否符合仓库约定；路径未校验视为流程错误
 
@@ -112,6 +118,7 @@
 
 - 路径触发规则、默认角色、必跑命令与 gate 约束以 `docs/process/change-matrix.md` 为准
 - 机器可读真源以 `docs/process/policy.json`、`.codex/workflows/solidity-subagent-workflow.json`、`.codex/runtime/subagent-runtime.json`、`script/process/*` 为准
+- 路径触发规则同时已在 `.claude/rules/` 中以 `paths:` frontmatter rule 文件落地
 
 ## 7. Pull Request Contract
 
@@ -123,41 +130,46 @@
 - 命中 `src/**/*.sol`、`script/**/*.sol` 变更时，本地与 CI 的 `quality:gate` 都必须能找到一份有效 review note
 - 字段、布尔值约束、owner-prefixed source 规则以 `docs/process/review-notes.md` 和 `docs/process/policy.json` 为准
 
-## 9. Local-Only Files
+## 9. Local-Only Files & Documentation Language
 
-- `docs/superpowers/specs/`、`docs/superpowers/plans/`：仅放设计文档、实现计划、阶段方案、拆分草案
-- `docs/task-briefs/`：仅放 `Task Brief`
-- `docs/agent-reports/`：仅放 `Agent Report`
-- `docs/reviews/`：review 草稿（是否提交由团队策略决定）
+- `docs/superpowers/specs/`、`docs/superpowers/plans/`（设计）、`docs/task-briefs/`（Task Brief）、`docs/agent-reports/`（Agent Report）、`docs/reviews/`（review 草稿）为本地专用目录
+- 新增自然语言文档默认简体中文；固定字段 key、命令、路径、代码标识、协议名、库名保持英文
+- 模块目录：Asset（`src/assets/`）、Position（`src/position/`）、Yield（`src/yield/`）、Router（`src/router/`）、Integration（`src/integrations/`）、Libraries（`src/libraries/`）
+- 产品真相文档：核心以 `README.md`、`foundry.toml`、`src/**`、`test/**`、`script/**` 为准；补充以 `docs/superpowers/specs/*`、`docs/superpowers/plans/*` 为准
 
-## 10. Documentation Language
-
-新增自然语言文档默认简体中文；固定字段 key、命令、路径、代码标识、协议名、库名保持英文；review note 固定 key 与 `yes` / `no` 取值保持英文。
-
-## 11. Repository Architecture Snapshot
-
-| 层 | 目录 | 说明 |
-|---|---|---|
-| Asset | `src/assets/` | ERC20 / ERC6909 / omnichain principal-token 等资产主模型、接口与跨链资产能力 |
-| Position | `src/position/` | staking position、`OutrunStakingPosition.sol`、position manager 交互、stake 状态与 position-oriented 入口 |
-| Yield | `src/yield/` | `SYBase.sol`、yield interfaces 与 adapter 表面 |
-| Router | `src/router/` | `OutrunRouter.sol`、聚合用户入口、协议内路由、组合调用与外部 launch/routing 适配 |
-| Integration | `src/integrations/` | 第三方协议 interface、adapter helper、oracle adapter、deployment surface 与 upstream dependency 边界；结论依赖 `aave`、`etherfi`、`lido`、`lista`、`sky` 等上游行为时必须回到主来源核验 |
-| Libraries | `src/libraries/` | 跨业务域共享的数组 / ID / 数学 / reentrancy / token helper 等底层能力 |
-| Test | `test/` | 按 `assets / position / router / yield / support` 分域；通用 mock 与 support surface 进入 `test/support/` |
-| Script | `script/` | `deploy/`（`.s.sol` 部署入口）、`lib/`（脚本基类）、`ops/`（shell 运维入口）、`process/`（execution-plane 稳定入口） |
-
-## 12. Source of Truth And Reading Order
+## 10. Source of Truth And Reading Order
 
 ### Harness / Process Truth
 
-`AGENTS.md` → `docs/process/change-matrix.md` → `docs/process/review-notes.md` → `docs/process/policy.json` → `docs/process/rule-map.json`（若存在）→ `script/process/*` → `.codex/agents/*.md` → `.codex/agents/*.toml`
+`AGENTS.md` → `docs/process/change-matrix.md` → `docs/process/review-notes.md` → `docs/process/policy.json` → `docs/process/rule-map.json`（若存在）→ `script/process/*` → `.claude/agents/*.md` → `.claude/rules/*.md` → `.codex/agents/*.md` → `.codex/agents/*.toml`（历史参考）
 
 ### Product Truth
 
-- Core：`README.md`、`foundry.toml`、`src/assets/**`、`src/position/**`、`src/yield/**`、`src/router/**`、`src/integrations/**`、`src/libraries/**`、`test/**`、`script/**`
+- Core：`README.md`、`foundry.toml`、`src/**`、`test/**`、`script/**`
 - Support：`docs/superpowers/specs/*`、`docs/superpowers/plans/*`、`docs/reviews/TEMPLATE.md`、`docs/task-briefs/README.md`、`docs/agent-reports/README.md`
 
 ### Recommended Reading Order
 
-1. `AGENTS.md` → 2. `README.md` → 3. `foundry.toml` → 4. `src/assets/**`、`src/position/**`、`src/yield/**`、`src/router/**` → 5. `src/integrations/**`、`src/libraries/**` → 6. `test/**`、`script/**` → 7. `docs/process/subagent-workflow.md` + `docs/process/*`
+1. `AGENTS.md` → 2. `README.md` → 3. `foundry.toml` → 4. `src/assets/`、`src/position/`、`src/yield/`、`src/router/` → 5. `src/integrations/`、`src/libraries/` → 6. `test/`、`script/` → 7. `docs/process/subagent-workflow.md` + `docs/process/*`
+
+## 11. Claude Code 适配说明
+
+- 原 `.codex/agents/*.toml` + `*.md` 已合并至 `.claude/agents/*.md`；Claude Code 用 Agent tool 调度，不需 `.toml` manifest
+- 路径触发规则已拆分至 `.claude/rules/*.md`（`paths:` frontmatter）
+- `.codex/templates/`、`.codex/workflows/`、`.codex/runtime/` 保留为参考
+- `main-orchestrator` 由主会话直接承担，不作为 subagent
+
+| 角色 | Agent 文件 | 类型 |
+|---|---|---|
+| `solidity-implementer` | `.claude/agents/solidity-implementer.md` | 可写 |
+| `process-implementer` | `.claude/agents/process-implementer.md` | 可写 |
+| `logic-reviewer` | `.claude/agents/logic-reviewer.md` | 只读 |
+| `security-reviewer` | `.claude/agents/security-reviewer.md` | 只读 |
+| `gas-reviewer` | `.claude/agents/gas-reviewer.md` | 只读 |
+| `verifier` | `.claude/agents/verifier.md` | 只读 |
+| `solidity-explorer` | `.claude/agents/solidity-explorer.md` | 按需只读 |
+| `security-test-writer` | `.claude/agents/security-test-writer.md` | 按需可写 |
+
+Agent Report 输出契约不变（`.codex/templates/agent-report.md`）：
+- Required：`Role`、`Summary`、`Task Brief path`、`Scope / ownership respected`、`Files touched/reviewed`
+- Conditional：`Findings`、`Required follow-up`、`Commands run`、`Evidence`、`Residual risks`
