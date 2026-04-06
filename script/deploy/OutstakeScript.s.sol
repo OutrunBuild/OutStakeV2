@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: UNLICENSED
+// solhint-disable no-console,check-send-result
 pragma solidity ^0.8.28;
 
 import {IOAppCore} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppCore.sol";
 import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 import {IOFT, SendParam, MessagingFee} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
 
-import "../lib/BaseScript.s.sol";
+import {BaseScript} from "../lib/BaseScript.s.sol";
+import {console} from "forge-std/console.sol";
 import {Create2} from "@openzeppelin/contracts/utils/Create2.sol";
 import {OutrunRouter} from "../../src/router/OutrunRouter.sol";
 import {IOutrunRouter} from "../../src/router/interfaces/IOutrunRouter.sol";
@@ -27,6 +29,8 @@ import {MockOutrunSUSDSSY} from "../../test/yield/MockOutrunSUSDSSY.sol";
 
 contract OutstakeScript is BaseScript {
     using OptionsBuilder for bytes;
+
+    error InvalidOmnichainId();
 
     address internal ueth;
     address internal uusd;
@@ -136,12 +140,12 @@ contract OutstakeScript is BaseScript {
         // omnichainIds[13] = 300;      // ZKsync Sepolia
 
         // Use default config
-        for (uint256 i = 0; i < omnichainIds.length; i++) {
+        for (uint256 i; i < omnichainIds.length; ++i) {
             uint32 omnichainId = omnichainIds[i];
             if (omnichainId == block.chainid) continue;
 
             uint32 endpointId = endpointIds[omnichainId];
-            require(endpointId != 0, "InvalidOmnichainId");
+            if (endpointId == 0) revert InvalidOmnichainId();
 
             IOAppCore(UETH).setPeer(endpointId, peer);
         }
@@ -176,12 +180,12 @@ contract OutstakeScript is BaseScript {
         // omnichainIds[13] = 300;      // ZKsync Sepolia
 
         // Use default config
-        for (uint256 i = 0; i < omnichainIds.length; i++) {
+        for (uint256 i; i < omnichainIds.length; ++i) {
             uint32 omnichainId = omnichainIds[i];
             if (omnichainId == block.chainid) continue;
 
             uint32 endpointId = endpointIds[omnichainId];
-            require(endpointId != 0, "InvalidOmnichainId");
+            if (endpointId == 0) revert InvalidOmnichainId();
 
             IOAppCore(UUSD).setPeer(endpointId, peer);
         }
@@ -216,12 +220,12 @@ contract OutstakeScript is BaseScript {
         // omnichainIds[13] = 300;      // ZKsync Sepolia
 
         // Use default config
-        for (uint256 i = 0; i < omnichainIds.length; i++) {
+        for (uint256 i; i < omnichainIds.length; ++i) {
             uint32 omnichainId = omnichainIds[i];
             if (omnichainId == block.chainid) continue;
 
             uint32 endpointId = endpointIds[omnichainId];
-            require(endpointId != 0, "InvalidOmnichainId");
+            if (endpointId == 0) revert InvalidOmnichainId();
 
             IOAppCore(UBNB).setPeer(endpointId, peer);
         }
