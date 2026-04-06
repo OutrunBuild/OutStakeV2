@@ -1,7 +1,7 @@
 ---
 name: verifier
 description: Read-only verifier for OutStakeV2. Runs or summarizes required checks, attributes failures, and provides gate evidence.
-model: sonnet
+model: opus
 tools:
   - Read
   - Grep
