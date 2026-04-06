@@ -25,7 +25,7 @@
 按当前 `run()` 实现，默认实际执行的部署面是：
 
 - `OutstakeScript.run()`：读取环境变量，执行 `_chainsInit()`，然后执行 `_deployOutrunRouter(7)`
-- `YieldDeployScript.run()`：读取环境变量，然后执行 `_supportAUSDC()` 与 `_supportSlisBNB()`
+- `YieldDeployScript.run()`：读取环境变量，然后执行 `_supportAUSDC()`
 
 同一批脚本里还存在若干辅助部署函数，但它们在当前 `run()` 中都被注释掉，没有自动执行：
 
@@ -175,7 +175,6 @@ Router 本身不在部署时绑定任何 `SY`、`OutrunStakingPosition` 或 `uAs
 当前默认启用的是：
 
 - `_supportAUSDC()`
-- `_supportSlisBNB()`
 
 注释掉但已实现的辅助逻辑是：
 
@@ -204,29 +203,6 @@ Router 本身不在部署时绑定任何 `SY`、`OutrunStakingPosition` 或 `uAs
 - `UUSD` 作为铸造出来的 uAsset
 
 串成了一条完整路径。
-
-### `_supportSlisBNB()`
-
-`_supportSlisBNB()` 只在 `BSC_TESTNET_CHAINID` 生效，否则直接 `return`。
-
-它的部署顺序是：
-
-1. 读取 `BSC_TESTNET_SLISBNB`
-2. 读取 `DELEGATE_TO`
-3. 读取 `BSC_TESTNET_LISTA_BNB_STAKE_MANAGER`
-4. 读取 `BSC_TESTNET_SLISBNB_PROVIDER`
-5. 部署 `OutrunSlisBNBSY(owner, slisBNB, delegateTo, stakeManager, provider)`
-6. 部署 `OutrunStakingPosition(owner, 0, revenuePool, slisBNBSYAddress, UBNB)`
-7. 调用 `SP_slisBNB.setKeeper(keeper)`
-8. 调用 `IUniversalAssets(UBNB).setMintingCap(slisBNBSPAddress, 1000000000 ether)`
-
-这说明当前 slisBNB 支持面把：
-
-- `OutrunSlisBNBSY` 作为 Lista 适配层
-- `OutrunStakingPosition` 作为 position 层
-- `UBNB` 作为铸造出来的 uAsset
-
-连接起来。
 
 ### 当前文件里已实现但未默认启用的两个 Sepolia 支持面
 
@@ -345,11 +321,6 @@ mock 支持相关 env：
 - `BASE_SEPOLIA_CHAINID`
 - `BASE_SEPOLIA_AUSDC`
 - `BASE_SEPOLIA_POOL`
-- `BSC_TESTNET_CHAINID`
-- `BSC_TESTNET_SLISBNB`
-- `BSC_TESTNET_LISTA_BNB_STAKE_MANAGER`
-- `BSC_TESTNET_SLISBNB_PROVIDER`
-- `DELEGATE_TO`
 
 共享角色与地址：
 
@@ -370,7 +341,6 @@ mock 支持相关 env：
 4. `OutrunStakingPosition` 是 position / debt / keeper / revenuePool 逻辑层，当前脚本里所有 position 的 `minStake` 都被部署为 `0`。
 5. `SY` 适配器是收益入口层，当前脚本已落地的生产适配器包括：
    - `OutrunAaveV3SY`
-   - `OutrunSlisBNBSY`
    - `OutrunWstETHSY`
    - `OutrunStakedUSDeSY`
 6. `OutrunRouter` 是独立的用户入口层，部署时只依赖 `owner` 与 `memeverseLauncher`，并不在脚本层直接绑定某个具体 `SY` 或 `position`。
@@ -380,7 +350,6 @@ mock 支持相关 env：
 - `wstETH SY -> OutrunStakingPosition -> UETH`
 - `sUSDe SY -> OutrunStakingPosition -> UUSD`
 - `aUSDC SY -> OutrunStakingPosition -> UUSD`
-- `slisBNB SY -> OutrunStakingPosition -> UBNB`
 
 ## 当前实现提醒
 

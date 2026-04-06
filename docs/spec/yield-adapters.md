@@ -103,22 +103,7 @@
 - `redeem(wstETH)` 会直接把 wrapped token 发给接收者。
 - `exchangeRate()` 会使用经过 `OutrunExchangeOracleAdapter` 归一化后的 oracle 值。
 
-## 6. Lista adapter
-
-`OutrunSlisBNBSY` 对应 Lista 的 `slisBNB` 适配，除了普通 deposit/redeem 之外还绑定 provider 委托关系。
-
-- 入金支持 `NATIVE` 和 `slisBNB`。
-- 当 `tokenIn == NATIVE` 时，调用 `listaBNBStakeManager.deposit{value: amountDeposited}()`，再用 `convertBnbToSnBnb(amountDeposited)` 计算 shares。
-- 当 `tokenIn == slisBNB` 时，shares 为 1:1。
-- 无论哪条入金路径，当前实现都会在 `_deposit()` 末尾把 `amountSharesOut` 授权并调用 `slisBNBProvider.provide(amountSharesOut, delegateTo)`。
-- 赎回只允许 `slisBNB` 路径；`_redeem()` 直接调用 `slisBNBProvider.release(receiver, amountSharesToRedeem)`，返回值也按 1:1 处理。
-- `exchangeRate()` 使用 `convertSnBnbToBnb(1 ether)`，即把 1 个 `slisBNB` 份额映射回 BNB。
-- `updateDelegateTo()` 只有 owner 能调用；当前实现会先按 `totalSupply` 从 provider `release(address(this), totalSupply)`，再把同样数量重新 `provide(totalSupply, _delegateTo)`，然后才更新存储里的 `delegateTo`。
-- `assetInfo()` 对外声明 canonical asset 为 `NATIVE`，精度 18。
-
-当前未看到 `OutrunSlisBNBSY` 的独立测试文件。
-
-## 7. Sky / Ethena adapters
+## 6. Sky / Ethena adapters
 
 ### `OutrunStakedUsdsSY`（Sky L1）
 
@@ -185,7 +170,7 @@
 
 仍然明显缺口的部分包括：
 
-- `OutrunL2StakedTokenSY`、`OutrunL2WstETHSY`、`OutrunSlisBNBSY`、`OutrunStakedUsdsSY`、`OutrunL2StakedUsdsSY`、`OutrunStakedUSDeSY` 没有同名独立测试文件。
+- `OutrunL2StakedTokenSY`、`OutrunL2WstETHSY`、`OutrunStakedUsdsSY`、`OutrunL2StakedUsdsSY`、`OutrunStakedUSDeSY` 没有同名独立测试文件。
 - 多数 adapter 的 `getTokensIn()`、`getTokensOut()`、`isValidTokenIn()`、`isValidTokenOut()`、`assetInfo()` 没有直接测试。
-- Aave、Ether.fi、Sky、Ethena、Lista 的大部分 deposit/redeem 双向路径仍主要依赖源码阅读，而非现成测试证明。
+- Aave、Ether.fi、Sky、Ethena 的大部分 deposit/redeem 双向路径仍主要依赖源码阅读，而非现成测试证明。
 - oracle-backed adapter 的统一覆盖仍不足；当前直接证据主要集中在 `OutrunL2WrappableWstETHSY` 和 `OutrunExchangeOracleAdapter`，不能替代所有 L2 变体的行为证明。

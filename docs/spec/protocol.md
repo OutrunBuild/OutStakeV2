@@ -45,7 +45,7 @@
 - `getTokensIn` / `getTokensOut`
 - `isValidTokenIn` / `isValidTokenOut`
 
-本地已存在 Aave、Lido、Etherfi、Lista、Sky、Ethena 等适配器源码表面；它们共享统一份额语义，但具体兑换、利息来源和底层状态仍依赖外部协议。就本地代码而言，协议只承诺”调用对应适配器并使用其 `exchangeRate` / redeem / deposit 结果完成账务”。
+本地已存在 Aave、Lido、Etherfi、Sky、Ethena 等适配器源码表面；它们共享统一份额语义，但具体兑换、利息来源和底层状态仍依赖外部协议。就本地代码而言，协议只承诺”调用对应适配器并使用其 `exchangeRate` / redeem / deposit 结果完成账务”。
 
 ### Ethena redeem 限制
 
@@ -63,7 +63,7 @@ router 当前覆盖 `mintSYFromToken`、`redeemSyToToken`、`stakeFromToken`、`
 
 ### integrations
 
-当前集成层存在于 `src/integrations/**` 与部分 `src/libraries/oracle/**`。本地代码为 Aave、Lido、Etherfi、Lista、Sky 等协议提供接口与适配依赖，也提供 oracle adapter 表面。但这些外部系统的真实结算、价格更新、队列、权限和可用性，不由本仓库单独证明；本文档仅将其视为本地合约调用时依赖的外部前提。
+当前集成层存在于 `src/integrations/**` 与部分 `src/libraries/oracle/**`。本地代码为 Aave、Lido、Etherfi、Sky 等协议提供接口与适配依赖，也提供 oracle adapter 表面。但这些外部系统的真实结算、价格更新、队列、权限和可用性，不由本仓库单独证明；本文档仅将其视为本地合约调用时依赖的外部前提。
 
 ### deployment
 

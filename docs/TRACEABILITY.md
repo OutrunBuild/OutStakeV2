@@ -43,18 +43,17 @@
 | YA-03 | `docs/spec/yield-adapters.md`（Ether.fi adapter） | native → depositETHForWeETH；EETH → wrap；exchangeRate 用 amountForShare | PARTIAL: 仅 `deposit(EETH)` 有直接覆盖 | `src/yield/adapters/etherfi/OutrunWeETHSY.sol` | PASS / Medium |
 | YA-04 | `docs/spec/yield-adapters.md`（Lido L1 adapter） | native → submit(address(0)) → wrap; exchangeRate 用 stEthPerToken | PARTIAL: 仅 `native deposit` 有直接覆盖 | `src/yield/adapters/lido/OutrunWstETHSY.sol` | PASS / Medium |
 | YA-05 | `docs/spec/yield-adapters.md`（Lido L2 wrappable） | STETH ↔ wstETH wrap/unwrap; exchangeRate 走 oracle | `test/yield/OutrunL2WrappableWstETHSY.t.sol` | `src/yield/adapters/lido/OutrunL2WrappableWstETHSY.sol` | PASS / High |
-| YA-06 | `docs/spec/yield-adapters.md`（Lista adapter） | native → deposit → provide; redeem → release; exchangeRate 用 convertSnBnbToBnb | GAP: 无独立测试文件 | `src/yield/adapters/lista/OutrunSlisBNBSY.sol` | PASS / Medium |
-| YA-07 | `docs/spec/yield-adapters.md`（Sky L1 adapter） | USDS → ERC4626 deposit(sUSDS); redeem → ERC4626 redeem | GAP: 无独立测试文件 | `src/yield/adapters/sky/OutrunStakedUsdsSY.sol` | PASS / Medium |
-| YA-08 | `docs/spec/yield-adapters.md`（Ethena adapter） | USDE → ERC4626 deposit(sUSDe); redeem 只输出 sUSDe | GAP: 无独立测试文件 | `src/yield/adapters/ethena/OutrunStakedUSDeSY.sol` | PASS / Medium |
+| YA-06 | `docs/spec/yield-adapters.md`（Sky L1 adapter） | USDS → ERC4626 deposit(sUSDS); redeem → ERC4626 redeem | GAP: 无独立测试文件 | `src/yield/adapters/sky/OutrunStakedUsdsSY.sol` | PASS / Medium |
+| YA-07 | `docs/spec/yield-adapters.md`（Ethena adapter） | USDE → ERC4626 deposit(sUSDe); redeem 只输出 sUSDe | GAP: 无独立测试文件 | `src/yield/adapters/ethena/OutrunStakedUSDeSY.sol` | PASS / Medium |
 | OA-01 | `docs/spec/oracles-and-integrations.md`（Oracle adapter） | 读取 latestAnswer → 拒绝 ≤0 → 精度归一化 | `test/support/MockOracleWarnings.t.sol` | `src/libraries/oracle/OutrunExchangeOracleAdapter.sol` | PASS / High |
 | OFT-01 | `docs/spec/common-foundations.md`（OFT 本地语义） | _debit burn / _credit mint; _toSD 溢出保护; 零地址改 0xdead | `test/assets/OutrunUniversalAssets.t.sol` | `src/assets/omnichain/OutrunOFT.sol` | PASS / High |
 | CF-01 | `docs/spec/common-foundations.md`（TokenHelper） | NATIVE = address(0); _transferIn 校验 msg.value; _transferOut 统一发送 | `test/yield/SYBaseDeposit.t.sol` | `src/libraries/TokenHelper.sol:_transferIn/_transferOut` | PASS / High |
 | CF-02 | `docs/spec/common-foundations.md`（ReentrancyGuard） | transient locked 防重入 | `test/yield/SYBaseDeposit.t.sol` 回调重入测试 | `src/libraries/ReentrancyGuard.sol` | PASS / High |
 | CF-03 | `docs/spec/common-foundations.md`（SYUtils） | 1e18 基准的 syToAsset / assetToSy 双向换算 | 间接通过 position test 验证 | `src/libraries/SYUtils.sol` | PARTIAL / Medium |
 | DEPL-01 | `docs/spec/deployment.md`（OutstakeScript run） | 默认只执行 _chainsInit + _deployOutrunRouter(7) | 脚本可追溯 | `script/deploy/OutstakeScript.s.sol:run()` | PASS / High |
-| DEPL-02 | `docs/spec/deployment.md`（YieldDeployScript run） | 默认只执行 _supportAUSDC + _supportSlisBNB | 脚本可追溯 | `script/deploy/YieldDeployScript.s.sol:run()` | PASS / High |
+| DEPL-02 | `docs/spec/deployment.md`（YieldDeployScript run） | 默认只执行 _supportAUSDC | 脚本可追溯 | `script/deploy/YieldDeployScript.s.sol:run()` | PASS / High |
 | DEPL-03 | `docs/spec/deployment.md`（CREATE2+CREATE3 两段式部署） | Create2 部署 OutrunDeployer → CREATE3 部署合约 | 脚本可追溯 | `script/deploy/deployment/OutrunDeployer.sol` salt 用 `keccak256(abi.encodePacked(msg.sender, salt))` | PASS / High |
-| TEST-01 | `docs/spec/testing-and-evidence.md`（测试覆盖缺口） | Lista/Sky/Ethena/generic L2 adapter 缺少独立测试 | 目录缺失可证 | `test/yield/` 下未见同名 adapter 测试文件 | GAP / High |
+| TEST-01 | `docs/spec/testing-and-evidence.md`（测试覆盖缺口） | Sky/Ethena/generic L2 adapter 缺少独立测试 | 目录缺失可证 | `test/yield/` 下未见同名 adapter 测试文件 | GAP / High |
 | TEST-02 | `docs/spec/testing-and-evidence.md`（Oracle 覆盖缺口） | 仅非正值拒绝 + L2 wrappable 有覆盖；无所有 L2 adapter 的统一 oracle 集成验证 | 目录缺失可证 | `test/support/MockOracleWarnings.t.sol` 只覆盖非正值 | PARTIAL / Medium |
 
 ## 3. 明确未知项

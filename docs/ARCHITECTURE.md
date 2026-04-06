@@ -26,7 +26,6 @@
 - `src/yield/adapters/lido/OutrunWstETHSY.sol`
 - `src/yield/adapters/lido/OutrunL2WstETHSY.sol`
 - `src/yield/adapters/lido/OutrunL2WrappableWstETHSY.sol`
-- `src/yield/adapters/lista/OutrunSlisBNBSY.sol`
 - `src/yield/adapters/sky/OutrunStakedUsdsSY.sol`
 - `src/yield/adapters/sky/OutrunL2StakedUsdsSY.sol`
 - `src/yield/OutrunL2StakedTokenSY.sol`
@@ -42,7 +41,7 @@
 
 ### 1.5 集成与 Oracle 层
 
-- `src/integrations/{aave,etherfi,lido,lista,sky}/interfaces/*.sol`
+- `src/integrations/{aave,etherfi,lido,sky}/interfaces/*.sol`
 - `src/libraries/oracle/OutrunExchangeOracleAdapter.sol`
 - 外部协议最小 interface 与 adapter 调用封装；oracle adapter 作为薄层标准化精度归一化。
 

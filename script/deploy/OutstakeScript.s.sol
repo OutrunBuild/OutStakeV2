@@ -34,7 +34,6 @@ contract OutstakeScript is BaseScript {
 
     address internal owner;
     address internal keeper;
-    address internal slisBNB;
     address internal revenuePool;
     address internal outrunDeployer;
     address internal outrunRouter;

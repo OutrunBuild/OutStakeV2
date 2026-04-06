@@ -34,7 +34,6 @@
 下列表面当前更适合归类为“代码已实现，但测试证据不完整”：
 
 - `OutrunOFT` 的完整跨链消息流、对端配置正确性与远端 mint/burn 配合。当前本地只看到部分安全边界测试，不构成完整跨链行为证明。
-- `OutrunSlisBNBSY`。仓库中存在源码与部署接线路径，但未见独立 adapter 测试文件。
 - `OutrunStakedUsdsSY`、`OutrunL2StakedUsdsSY`、`OutrunStakedUSDeSY`、`OutrunL2WstETHSY`、`OutrunL2StakedTokenSY`。这些表面在源码中已定义，但当前测试目录未提供同名正式测试文件。
 - deployment scripts。`OutstakeScript.s.sol`、`YieldDeployScript.s.sol`、`OutrunDeployer.sol` 能证明部署和接线意图，但它们不是运行时产品行为测试。
 - router 的 genesis 集成当前只有 `genesisBySY` 在本地 mock launcher 下有直接测试，且该测试只证明本地资金流接口；`genesisByToken` 仍不应被表述为已有直接覆盖，也不构成外部 `Memeverse` 系统语义证明。
@@ -56,7 +55,7 @@
 
 从当前仓库证据面看，至少存在以下可保守记录的缺口：
 
-- adapter 覆盖不均衡。Aave、Ether.fi、Lido 的部分变体有测试，但 Sky、Ethena、Lista、generic L2 oracle-backed 变体缺少同等级直接测试。
+- adapter 覆盖不均衡。Aave、Ether.fi、Lido 的部分变体有测试，但 Sky、Ethena、generic L2 oracle-backed 变体缺少同等级直接测试。
 - 部署脚本与运行时主流程之间缺少正式的 end-to-end 部署后验证证据；目前更多是脚本可读性证据。
 - Oracle 侧当前直接测试主要集中在“非正数 answer 要拒绝”和个别 L2 wrappable path；并未形成所有 oracle-backed adapter 的统一集成验证。
 - 外部系统交互当前主要通过本地 interface 与 mock 说明边界；不能仅凭接口命名推断外部协议完整语义。

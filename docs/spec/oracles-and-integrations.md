@@ -110,27 +110,7 @@ L2 相关文件是 `src/integrations/lido/interfaces/IL2StETH.sol`、`src/yield/
 
 - `submit(address(0))` 的无 referral 语义、`wrap` / `unwrap` 的真实换算逻辑、L2 包装资产与 Ethereum canonical asset 的真实对应关系，都是外部依赖。
 - 本地未看到 `OutrunL2WstETHSY` 的独立测试。
-- `OutrunL2WrappableWstETHSY` 的函数命名与资金方向存在“对 L2 wrapper 语义的本地适配假设”；仓库只证明当前调用方式可通过现有 mock 测试，不证明所有上游实现都使用同样语义。
-
-## Lista
-
-当前 Lista 相关本地边界由 `src/integrations/lista/interfaces/IListaBNBStakeManager.sol`、`ISlisBNBProvider.sol` 与 `src/yield/adapters/lista/OutrunSlisBNBSY.sol` 构成。
-
-本地已实现的调用关系：
-
-- `tokenIn == NATIVE` 时，adapter 调用 `listaBNBStakeManager.deposit{value: amountDeposited}()`，再用 `convertBnbToSnBnb(amountDeposited)` 作为 shares 结果。
-- `tokenIn == yieldBearingToken` 时，本地按 1:1 接收 shares。
-- 无论输入路径如何，`deposit` 结束前都会授权 `slisBNBProvider`，并调用 `provide(amountSharesOut, delegateTo)`。
-- `redeem` 不做本地 unwrap 或兑换，而是直接调用 `slisBNBProvider.release(receiver, amountSharesToRedeem)`。
-- owner 可以通过 `updateDelegateTo` 先 `release(address(this), totalSupply)`，再 `provide(totalSupply, _delegateTo)`，以重挂全部已提供余额。
-- `exchangeRate` 直接读取 `listaBNBStakeManager.convertSnBnbToBnb(1 ether)`。
-- `getTokensIn` 暴露 `yieldBearingToken` 与 `NATIVE`；`getTokensOut` 只暴露 `yieldBearingToken`。
-
-本地依赖与假设：
-
-- `provide` / `release` 的真实托管、委托和释放语义全部属于外部依赖。
-- `convertBnbToSnBnb` 与 `convertSnBnbToBnb` 是否互为一致报价，仓库未单独证明。
-- 当前测试目录中未看到 `OutrunSlisBNBSY` 的独立测试，因此本节主要是代码边界说明，不是测试已证行为。
+- `OutrunL2WrappableWstETHSY` 的函数命名与资金方向存在”对 L2 wrapper 语义的本地适配假设”；仓库只证明当前调用方式可通过现有 mock 测试，不证明所有上游实现都使用同样语义。
 
 ## Sky
 
@@ -215,7 +195,7 @@ L2 相关文件是 `src/integrations/sky/interfaces/IPSM3.sol` 与 `src/yield/ad
 ## 当前实现提醒
 
 1. 当前 adapter 文档能确认的是“本地如何调用外部协议”，不是“外部协议一定如何结算”。
-2. 已有直接测试支撑的协议面主要集中在 Aave、Ether.fi、Lido L1、Lido L2 wrappable 和 oracle 非正值拒绝；Lista、Sky、Ethena、L2 non-wrappable Lido 目前缺少同等级正式测试。
+2. 已有直接测试支撑的协议面主要集中在 Aave、Ether.fi、Lido L1、Lido L2 wrappable 和 oracle 非正值拒绝；Sky、Ethena、L2 non-wrappable Lido 目前缺少同等级正式测试。
 3. 多个 adapter 把外部报价函数直接用于 `exchangeRate()` 或 preview，因此外部返回值异常会直接影响本地定价。
 4. `OutrunL2StakedUsdsSY` 当前使用 `swapExactIn(..., minAmountOut = 0, referralCode = 0)`；`OutrunWeETHSY` 和 `OutrunWstETHSY` 的某些路径也把 referral 固定为 `address(0)`。这些都是当前硬编码事实。
 5. `assetInfo()` 在多个跨链/L2 adapter 中暴露的是构造时给定的 canonical asset 元数据；这只是本地配置，不是仓库自行证明的跨链资产真实性。

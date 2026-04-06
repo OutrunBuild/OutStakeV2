@@ -5,12 +5,8 @@ import {BaseScript} from "../lib/BaseScript.s.sol";
 import {OutrunStakingPosition} from "../../src/position/OutrunStakingPosition.sol";
 import {IUniversalAssets} from "../../src/assets/interfaces/IUniversalAssets.sol";
 
-import {ISlisBNBProvider} from "../../src/integrations/lista/interfaces/ISlisBNBProvider.sol";
-import {IListaBNBStakeManager} from "../../src/integrations/lista/interfaces/IListaBNBStakeManager.sol";
-
 import {OutrunWstETHSY} from "../../src/yield/adapters/lido/OutrunWstETHSY.sol";
 import {OutrunAaveV3SY} from "../../src/yield/adapters/aave/OutrunAaveV3SY.sol";
-import {OutrunSlisBNBSY} from "../../src/yield/adapters/lista/OutrunSlisBNBSY.sol";
 import {OutrunStakedUSDeSY} from "../../src/yield/adapters/ethena/OutrunStakedUSDeSY.sol";
 
 contract YieldDeployScript is BaseScript {
@@ -34,7 +30,6 @@ contract YieldDeployScript is BaseScript {
         // _supportWstETHOnSepolia();
         // _supportSUSDeOnSepolia();
         _supportAUSDC();
-        _supportSlisBNB();
     }
 
     /**
@@ -105,31 +100,5 @@ contract YieldDeployScript is BaseScript {
 
         SP_aUSDC.setKeeper(keeper);
         IUniversalAssets(UUSD).setMintingCap(aUSDCSPAddress, 1000000000 ether);
-    }
-
-    /**
-     * Support slisBNB (BSC Testnet)
-     */
-    function _supportSlisBNB() internal {
-        if (block.chainid != vm.envUint("BSC_TESTNET_CHAINID")) return;
-
-        address slisBNB = vm.envAddress("BSC_TESTNET_SLISBNB");
-
-        // SY
-        OutrunSlisBNBSY SY_slisBNB = new OutrunSlisBNBSY(
-            owner,
-            slisBNB,
-            vm.envAddress("DELEGATE_TO"),
-            IListaBNBStakeManager(vm.envAddress(string.concat("BSC_TESTNET_LISTA_BNB_", "STAKE_MANAGER"))),
-            ISlisBNBProvider(vm.envAddress("BSC_TESTNET_SLISBNB_PROVIDER"))
-        );
-        address slisBNBSYAddress = address(SY_slisBNB);
-
-        // Position
-        OutrunStakingPosition SP_slisBNB = new OutrunStakingPosition(owner, 0, revenuePool, slisBNBSYAddress, UBNB);
-        address slisBNBSPAddress = address(SP_slisBNB);
-
-        SP_slisBNB.setKeeper(keeper);
-        IUniversalAssets(UBNB).setMintingCap(slisBNBSPAddress, 1000000000 ether);
     }
 }
