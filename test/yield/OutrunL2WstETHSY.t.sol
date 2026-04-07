@@ -4,7 +4,6 @@ pragma solidity ^0.8.28;
 import {Test} from "forge-std/Test.sol";
 
 import {OutrunERC20} from "../../src/assets/base/OutrunERC20.sol";
-import {IStandardizedYield} from "../../src/yield/interfaces/IStandardizedYield.sol";
 import {OutrunL2WstETHSY} from "../../src/yield/adapters/lido/OutrunL2WstETHSY.sol";
 
 contract MockWstETH is OutrunERC20 {
