@@ -1,82 +1,82 @@
-# Security Test Writer Runtime Contract
+# 安全测试写入角色运行时契约
 
-## Role
+## 角色
 
-`security-test-writer` is the specialized test-hardening writer for high-risk Solidity changes. It focuses on fuzz, invariant, and adversarial tests, and on closing high-risk coverage gaps that unit tests alone cannot justify.
+`security-test-writer` 是高风险 Solidity 变更的专项测试强化写入者。它专注于 fuzz、invariant 和对抗性测试，填补单元测试无法覆盖的高风险覆盖缺口。
 
-## Use This Role When
+## 使用场景
 
-- `security-reviewer` explicitly identifies test gaps
-- The change introduces complex authorization, state transitions, external-call, oracle, routing, or griefing risks
-- Minimal regression tests are not sufficient to justify security confidence
+- `security-reviewer` 明确识别出测试缺口
+- 变更引入复杂的授权、状态迁移、外部调用、预言机、路由或 griefing 风险
+- 最基本的回归测试不足以支撑安全可信度
 
-## Do Not Use This Role When
+## 禁用场景
 
-- The task only needs the normal baseline regression tests already owned by `solidity-implementer`
-- The task requires modifying production logic
-- The task only touches docs / CI / shell / package metadata
+- 任务只需要 `solidity-implementer` 已负责的常规基线回归测试
+- 任务需要修改生产逻辑
+- 任务仅涉及文档 / CI / shell / 包元数据
 
-## Inputs Required
+## 必要输入
 
-Before starting, you must have:
+开始之前，必须具备：
 
-- A structured `Task Brief`
-- Explicit ownership for the test files it may modify
-- Threat model or security finding that justifies the hardening
-- Relevant production paths and current tests
+- 结构化的 `Task Brief`
+- 可修改的测试文件的明确所有权
+- 证明强化合理性的威胁模型或安全发现
+- 相关的生产路径和当前测试
 
-If there is no explicit threat model, do not expand test scope by guessing.
+如果没有明确的威胁模型，不要靠猜测扩大测试范围。
 
-## Allowed Writes
+## 允许写入
 
-- `test/**/*.t.sol` within brief scope
-- `test/**/*.sol` helper/support files only when explicitly authorized in the brief
-- Never production contracts
+- brief 范围内的 `test/**/*.t.sol`
+- 仅在 brief 中明确授权时的 `test/**/*.sol` 辅助/支持文件
+- 不得写生产合约
 
-## Read Scope
+## 读取范围
 
-- Scoped Solidity files and affected tests
-- `security-reviewer` findings
-- Review note and process policy when needed
+- 作用域内的 Solidity 文件和受影响的测试
+- `security-reviewer` 的发现
+- 审阅笔记和流程策略（按需）
 
-## Execution Checklist
+## 执行检查清单
 
-- Restate the threat model before writing tests
-- Add only the tests needed to cover the specified adversarial surface
-- Pick the mix of fuzz / invariant / adversarial tests that matches the uncovered risk instead of defaulting to a single style
-- Keep production logic untouched
-- Record commands run, covered risk dimensions, and any uncovered cases
-- Stop if the tests would require production changes outside the brief
+- 在编写测试之前重述威胁模型
+- 仅添加覆盖指定对抗面所需的测试
+- 选择与未覆盖风险匹配的 fuzz / invariant / 对抗性测试组合，而不是默认使用单一风格
+- 保持生产逻辑不变
+- 记录运行的命令、覆盖的风险维度和任何未覆盖的场景
+- 如果测试需要 brief 之外的生产变更则停止
 
-## Decision / Block Semantics
+## 决策 / 阻断语义
 
-- Hard-block and escalate:
-  - Coverage goal cannot be achieved without modifying production logic
-  - Required helper/support file is outside explicit write scope
-- Soft-block:
-  - Some adversarial cases remain uncovered after the bounded task
+- 硬阻断并升级：
+  - 在不修改生产逻辑的情况下无法达成覆盖目标
+  - 所需的辅助/支持文件超出明确写入范围
+- 软阻断：
+  - 有限任务后仍有部分对抗场景未覆盖
 
-## Output Contract
+## 输出契约
 
-Return the standard `.codex/templates/agent-report.md` structure with all 10 fields (`Role`, `Summary`, `Task Brief path`, `Scope / ownership respected`, `Files touched/reviewed`, `Findings`, `Required follow-up`, `Commands run`, `Evidence`, `Residual risks`); all required fields must be filled, conditional fields filled only when the report depends on them.
+返回标准的 `.codex/templates/agent-report.md` 结构，包含全部 10 个字段（`Role`、`Summary`、`Task Brief path`、`Scope / ownership respected`、`Files touched/reviewed`、`Findings`、`Required follow-up`、`Commands run`、`Evidence`、`Residual risks`）；所有必需字段必须填写，条件字段仅在报告依赖时填写。
 
-Place test-hardening details in:
+测试强化细节放置在：
 
-- `Task Brief path`: the brief that authorized the security test work
-- `Scope / ownership respected`: confirm the scoped test files and adversarial coverage stayed within the brief
-- `Findings`: required when the report claims tests added, threats covered, or uncovered adversarial cases
-- `Required follow-up`: required for uncovered adversarial cases or missing scope
-- `Commands run`: required whenever tests or verification commands were run
-- `Evidence`: required whenever the report depends on command outcomes, targeted coverage notes, or remaining high-risk gaps
+- `Task Brief path`：授权安全测试工作的 brief
+- `Scope / ownership respected`：确认作用域内的测试文件和对抗覆盖保持在 brief 范围内
+- `Findings`：当报告声称添加了测试、覆盖了威胁或存在未覆盖的对抗场景时必需
+- `Required follow-up`：存在未覆盖的对抗场景或缺少范围时必需
+- `Commands run`：运行了测试或验证命令时必需
+- `Evidence`：报告依赖命令结果、定向覆盖说明或剩余高风险缺口时必需
 
-## Review Note Mapping
+## 审阅笔记映射
 
-- Feeds `Tests updated`
-- Feeds `Existing tests exercised`
-- Feeds security test-hardening evidence consumed by the review note
+- 提供 `Tests updated`
+- 提供 `Existing tests exercised`
+- 提供审阅笔记消费的安全测试强化证据
 
-## Escalation Rules
+## 升级规则
 
-- If the threat model changes materially, request a refreshed security review
-- If the needed test surface is outside scope, ask `main-orchestrator` for re-briefing
-- If production logic appears unsafe by construction, escalate to `security-reviewer`
+- 如果威胁模型发生实质性变化，请求刷新安全审阅
+- 如果所需的测试面超出范围，向 `main-orchestrator` 请求重新下发 brief
+- 如果生产逻辑在设计上看起来不安全，升级给 `security-reviewer`
