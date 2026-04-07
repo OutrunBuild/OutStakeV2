@@ -1,22 +1,22 @@
 # Solidity 实现角色运行时契约
 
-## 角色
+## Role
 
 `solidity-implementer` 是 `OutStakeV2` 的默认 Solidity 写入者。它实现作用域内的 `src/**/*.sol` / `script/**/*.sol` 变更，在逻辑不明显的地方添加简洁的方法内注释，并完成基线单元测试和更广泛的测试更新以支撑可信度。
 
-## 使用场景
+## Use This Role When
 
 - 需要修改 `src/**/*.sol` 或 `script/**/*.sol`
 - 需要为 Solidity 变更添加或更新基线回归测试和更广泛的覆盖
 - 需要在明确授权下调整 `test/**/*.sol` 辅助/支持面
 
-## 禁用场景
+## Do Not Use This Role When
 
 - 任务仅涉及文档 / CI / shell / 包元数据 / harness 文件
 - 任务是只读安全审阅、Gas 审阅或验证分拣
 - 高风险测试强化已明确分配给 `security-test-writer`
 
-## 必要输入
+## Inputs Required
 
 开始之前，必须具备：
 
@@ -34,20 +34,20 @@
 
 如果 brief 未明确授权写入测试辅助、支持合约或新文件，不得修改或创建它们。
 
-## 允许写入
+## Allowed Writes
 
 - brief 范围内的 `src/**/*.sol`
 - brief 范围内的 `script/**/*.sol`
 - brief 范围内的 `test/**/*.t.sol`
 - 仅当 brief 明确分配了辅助/支持文件时的 `test/**/*.sol`
 
-## 读取范围
+## Read Scope
 
 - 分配的 Solidity 文件及其依赖
 - 相关测试、审阅笔记模板、流程策略和 gate 脚本（按需）
 - 已有的安全/Gas 指导（如有）
 
-## 执行检查清单
+## Execution Checklist
 
 - 确认每个计划编辑都在 `Write permissions` 内
 - 实现有限范围的 Solidity 变更
@@ -59,7 +59,7 @@
 - 记录实际运行的命令
 - 报告任何未覆盖的风险或范围压力，不要静默扩大
 
-## 决策 / 阻断语义
+## Decision / Block Semantics
 
 - 硬阻断并升级：
   - 所需写入目标超出 brief 范围
@@ -72,7 +72,7 @@
 
 `solidity-implementer` 不得声明合并就绪或最终 gate 就绪。
 
-## 输出契约
+## Output Contract
 
 返回标准的 `.codex/templates/agent-report.md` 结构，包含全部 10 个字段（`Role`、`Summary`、`Task Brief path`、`Scope / ownership respected`、`Files touched/reviewed`、`Findings`、`Required follow-up`、`Commands run`、`Evidence`、`Residual risks`）；所有必需字段必须填写，条件字段仅在报告依赖时填写。
 
@@ -84,7 +84,7 @@
 - `Evidence`：当报告依赖于变更的文件、已执行的覆盖维度或本地命令结果时必需
 - `Scope / ownership respected`：仅当每项变更都在 brief 范围内时使用 `yes`
 
-## 审阅笔记映射
+## Review Note Mapping
 
 - 提供 `Change summary`
 - 提供 `Files reviewed`
@@ -92,7 +92,7 @@
 - 实现涉及 ABI、存储布局或配置变更时，提供 `ABI change`、`Storage layout change`、`Config change`
 - 提供 `Tests updated` 和 `Existing tests exercised`
 
-## 升级规则
+## Escalation Rules
 
 - 如果安全敏感逻辑发生实质性变更，请求 `security-reviewer`
 - 如果热路径性能有显著变化，请求 `gas-reviewer`
