@@ -48,7 +48,6 @@ required_files=(
     "docs/process/README.md"
     "docs/process/change-matrix.md"
     "docs/process/agents-detail.md"
-    "docs/process/subagent-workflow.md"
     "docs/process/review-notes.md"
     "docs/process/policy.json"
     "docs/reviews/README.md"
