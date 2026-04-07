@@ -150,7 +150,7 @@ contract OutrunWeETHSYTest is Test {
         eETH.approve(address(weETH), AMOUNT);
         weETH.wrap(AMOUNT);
 
-        uint256 weETHBalanceBefore = weETH.balanceOf(USER);
+        weETH.balanceOf(USER);
         weETH.approve(address(sy), AMOUNT);
         uint256 sharesOut = sy.deposit(USER, address(weETH), AMOUNT, 0);
         vm.stopPrank();

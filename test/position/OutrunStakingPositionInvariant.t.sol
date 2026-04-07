@@ -5,7 +5,6 @@ import {Test} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {MockSY, MockERC20, MockUAsset} from "./OutrunStakingPosition.t.sol";
 import {OutrunStakingPosition} from "../../src/position/OutrunStakingPosition.sol";
-import {IOutrunStakeManager} from "../../src/position/interfaces/IOutrunStakeManager.sol";
 import {IStandardizedYield} from "../../src/yield/interfaces/IStandardizedYield.sol";
 import {SYUtils} from "../../src/libraries/SYUtils.sol";
 
@@ -158,7 +157,7 @@ contract PositionHandler is Test {
         }
 
         vm.prank(actor);
-        uint256 uAssetMinted = position.wrapStake(amount, actor);
+        position.wrapStake(amount, actor);
 
         // Ensure position contract has enough SY for wrap redemptions
         sy.mintShares(address(position), amount);
@@ -421,7 +420,7 @@ contract OutrunStakingPositionInvariantTest is StdInvariant, Test {
 
         // Calculate debt in SY terms
         if (wrapDebt > 0) {
-            uint256 wrapDebtInSY = SYUtils.assetToSy(IStandardizedYield(address(sy)).exchangeRate(), wrapDebt);
+            SYUtils.assetToSy(IStandardizedYield(address(sy)).exchangeRate(), wrapDebt);
 
             // If there's wrap debt, there must be some wrap SY (can't have debt with zero SY)
             // Unless all SY has been harvested after rate decrease
@@ -469,7 +468,7 @@ contract OutrunStakingPositionInvariantTest is StdInvariant, Test {
             }
         }
 
-        uint256 expectedTotalDebt = totalPositionDebt + position.wrapUAssetDebt();
+        totalPositionDebt + position.wrapUAssetDebt();
 
         // The total minted tracked by the handler should match
         // Note: We can't directly check MockUAsset.mintingStatusTable because
@@ -559,7 +558,6 @@ contract OutrunStakingPositionInvariantTest is StdInvariant, Test {
      */
     function invariant_wrapPoolAccountingConsistent() public {
         uint256 syWrap = position.syWrapStaking();
-        uint256 wrapDebt = position.wrapUAssetDebt();
         uint256 syTotal = position.syTotalStaking();
 
         // syWrapStaking must be <= syTotalStaking

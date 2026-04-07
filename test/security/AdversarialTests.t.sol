@@ -234,14 +234,19 @@ contract MaliciousSY is OutrunERC20, IStandardizedYield {
             // Try to call stake during redeem callback
             if (attackSelector == IOutrunStakeManager.stake.selector) {
                 // solhint-disable-next-line avoid-low-level-calls
-                address(targetPosition)
+                // Adversarial test: intentionally ignore return value
+                (bool success,) = address(targetPosition)
                     .call(abi.encodeWithSelector(attackSelector, 1e18, uint128(30), receiver, receiver));
+                success; // suppress unused-variable warning
             }
             // Try to call drawUAsset during redeem callback
             else if (attackSelector == IOutrunStakeManager.drawUAsset.selector) {
                 // Need a valid positionId - try with 1
+                // Adversarial test: intentionally ignore return value
                 // solhint-disable-next-line avoid-low-level-calls
-                address(targetPosition).call(abi.encodeWithSelector(attackSelector, uint256(1), receiver));
+                (bool success,) =
+                    address(targetPosition).call(abi.encodeWithSelector(attackSelector, uint256(1), receiver));
+                success; // suppress unused-variable warning
             }
         }
     }

@@ -568,6 +568,7 @@ contract OutrunStakingPositionFuzzTest is Test {
 
     function testFuzz_LargeAmountStake(uint128 amountInSY) public {
         // Use uint128 to avoid overflow in fuzzing, but still test large values
+        // forge-lint: disable-next-line(unsafe-typecast)
         vm.assume(amountInSY >= uint128(MIN_STAKE));
 
         uint256 largeAmount = uint256(amountInSY);
@@ -627,7 +628,7 @@ contract OutrunStakingPositionFuzzTest is Test {
         (uint256 pos1,) = position.stake(stakeAmount1, 30, owner, owner);
 
         vm.prank(user1);
-        (uint256 pos2,) = position.stake(stakeAmount2, 30, user1, user1);
+        position.stake(stakeAmount2, 30, user1, user1);
 
         vm.prank(owner);
         position.wrapStake(wrapAmount, owner);

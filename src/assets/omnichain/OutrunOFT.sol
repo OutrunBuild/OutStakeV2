@@ -82,6 +82,8 @@ abstract contract OutrunOFT is OutrunERC20FlashMint, OutrunERC20Pausable, OFTCor
     function _toSD(uint256 _amountLD) internal view virtual override returns (uint64 amountSD) {
         uint256 amountSD256 = _amountLD / decimalConversionRate;
         if (amountSD256 > type(uint64).max) revert AmountSDOverflowed(amountSD256);
+        // Safe: overflow guard above guarantees amountSD256 <= type(uint64).max
+        // forge-lint: disable-next-line(unsafe-typecast)
         return uint64(amountSD256);
     }
 

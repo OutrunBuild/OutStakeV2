@@ -517,6 +517,7 @@ contract OutrunRouterFuzzTest is Test {
         // Verify genesis called correctly
         (uint256 launcherVerseId, uint128 launcherUAsset, address launcherUser) = launcher.snapshot();
         assertEq(launcherVerseId, verseId, "verseId mismatch");
+        // forge-lint: disable-next-line(unsafe-typecast)
         assertEq(launcherUAsset, uint128(amount), "launcher uAsset mismatch");
         assertEq(launcherUser, user, "genesisUser mismatch");
 
@@ -584,6 +585,7 @@ contract OutrunRouterFuzzTest is Test {
         // Verify genesis called correctly
         (uint256 launcherVerseId, uint128 launcherUAsset, address launcherUser) = launcher.snapshot();
         assertEq(launcherVerseId, verseId, "verseId mismatch");
+        // forge-lint: disable-next-line(unsafe-typecast)
         assertEq(launcherUAsset, uint128(amount), "launcher uAsset mismatch");
         assertEq(launcherUser, user, "genesisUser mismatch");
     }

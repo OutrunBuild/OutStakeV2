@@ -151,7 +151,7 @@ contract OutrunWstETHSYTest is Test {
         stETH.approve(address(wstETH), AMOUNT);
         wstETH.wrap(AMOUNT);
 
-        uint256 wstETHBalanceBefore = wstETH.balanceOf(USER);
+        wstETH.balanceOf(USER);
         wstETH.approve(address(sy), AMOUNT);
         uint256 sharesOut = sy.deposit(USER, address(wstETH), AMOUNT, 0);
         vm.stopPrank();
@@ -173,10 +173,7 @@ contract OutrunWstETHSYTest is Test {
         vm.stopPrank();
 
         assertEq(amountOut, sharesOut, "redeem to wstETH should be 1:1");
-        assertEq(
-            wstETH.balanceOf(USER),
-            wstETHBalanceBefore + amountOut
-        );
+        assertEq(wstETH.balanceOf(USER), wstETHBalanceBefore + amountOut);
         assertEq(sy.balanceOf(USER), 0);
     }
 
