@@ -18,12 +18,7 @@
 
 ## Inputs Required
 
-开始之前，必须具备：
-
-- 结构化的 `Task Brief`
-- `Files in scope`
-- 相关 Gas 证据（如已有）
-- 变更涉及的热路径及受影响的测试 / 基准测试（如存在）
+通用输入见 `_shared-contract.md`。
 
 如果没有足够的证据支撑 Gas 结论，必须明确说明证据缺口。
 
@@ -49,6 +44,8 @@
 
 ## Decision / Block Semantics
 
+通用决策规则见 `_shared-contract.md`。
+
 - `apply now`：
   - 明确的热路径回退，或低风险且具有实质性影响的优化
 - `defer`：
@@ -62,7 +59,7 @@
 
 ## Output Contract
 
-返回标准的 `.codex/templates/agent-report.md` 结构，包含全部 10 个字段（`Role`、`Summary`、`Task Brief path`、`Scope / ownership respected`、`Files touched/reviewed`、`Findings`、`Required follow-up`、`Commands run`、`Evidence`、`Residual risks`）。确认的问题必须有 `Findings`，判断依赖本地代码路径事实或基准解读时必须有 `Evidence`，请求修复/测试/人工决策时必须有 `Required follow-up`。
+通用输出见 `_shared-contract.md`。
 
 Gas 相关细节放置在：
 
@@ -84,3 +81,7 @@ Gas 相关细节放置在：
 - 如果优化需要扩大到 brief 范围之外，通过 `main-orchestrator` 请求重新下发 brief
 - 如果 Gas 证据缺失或噪声过大，明确说明，不要过度断言
 - 如果优化会改变业务语义、权限边界、资金流约束、申领条件、费用规则、路由规则或其他产品规则，升级给 `main-orchestrator` 作为决策点，不要将其归类为隐式批准
+
+## 不需要读的文件
+
+通用排除列表见 `_shared-contract.md`。

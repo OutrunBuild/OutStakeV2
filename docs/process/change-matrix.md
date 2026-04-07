@@ -16,17 +16,7 @@
 
 ## `src/**/*.sol`、`script/**/*.sol`
 
-分类驱动角色：
-
-- `non-semantic`：`solidity-implementer`、`verifier(light)`
-- `test-semantic`：`solidity-implementer`、`logic-reviewer`、`verifier(light)`
-- `prod-semantic`：`solidity-implementer`、`logic-reviewer`、`security-reviewer`、`gas-reviewer`、`verifier(full)`
-- `high-risk`：与 `prod-semantic` 相同，`security-test-writer` 继续按需启用
-
-按需角色：
-
-- `solidity-explorer`
-- `security-test-writer`
+默认角色：见 AGENTS.md §5。
 
 必须满足：
 
@@ -51,16 +41,7 @@
 
 ## `test/**/*.sol`
 
-默认角色：
-
-- `solidity-implementer`
-- `logic-reviewer`
-- `verifier`
-
-按需角色：
-
-- `security-reviewer`
-- `security-test-writer`
+默认角色：见 AGENTS.md §5。
 
 必须满足：
 
@@ -73,10 +54,7 @@
 
 ## `script/process/**`、`.githooks/*` 或其他流程脚本
 
-默认角色：
-
-- `process-implementer`
-- `verifier`
+默认角色：见 AGENTS.md §5。
 
 必须满足：
 
@@ -88,10 +66,7 @@
 
 ## `package.json`、`package-lock.json`、CI 与工具链入口
 
-默认角色：
-
-- `process-implementer`
-- `verifier`
+默认角色：见 AGENTS.md §5。
 
 必须满足：
 
@@ -113,10 +88,7 @@
 - `.github/workflows/**`
 - `.codex/**`
 
-默认角色：
-
-- `process-implementer`
-- `verifier`
+默认角色：见 AGENTS.md §5。
 
 必须满足：
 

@@ -14,6 +14,7 @@ changed_files_path="$tmp_dir/changed-files.txt"
 diff_file="$tmp_dir/change.diff"
 created_src_fixture=""
 created_test_fixture=""
+created_script_fixture=""
 
 cleanup() {
     if [ -n "$created_src_fixture" ] && [ -f "$created_src_fixture" ]; then
@@ -21,6 +22,9 @@ cleanup() {
     fi
     if [ -n "$created_test_fixture" ] && [ -f "$created_test_fixture" ]; then
         rm -f "$created_test_fixture"
+    fi
+    if [ -n "$created_script_fixture" ] && [ -f "$created_script_fixture" ]; then
+        rm -f "$created_script_fixture"
     fi
     rm -rf "$tmp_dir"
 }
@@ -42,6 +46,13 @@ if [ -z "$existing_test_file" ]; then
     created_test_fixture="test/__quality_gates_selftest__.sol"
     printf '%s\n' 'pragma solidity ^0.8.20; contract QualityGateTestFixture {}' > "$created_test_fixture"
     existing_test_file="$created_test_fixture"
+fi
+
+if [ -z "$existing_script_file" ]; then
+    mkdir -p script
+    created_script_fixture="script/__quality_gates_selftest__.sol"
+    printf '%s\n' 'pragma solidity ^0.8.20; contract QualityGateScriptFixture {}' > "$created_script_fixture"
+    existing_script_file="$created_script_fixture"
 fi
 
 mkdir -p "$bin_dir"
@@ -118,7 +129,7 @@ run_quality_script() {
         return
     fi
 
-    PATH="$bin_dir:$PATH" CHANGE_CLASSIFIER_FORCE="$forced_classification" CHANGE_CLASSIFIER_DIFF_FILE="$diff_file" \
+    PATH="$bin_dir:$PATH" QUALITY_GATE_FILE_LIST="$changed_files_path" CHANGE_CLASSIFIER_FORCE="$forced_classification" CHANGE_CLASSIFIER_DIFF_FILE="$diff_file" \
         /bin/bash "./script/process/${script_name}" >"$output_file" 2>&1
 }
 

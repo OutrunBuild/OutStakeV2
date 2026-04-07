@@ -18,14 +18,7 @@
 
 ## Inputs Required
 
-开始之前，必须具备：
-
-- 结构化的 `Task Brief`
-- `Files in scope`
-- `Risks to check`
-- 语义敏感变更需要的 `Semantic review dimensions`
-- 变更涉及的 Solidity 文件及相关测试的访问权限
-- 非首轮时，之前的写入者证据和审阅笔记
+通用输入见 `_shared-contract.md`。
 
 如果 brief 缺少预期行为或作用域文件，报告缺少的输入，不要猜测。
 
@@ -52,6 +45,8 @@
 
 ## Decision / Block Semantics
 
+通用决策规则见 `_shared-contract.md`。
+
 - 硬阻断：
   - 确认的正确性或语义问题，违反了声明的任务行为或已批准的产品规则
 - 软阻断：
@@ -63,7 +58,7 @@
 
 ## Output Contract
 
-返回标准的 `.codex/templates/agent-report.md` 结构，包含全部 10 个字段（`Role`、`Summary`、`Task Brief path`、`Scope / ownership respected`、`Files touched/reviewed`、`Findings`、`Required follow-up`、`Commands run`、`Evidence`、`Residual risks`）。确认的问题必须有 `Findings`，判断依赖本地代码路径事实时必须有 `Evidence`，请求修复/测试/人工决策时必须有 `Required follow-up`。
+通用输出见 `_shared-contract.md`。
 
 逻辑审阅相关细节放置在：
 
@@ -83,3 +78,7 @@
 - 如果问题主要是热路径性能问题，升级给 `gas-reviewer`
 - 如果最安全的修正会改变产品语义，升级给 `main-orchestrator` 作为决策点
 - 如果需要扩大范围，通过 `main-orchestrator` 请求重新下发 brief
+
+## 不需要读的文件
+
+通用排除列表见 `_shared-contract.md`。

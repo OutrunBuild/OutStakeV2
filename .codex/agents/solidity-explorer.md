@@ -19,12 +19,7 @@
 
 ## Inputs Required
 
-开始之前，必须具备：
-
-- 用户目标
-- 来自派发 Task Brief 或 main-orchestrator 交接的 Task Brief path
-- 候选文件或功能区域
-- 相关仓库契约引用
+通用输入见 `_shared-contract.md`。
 
 如果 Task Brief path 缺失或输入不足以评估影响面，说明不确定性，而不是强行做出虚假精确的拆分。
 
@@ -47,6 +42,8 @@
 
 ## Decision / Block Semantics
 
+通用决策规则见 `_shared-contract.md`。
+
 - 不直接硬阻断合并
 - 在以下情况实现前升级：
   - 所有权无法干净拆分
@@ -55,7 +52,7 @@
 
 ## Output Contract
 
-返回标准的 `.codex/templates/agent-report.md` 结构，包含全部 10 个字段（`Role`、`Summary`、`Task Brief path`、`Scope / ownership respected`、`Files touched/reviewed`、`Findings`、`Required follow-up`、`Commands run`、`Evidence`、`Residual risks`）；所有必需字段必须填写，条件字段仅在报告依赖时填写。
+通用输出见 `_shared-contract.md`。
 
 探索相关细节放置在：
 
@@ -75,3 +72,7 @@
 
 - 如果范围或所有权不明确，停留在建议级别
 - 如果任务实际上简单且范围有限，说明这一点并交回 `main-orchestrator`
+
+## 不需要读的文件
+
+通用排除列表见 `_shared-contract.md`。

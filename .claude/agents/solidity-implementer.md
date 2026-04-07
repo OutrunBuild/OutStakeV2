@@ -31,7 +31,7 @@ tools:
 
 ## Inputs
 
-Inputs: 见 AGENTS.md Part I §8 通用输入。
+通用输入见 `_shared-contract.md`。
 
 如果 brief 未明确授权写入测试辅助文件、支撑合约或新文件，则不得修改或创建。
 
@@ -62,7 +62,7 @@ Inputs: 见 AGENTS.md Part I §8 通用输入。
 
 ## 决策规则
 
-Decision rules: 见 AGENTS.md Part I §8 通用决策规则。
+通用决策规则见 `_shared-contract.md`。
 
 - Hard-block 并升级：
   - 需要写入的目标超出 brief 范围
@@ -77,7 +77,7 @@ Decision rules: 见 AGENTS.md Part I §8 通用决策规则。
 
 ## 输出
 
-Output: 见 AGENTS.md Part I §8 通用输出。
+通用输出见 `_shared-contract.md`。
 
 实现相关细节放入：
 
@@ -104,7 +104,4 @@ Output: 见 AGENTS.md Part I §8 通用输出。
 
 ## 不需要读的文件
 
-- `docs/process/policy.json` — 脚本专用，规则已在 AGENTS.md
-- `docs/process/subagent-workflow.md` — 已合并进 AGENTS.md
-- `.codex/agents/*.toml` — Codex manifest
-- `.codex/workflows/*.json`、`.codex/runtime/*.json` — Codex 索引
+通用排除列表见 `_shared-contract.md`。

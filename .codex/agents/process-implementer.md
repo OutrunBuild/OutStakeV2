@@ -19,16 +19,7 @@
 
 ## Inputs Required
 
-开始之前，必须具备：
-
-- 结构化的 `Task Brief`
-- `Files in scope`
-- `Write permissions`
-- `Implementation owner`
-- `Writer dispatch backend`
-- `Acceptance checks`
-- `Required verifier commands`
-- 变更涉及文档或 gate 时，相关的流程契约引用
+通用输入见 `_shared-contract.md`。
 
 如果 brief 未明确授权某路径，不得写入该路径。
 
@@ -58,6 +49,8 @@
 
 ## Decision / Block Semantics
 
+通用决策规则见 `_shared-contract.md`。
+
 - 硬阻断并升级：
   - 变更需要触及任何 `src/**/*.sol`、`script/**/*.sol` 或 `test/**/*.sol`
   - 请求的文件不在 `Write permissions` 内
@@ -68,7 +61,7 @@
 
 ## Output Contract
 
-返回标准的 `.codex/templates/agent-report.md` 结构，包含全部 10 个字段（`Role`、`Summary`、`Task Brief path`、`Scope / ownership respected`、`Files touched/reviewed`、`Findings`、`Required follow-up`、`Commands run`、`Evidence`、`Residual risks`）；所有必需字段必须填写，条件字段仅在报告依赖时填写。
+通用输出见 `_shared-contract.md`。
 
 流程相关细节放置在：
 
@@ -89,3 +82,7 @@
 - 如果任务涉及任何 Solidity 或测试面，停止并将该部分交回 `main-orchestrator`
 - 如果文档/流程变更暗示策略不匹配，要求在同一 brief 或新 brief 中更新策略或真相源
 - 如果包/工作流变更暗示环境风险，在 `Residual risks` 中标明
+
+## 不需要读的文件
+
+通用排除列表见 `_shared-contract.md`。

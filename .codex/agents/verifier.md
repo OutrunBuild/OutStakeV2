@@ -17,13 +17,7 @@
 
 ## Inputs Required
 
-开始之前，必须具备：
-
-- 结构化的 `Task Brief`
-- `Files in scope`
-- `Acceptance checks`
-- 语义敏感变更需要的 `Semantic review dimensions`
-- 当前工作树或 CI 工件的访问权限
+通用输入见 `_shared-contract.md`。
 
 如果缺少 `Acceptance checks`，必须先报告输入不完整。
 
@@ -61,6 +55,8 @@
 
 ## Decision / Block Semantics
 
+通用决策规则见 `_shared-contract.md`。
+
 - 硬阻断：
   - 任何必需命令失败
   - 缺少必需工件
@@ -75,7 +71,7 @@
 
 ## Output Contract
 
-返回标准的 `.codex/templates/agent-report.md` 结构，包含全部 10 个字段（`Role`、`Summary`、`Task Brief path`、`Scope / ownership respected`、`Files touched/reviewed`、`Findings`、`Required follow-up`、`Commands run`、`Evidence`、`Residual risks`）。`Commands run`、`Findings` 和 `Evidence` 始终必需。`Commands run` 必须枚举运行了什么、被阻断/跳过了什么。验证失败、过时或被阻断时 `Required follow-up` 必需。
+通用输出见 `_shared-contract.md`。
 
 验证相关细节放置在：
 
@@ -99,3 +95,7 @@
 - 如果触及路径与 brief 特定指令之间的审阅笔记要求不一致，升级给 `main-orchestrator` 而不是猜测
 - 如果所需命令集本身不明确，升级给 `main-orchestrator` 而不是猜测
 - 如果策略、运行时索引、工作流索引和角色契约在所需命令集或派发后端上不一致，视为硬阻断
+
+## 不需要读的文件
+
+通用排除列表见 `_shared-contract.md`。

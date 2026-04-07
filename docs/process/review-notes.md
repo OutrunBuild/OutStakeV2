@@ -117,6 +117,8 @@
 
 ## 6. 防误报与证据链规则
 
+证据链、hard-block 与 soft-block 的完整定义见 `AGENTS.md §10`。
+
 - `Local control-flow facts checked` 必须写清结论依赖的本地关键前提，例如状态更新顺序、条件分支、金额处理、索引推进、返回值处理或权限检查。
 - 若结论依赖第三方协议、外部合约、SDK、API 或系统行为，`External facts checked` 必须写明主来源；没有主来源时只能写成 `needs verification`、假设或待确认决策点。
 - `Evidence chain complete` 只有在“本地前提已复核”且“必要时外部主来源已核验”同时满足时才允许填写 `yes`。

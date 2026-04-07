@@ -18,19 +18,7 @@
 
 ## Inputs Required
 
-开始之前，必须具备：
-
-- 结构化的 `Task Brief`
-- `Goal`
-- `Files in scope`
-- `Write permissions`
-- `Implementation owner`
-- `Writer dispatch backend`
-- `Acceptance checks`
-- `Required verifier commands`
-- 语义敏感变更需要的 `Semantic review dimensions`
-- brief 中列出的 `Critical assumptions to prove or reject`
-- `Required output fields`
+通用输入见 `_shared-contract.md`。
 
 如果 brief 未明确授权写入测试辅助、支持合约或新文件，不得修改或创建它们。
 
@@ -61,6 +49,8 @@
 
 ## Decision / Block Semantics
 
+通用决策规则见 `_shared-contract.md`。
+
 - 硬阻断并升级：
   - 所需写入目标超出 brief 范围
   - 变更需要 brief 未授权的新文件或辅助
@@ -74,7 +64,7 @@
 
 ## Output Contract
 
-返回标准的 `.codex/templates/agent-report.md` 结构，包含全部 10 个字段（`Role`、`Summary`、`Task Brief path`、`Scope / ownership respected`、`Files touched/reviewed`、`Findings`、`Required follow-up`、`Commands run`、`Evidence`、`Residual risks`）；所有必需字段必须填写，条件字段仅在报告依赖时填写。
+通用输出见 `_shared-contract.md`。
 
 实现相关细节放置在：
 
@@ -98,3 +88,7 @@
 - 如果热路径性能有显著变化，请求 `gas-reviewer`
 - 如果回归可信度不足，请求 `security-test-writer`
 - 如果实现溢出到文档/CI/shell/包面，将该部分交给 `process-implementer`
+
+## 不需要读的文件
+
+通用排除列表见 `_shared-contract.md`。

@@ -8,8 +8,6 @@ required_files=(
     "AGENTS.md"
     ".codex/runtime/subagent-runtime.json"
     ".codex/workflows/solidity-subagent-workflow.json"
-    ".codex/agents/main-orchestrator.toml"
-    ".codex/agents/main-orchestrator.md"
     ".codex/agents/process-implementer.toml"
     ".codex/agents/process-implementer.md"
     ".codex/agents/logic-reviewer.toml"
@@ -49,6 +47,7 @@ required_files=(
     "script/process/tests/run-all.sh"
     "docs/process/README.md"
     "docs/process/change-matrix.md"
+    "docs/process/agents-detail.md"
     "docs/process/subagent-workflow.md"
     "docs/process/review-notes.md"
     "docs/process/policy.json"
@@ -120,7 +119,7 @@ if sys.version_info < (3, 11):
 
 agent_dir = Path(".codex/agents")
 toml_files = sorted(agent_dir.glob("*.toml"))
-md_files = sorted(path for path in agent_dir.glob("*.md") if path.name != "README.md")
+md_files = sorted(path for path in agent_dir.glob("*.md") if path.name not in ("README.md", "_shared-contract.md"))
 
 if not toml_files:
     print("[check-docs] ERROR: no agent manifest files found under .codex/agents", file=sys.stderr)

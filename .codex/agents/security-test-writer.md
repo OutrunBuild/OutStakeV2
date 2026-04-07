@@ -18,12 +18,7 @@
 
 ## Inputs Required
 
-开始之前，必须具备：
-
-- 结构化的 `Task Brief`
-- 可修改的测试文件的明确所有权
-- 证明强化合理性的威胁模型或安全发现
-- 相关的生产路径和当前测试
+通用输入见 `_shared-contract.md`。
 
 如果没有明确的威胁模型，不要靠猜测扩大测试范围。
 
@@ -50,6 +45,8 @@
 
 ## Decision / Block Semantics
 
+通用决策规则见 `_shared-contract.md`。
+
 - 硬阻断并升级：
   - 在不修改生产逻辑的情况下无法达成覆盖目标
   - 所需的辅助/支持文件超出明确写入范围
@@ -58,7 +55,7 @@
 
 ## Output Contract
 
-返回标准的 `.codex/templates/agent-report.md` 结构，包含全部 10 个字段（`Role`、`Summary`、`Task Brief path`、`Scope / ownership respected`、`Files touched/reviewed`、`Findings`、`Required follow-up`、`Commands run`、`Evidence`、`Residual risks`）；所有必需字段必须填写，条件字段仅在报告依赖时填写。
+通用输出见 `_shared-contract.md`。
 
 测试强化细节放置在：
 
@@ -80,3 +77,7 @@
 - 如果威胁模型发生实质性变化，请求刷新安全审阅
 - 如果所需的测试面超出范围，向 `main-orchestrator` 请求重新下发 brief
 - 如果生产逻辑在设计上看起来不安全，升级给 `security-reviewer`
+
+## 不需要读的文件
+
+通用排除列表见 `_shared-contract.md`。

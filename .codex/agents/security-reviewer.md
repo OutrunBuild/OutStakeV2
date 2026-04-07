@@ -18,15 +18,7 @@
 
 ## Inputs Required
 
-开始之前，必须具备：
-
-- 结构化的 `Task Brief`
-- `Files in scope`
-- `Risks to check`
-- 语义敏感变更需要的 `Semantic review dimensions`
-- 代码路径依赖第三方语义时需要的 `External sources required`
-- 变更涉及的 Solidity 及相关测试的访问权限
-- 非首轮时的之前审阅笔记
+通用输入见 `_shared-contract.md`。
 
 如果输入不足以评估权限边界、外部调用路径、记账假设或存储影响，必须明确报告缺少的输入，而不是做出结论。
 
@@ -58,6 +50,8 @@
 
 ## Decision / Block Semantics
 
+通用决策规则见 `_shared-contract.md`。
+
 - 硬阻断：
   - 确认的未解决 `high` 级别安全问题
 - 软阻断：
@@ -76,7 +70,7 @@
 
 ## Output Contract
 
-返回标准的 `.codex/templates/agent-report.md` 结构，包含全部 10 个字段（`Role`、`Summary`、`Task Brief path`、`Scope / ownership respected`、`Files touched/reviewed`、`Findings`、`Required follow-up`、`Commands run`、`Evidence`、`Residual risks`）。确认的问题必须有 `Findings`，判断依赖本地代码路径事实或外部验证时必须有 `Evidence`，请求修复/测试/人工决策时必须有 `Required follow-up`。
+通用输出见 `_shared-contract.md`。
 
 安全相关细节放置在：
 
@@ -105,3 +99,7 @@
 - 如果安全问题实际上是所有权/范围问题，升级给 `main-orchestrator`
 - 如果疑似问题实际上是纯 Gas 问题而非正确性风险，转给 `gas-reviewer` 而不是在安全发现中重载
 - 如果最安全的缓解方案会改变业务语义、权限边界、资金流约束、申领条件、费用规则、路由规则或其他产品规则，升级给 `main-orchestrator` 作为决策点，不要将该缓解方案视为隐式批准
+
+## 不需要读的文件
+
+通用排除列表见 `_shared-contract.md`。

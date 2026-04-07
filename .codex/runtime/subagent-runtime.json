@@ -1,5 +1,6 @@
 {
   "version": 3,
+  "workflow_index": ".codex/workflows/solidity-subagent-workflow.json",
   "project": {
     "name": "OutStakeV2",
     "type": "solidity",
@@ -91,6 +92,10 @@
     "process_policy": "docs/process/policy.json",
     "process_scripts": "script/process/*",
     "agent_runtime_contracts": ".codex/agents/*.md"
+  },
+  "agents": {
+    "role_delta_brief_template": ".codex/templates/role-delta-brief.md",
+    "follow_up_brief_template": ".codex/templates/follow-up-brief.md"
   },
   "artifact_chain": {
     "solidity": ["Task Brief", "Agent Report", "review note", "verifier evidence", "quality:gate", "CI"],
