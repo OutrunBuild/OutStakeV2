@@ -1,6 +1,6 @@
 name = "process-implementer"
 description = "OutStakeV2 的非 Solidity 有限写入者。负责文档、CI、shell、包元数据和 harness 面。"
-model = "gpt-5.4"
+model = "gpt-5.3-codex"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 developer_instructions = """
