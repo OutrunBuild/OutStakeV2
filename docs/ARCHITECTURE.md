@@ -310,6 +310,7 @@ Harvest:
    - `docs/reviews/*`
 
 冲突处理顺序：
+
 - 当前规则判断以 Product Truth 层为准，并用 Implementation Evidence 层核验。
 - Topic Guides 层用于补充设计历史，不单独定义当前规则。
 - 若 `docs/spec/*.md` 与 `src/**` 冲突，以 `src/**` 为准。
