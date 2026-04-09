@@ -60,11 +60,9 @@
 - `Existing tests exercised`
 - `Commands run`
 - `Results`
-- `Codex review summary`
 - `Logic evidence source`
 - `Security evidence source`
 - `Gas evidence source`
-- `Codex review evidence source`
 - `Verification evidence source`
 - `Decision evidence source`
 - `Ready to commit`
@@ -112,6 +110,7 @@
   - `Results` 必须包含 required commands 的通过/失败结论与 failure attribution，不能只写“已跑 gate”。
 - `Codex review summary`、`Codex review evidence source`
   - 默认由 `verifier` 提供，用于记录 writer 完成后的一次独立 Codex 审查与 findings 收口。
+  - 仅在 classification 要求本地 `codex:review`，或 review note 显式记录该审查证据时才需要填写并通过 token 校验。
 - `Ready to commit`、`Decision evidence source`
   - 只能由 `main-orchestrator` 最终判定。
 
@@ -126,7 +125,7 @@
 - 对 `prod-semantic` / `high-risk` 的 `src/**/*.sol`、`script/**/*.sol` 写面，本地 `quality:gate`（含 `pre-commit`）会在进入 review-note / verifier 校验前自动再执行一次 `npm run codex:review`；`pre-push` / CI 只校验证据链，不自动执行。`non-semantic` / `test-semantic` 与流程面默认按需手动触发。若当前交互会话支持 `/review`，可视为同义入口，但落盘 evidence 仍以 wrapper / CLI 命令为准。
 - 对 `src/**/*.sol`、`script/**/*.sol` 写面，`Logic evidence source`、`Security evidence source`、`Gas evidence source`、`Verification evidence source` 必须指向可落盘、可回溯的具体 artifact path；不能只写命令名、聊天结论或模糊描述。
 - 如果 `solidity-implementer` 在 review finding 之后再次写入受影响的 Solidity scope，上一轮 review note 与上述 reviewer / verifier evidence 都会被视为 stale；它们必须在最新 writer `Agent Report` 之后重新生成。
-- `Codex review evidence source` 可以继续记录 wrapper / CLI 命令，但承载该字段的 review note 必须晚于当前 writer `Agent Report`。
+- `Codex review evidence source` 可以继续记录 wrapper / CLI 命令，但只在需要本地 `codex:review` 或显式记录该证据时才参与校验；承载该字段的 review note 必须晚于当前 writer `Agent Report`。
 - 当某个 reviewer 没有被 classifier 选中时，对应 review-note 字段应保留 owner-prefixed 说明，例如 `security-reviewer: skipped by classifier (non-semantic)`；不得伪造不存在的 reviewer artifact path。
 - stale-evidence freshness 只针对当前 classifier 选中的 reviewer / verifier evidence；未被 classifier 选中的 reviewer 字段不作为 freshness blocker。
 - 发现 stale evidence 后，`quality:gate` 会默认触发 `npm run stale-evidence:loop`；它会生成新的 follow-up brief，并给出 writer / reviewer / verifier 的 rerun order。
@@ -153,5 +152,5 @@
 - 命中 `src/**/*.sol`、`script/**/*.sol` 变更且准备运行本地或 CI `quality:gate` 时，必须先准备好一份可通过校验的 review note。
 - 仅检查草稿结构可运行：`bash ./script/process/check-review-note.sh <review-note>`
 - 需要在 Solidity gate 中联动检查时，可运行：`bash ./script/process/check-solidity-review-note.sh`
-- 若未显式设置 `QUALITY_GATE_REVIEW_NOTE`，Solidity gate 只会自动选择一份 `Files reviewed` 能唯一匹配当前变更 Solidity 路径的 review note；若存在歧义或没有匹配，必须显式指定。
+- 若未显式设置 `QUALITY_GATE_REVIEW_NOTE`，Solidity gate 只会自动选择一份 `Files reviewed` 能唯一覆盖当前变更 production Solidity path set 的 review note；若存在歧义或没有匹配，必须显式指定。
 - 若仓库跟踪了特定 review note 文件，它也必须与当前改动、当前 gate 语义保持一致。

@@ -90,7 +90,7 @@ const matching = candidates.filter((candidate) => {
   const document = fs.readFileSync(candidate, 'utf8');
   const filesReviewed = extractField(document, 'Files reviewed');
   const reviewedTokens = new Set(extractPathTokens(filesReviewed));
-  return targetSolidityFiles.some((changedFile) => reviewedTokens.has(changedFile));
+  return targetSolidityFiles.every((changedFile) => reviewedTokens.has(changedFile));
 });
 
 if (matching.length === 1) {
@@ -100,14 +100,14 @@ if (matching.length === 1) {
 
 if (matching.length === 0) {
   console.error(
-    '[check-solidity-review-note] ERROR: review note discovery found no candidate whose Files reviewed field references the changed Solidity paths. Set QUALITY_GATE_REVIEW_NOTE explicitly.'
-      .replace('changed Solidity paths', changedProductionSolidityFiles.length > 0 ? 'changed production Solidity paths' : 'changed Solidity paths')
+    '[check-solidity-review-note] ERROR: review note discovery found no candidate whose Files reviewed field fully references the changed Solidity path set. Set QUALITY_GATE_REVIEW_NOTE explicitly.'
+      .replace('changed Solidity path set', changedProductionSolidityFiles.length > 0 ? 'changed production Solidity path set' : 'changed Solidity path set')
   );
   process.exit(2);
 }
 
 console.error(
-  `[check-solidity-review-note] ERROR: review note discovery matched multiple candidates (${matching.join(', ')}). Set QUALITY_GATE_REVIEW_NOTE explicitly.`
+  `[check-solidity-review-note] ERROR: review note discovery matched multiple candidates that each fully reference the changed Solidity path set (${matching.join(', ')}). Set QUALITY_GATE_REVIEW_NOTE explicitly.`
 );
 process.exit(2);
 EOF
@@ -456,8 +456,8 @@ for (const field of requiredSolidityFields) {
 
 const reviewFilesValue = extractField(reviewNote, 'Files reviewed').trim();
 const reviewFileTokens = new Set(extractPathTokens(reviewFilesValue));
-if (!targetSolidityFiles.some((changedFile) => reviewFileTokens.has(changedFile))) {
-  fail(`Files reviewed: review note does not reference any changed ${changedProductionSolidityFiles.length > 0 ? 'production Solidity' : 'Solidity'} path.`);
+if (!targetSolidityFiles.every((changedFile) => reviewFileTokens.has(changedFile))) {
+  fail(`Files reviewed: review note does not reference the full changed ${changedProductionSolidityFiles.length > 0 ? 'production Solidity' : 'Solidity'} path set.`);
 }
 
 const taskBriefPath = extractField(reviewNote, taskBriefField).trim();
@@ -529,8 +529,8 @@ if (agentReport !== '') {
 
   if (agentReportFiles === '') {
     fail(`${agentReportField}: missing '- ${agentReportFilesField}:' in agent report.`);
-  } else if (!targetSolidityFiles.some((changedFile) => agentReportFileTokens.has(changedFile))) {
-    fail(`${agentReportField}: agent report files do not reference any changed ${changedProductionSolidityFiles.length > 0 ? 'production Solidity' : 'Solidity'} path.`);
+  } else if (!targetSolidityFiles.every((changedFile) => agentReportFileTokens.has(changedFile))) {
+    fail(`${agentReportField}: agent report files do not reference the full changed ${changedProductionSolidityFiles.length > 0 ? 'production Solidity' : 'Solidity'} path set.`);
   }
 
   if (agentReportMustPostdateChangedFiles) {
