@@ -18,10 +18,18 @@ abstract contract OutrunERC20Pausable is OutrunERC20, Pausable, Ownable {
         super._update(from, to, value);
     }
 
+    /**
+     * @notice Pauses token transfers, minting, and burning.
+     * @dev Owner-only emergency stop for ERC20 state-changing flows.
+     */
     function pause() external onlyOwner {
         _pause();
     }
 
+    /**
+     * @notice Unpauses token transfers, minting, and burning.
+     * @dev Owner-only recovery path after a prior pause.
+     */
     function unpause() external onlyOwner {
         _unpause();
     }

@@ -37,6 +37,7 @@ abstract contract OutrunOFT is OutrunERC20FlashMint, OutrunERC20Pausable, OFTCor
     }
 
     /**
+     * @notice Returns the ERC-20 token address exposed by this OFT implementation.
      * @dev Retrieves the address of the underlying ERC20 implementation.
      * @return The address of the OFT token.
      *
@@ -56,6 +57,11 @@ abstract contract OutrunOFT is OutrunERC20FlashMint, OutrunERC20Pausable, OFTCor
         return false;
     }
 
+    /**
+     * @notice Sets the recipient that collects flash-loan fees.
+     * @dev Owner-only setter for the address returned by {_flashFeeReceiver}.
+     * @param flashFeeReceiver_ The new fee recipient. Use `address(0)` to burn fees.
+     */
     function setFlashFeeReceiver(address flashFeeReceiver_) external onlyOwner {
         flashFeeReceiver = flashFeeReceiver_;
     }

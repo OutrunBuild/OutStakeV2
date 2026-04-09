@@ -17,6 +17,11 @@ contract OutrunExchangeOracleAdapter is IExchangeRateOracle {
         rawDecimals = AggregatorInterface(_oracle).decimals();
     }
 
+    /**
+     * @notice Returns the latest oracle exchange rate scaled to the configured SY decimals.
+     * @dev Reverts when the underlying oracle answer is non-positive.
+     * @return The normalized exchange rate value.
+     */
     function getExchangeRate() external view returns (uint256) {
         int256 answer = AggregatorInterface(oracle).latestAnswer();
         if (answer <= 0) revert InvalidOracleAnswer();

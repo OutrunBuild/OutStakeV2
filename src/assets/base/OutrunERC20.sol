@@ -33,26 +33,37 @@ contract OutrunERC20 is Context, IERC20, IERC20Metadata, IERC20Errors {
     }
 
     /**
+     * @notice Returns the token balance owned by `account`.
      * @dev See {IERC20-balanceOf}.
+     * @param account The account whose balance is queried.
+     * @return The current token balance of `account`.
      */
     function balanceOf(address account) public view virtual override returns (uint256) {
         return _balances[account];
     }
 
     /**
+     * @notice Returns the remaining allowance from `owner` to `spender`.
      * @dev See {IERC20-allowance}.
+     * @param owner The token owner that granted the allowance.
+     * @param spender The spender authorized by `owner`.
+     * @return The current allowance amount.
      */
     function allowance(address owner, address spender) public view override returns (uint256) {
         return _allowances[owner][spender];
     }
 
     /**
+     * @notice Transfers `value` tokens from the caller to `to`.
      * @dev See {IERC20-transfer}.
      *
      * Requirements:
      *
      * - `to` cannot be the zero address.
      * - the caller must have a balance of at least `value`.
+     * @param to The recipient of the transfer.
+     * @param value The amount of tokens to transfer.
+     * @return `true` when the transfer succeeds.
      */
     function transfer(address to, uint256 value) external virtual override returns (bool) {
         address owner = _msgSender();
@@ -61,6 +72,7 @@ contract OutrunERC20 is Context, IERC20, IERC20Metadata, IERC20Errors {
     }
 
     /**
+     * @notice Sets the allowance from the caller to `spender` to `value`.
      * @dev See {IERC20-approve}.
      *
      * NOTE: If `value` is the maximum `uint256`, the allowance is not updated on
@@ -69,6 +81,9 @@ contract OutrunERC20 is Context, IERC20, IERC20Metadata, IERC20Errors {
      * Requirements:
      *
      * - `spender` cannot be the zero address.
+     * @param spender The spender receiving the allowance.
+     * @param value The allowance amount to set.
+     * @return `true` when the approval succeeds.
      */
     function approve(address spender, uint256 value) external virtual override returns (bool) {
         address owner = _msgSender();
@@ -77,6 +92,7 @@ contract OutrunERC20 is Context, IERC20, IERC20Metadata, IERC20Errors {
     }
 
     /**
+     * @notice Transfers `value` tokens from `from` to `to` using the caller's allowance.
      * @dev See {IERC20-transferFrom}.
      *
      * Emits an {Approval} event indicating the updated allowance. This is not
@@ -91,6 +107,10 @@ contract OutrunERC20 is Context, IERC20, IERC20Metadata, IERC20Errors {
      * - `from` must have a balance of at least `value`.
      * - the caller must have allowance for ``from``'s tokens of at least
      * `value`.
+     * @param from The account providing the tokens.
+     * @param to The recipient receiving the tokens.
+     * @param value The amount of tokens to transfer.
+     * @return `true` when the transfer succeeds.
      */
     function transferFrom(address from, address to, uint256 value) external virtual override returns (bool) {
         address spender = _msgSender();

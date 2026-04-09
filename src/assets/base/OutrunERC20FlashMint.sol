@@ -29,6 +29,7 @@ abstract contract OutrunERC20FlashMint is OutrunERC20, IERC3156FlashLender {
     error ERC3156InvalidReceiver(address receiver);
 
     /**
+     * @notice Returns the maximum flash-loan amount currently available for `token`.
      * @dev Returns the maximum amount of tokens available for loan.
      * @param token The address of the token that is requested.
      * @return The amount of token that can be loaned.
@@ -38,6 +39,7 @@ abstract contract OutrunERC20FlashMint is OutrunERC20, IERC3156FlashLender {
     }
 
     /**
+     * @notice Returns the fee charged for flash-loaning `value` of `token`.
      * @dev Returns the fee applied when doing flash loans.
      * @param token The token to be flash loaned.
      * @param value The amount of tokens to be loaned.
@@ -59,6 +61,7 @@ abstract contract OutrunERC20FlashMint is OutrunERC20, IERC3156FlashLender {
     }
 
     /**
+     * @notice Mints, lends, and recollects a flash loan plus fee in one transaction.
      * @dev Performs a flash loan. New tokens are minted and sent to the `receiver`, who is required to
      * implement the {IERC3156FlashBorrower} interface. By the end of the flash loan, the receiver is
      * expected to own value + fee tokens so they can be burned.

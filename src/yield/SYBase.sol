@@ -31,7 +31,13 @@ abstract contract SYBase is IStandardizedYield, OutrunERC20Pausable, TokenHelper
     //////////////////////////////////////////////////////////////*/
 
     /**
+     * @notice Mints SY shares by depositing a supported base token.
      * @dev See {IStandardizedYield-deposit}
+     * @param receiver The account receiving minted SY shares.
+     * @param tokenIn The base token deposited into the SY.
+     * @param amountTokenToDeposit The amount of `tokenIn` deposited.
+     * @param minSharesOut The minimum acceptable share output.
+     * @return amountSharesOut The amount of SY shares minted.
      */
     function deposit(address receiver, address tokenIn, uint256 amountTokenToDeposit, uint256 minSharesOut)
         external
@@ -54,7 +60,14 @@ abstract contract SYBase is IStandardizedYield, OutrunERC20Pausable, TokenHelper
     }
 
     /**
+     * @notice Redeems SY shares into a supported output token.
      * @dev See {IStandardizedYield-redeem}
+     * @param receiver The account receiving redeemed tokens.
+     * @param amountSharesToRedeem The amount of SY shares to burn.
+     * @param tokenOut The base token requested on redemption.
+     * @param minTokenOut The minimum acceptable token output.
+     * @param burnFromInternalBalance Whether to burn shares from `address(this)` instead of `msg.sender`.
+     * @return amountTokenOut The amount of output tokens redeemed.
      */
     function redeem(
         address receiver,
@@ -102,7 +115,9 @@ abstract contract SYBase is IStandardizedYield, OutrunERC20Pausable, TokenHelper
     //////////////////////////////////////////////////////////////*/
 
     /**
+     * @notice Returns the current asset-per-share exchange rate for this SY.
      * @dev See {IStandardizedYield-exchangeRate}
+     * @return res The current exchange rate scaled by `1e18`.
      */
     function exchangeRate() external view virtual override returns (uint256 res);
 
@@ -110,6 +125,13 @@ abstract contract SYBase is IStandardizedYield, OutrunERC20Pausable, TokenHelper
                 MISC METADATA FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
+    /**
+     * @notice Quotes the shares minted for depositing `amountTokenToDeposit` of `tokenIn`.
+     * @dev Mirrors the token validation used by `deposit`.
+     * @param tokenIn The token that would be deposited.
+     * @param amountTokenToDeposit The amount of `tokenIn` to preview.
+     * @return amountSharesOut The quoted share output.
+     */
     function previewDeposit(address tokenIn, uint256 amountTokenToDeposit)
         external
         view
@@ -120,6 +142,13 @@ abstract contract SYBase is IStandardizedYield, OutrunERC20Pausable, TokenHelper
         return _previewDeposit(tokenIn, amountTokenToDeposit);
     }
 
+    /**
+     * @notice Quotes the token output for redeeming `amountSharesToRedeem` into `tokenOut`.
+     * @dev Mirrors the token validation used by `redeem`.
+     * @param tokenOut The token that would be received.
+     * @param amountSharesToRedeem The amount of shares to preview redeeming.
+     * @return amountTokenOut The quoted redemption output.
+     */
     function previewRedeem(address tokenOut, uint256 amountSharesToRedeem)
         external
         view
@@ -142,11 +171,33 @@ abstract contract SYBase is IStandardizedYield, OutrunERC20Pausable, TokenHelper
         virtual
         returns (uint256 amountTokenOut);
 
+    /**
+     * @notice Returns all tokens accepted by `deposit`.
+     * @dev Mirrors the token universe checked by `isValidTokenIn`.
+     * @return res The supported deposit token list.
+     */
     function getTokensIn() public view virtual returns (address[] memory res);
 
+    /**
+     * @notice Returns all tokens produced by `redeem`.
+     * @dev Mirrors the token universe checked by `isValidTokenOut`.
+     * @return res The supported redemption token list.
+     */
     function getTokensOut() public view virtual returns (address[] memory res);
 
+    /**
+     * @notice Returns whether `token` is accepted by `deposit`.
+     * @dev Implementations should keep this helper consistent with `getTokensIn`.
+     * @param token The token to validate.
+     * @return True when `token` is supported for deposits.
+     */
     function isValidTokenIn(address token) public view virtual returns (bool);
 
+    /**
+     * @notice Returns whether `token` is accepted by `redeem`.
+     * @dev Implementations should keep this helper consistent with `getTokensOut`.
+     * @param token The token to validate.
+     * @return True when `token` is supported for redemptions.
+     */
     function isValidTokenOut(address token) public view virtual returns (bool);
 }
