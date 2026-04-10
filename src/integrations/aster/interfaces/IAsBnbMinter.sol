@@ -25,6 +25,7 @@ interface IAsBnbMinter {
 
     /**
      * @notice Mints asBNB from slisBNB.
+     * @dev Returns zero when the request is queued by Aster instead of settled immediately.
      * @param amountIn The slisBNB amount to deposit.
      * @return The asBNB amount minted, or zero when Aster queues the request.
      */
@@ -32,12 +33,14 @@ interface IAsBnbMinter {
 
     /**
      * @notice Mints asBNB from native BNB.
+     * @dev msg.value is the BNB deposit; returns zero when queued by Aster.
      * @return The asBNB amount minted, or zero when Aster queues the request.
      */
     function mintAsBnb() external payable returns (uint256);
 
     /**
      * @notice Quotes the token-side asset value represented by an asBNB amount.
+     * @dev Converts asBNB to the equivalent slisBNB amount at the current exchange rate.
      * @param asBNBAmount The asBNB amount to convert.
      * @return The corresponding token-side amount.
      */
@@ -45,6 +48,7 @@ interface IAsBnbMinter {
 
     /**
      * @notice Quotes the asBNB amount represented by a token-side amount.
+     * @dev Converts slisBNB to the equivalent asBNB amount at the current exchange rate.
      * @param tokenAmount The token-side amount to convert.
      * @return The corresponding asBNB amount.
      */
