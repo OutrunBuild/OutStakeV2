@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.28;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
 import {IListaStakeManager} from "../../../integrations/lista/interfaces/IListaStakeManager.sol";
 import {ArrayLib} from "../../../libraries/ArrayLib.sol";
 import {SYBase} from "../../SYBase.sol";
@@ -24,9 +22,10 @@ contract OutrunSlisBNBSY is SYBase {
 
     function _deposit(address tokenIn, uint256 amountDeposited) internal override returns (uint256 amountSharesOut) {
         if (tokenIn == NATIVE) {
-            uint256 before = IERC20(yieldBearingToken).balanceOf(address(this));
+            // deposit() returns void — measure actual slisBNB output via balance diff.
+            uint256 before = _selfBalance(yieldBearingToken);
             IListaStakeManager(STAKE_MANAGER).deposit{value: amountDeposited}();
-            uint256 after_ = IERC20(yieldBearingToken).balanceOf(address(this));
+            uint256 after_ = _selfBalance(yieldBearingToken);
             amountSharesOut = after_ - before;
             if (amountSharesOut == 0) revert StakeManagerDepositZero();
             return amountSharesOut;
