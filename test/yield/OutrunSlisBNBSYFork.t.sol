@@ -8,7 +8,8 @@ import {OutrunSlisBNBSY} from "../../src/yield/adapters/lista/OutrunSlisBNBSY.so
 
 contract OutrunSlisBNBSYForkTest is Test {
     address internal constant OWNER = address(0xA11CE);
-    address internal constant STAKE_MANAGER_PROXY = 0xFD6B9CC40A30C1b57799db95e59C0B73E3aEB4eF;
+    // Pinned to the current live Lista stake manager on BSC mainnet.
+    address internal constant STAKE_MANAGER_PROXY = 0x1adB950d8bB3dA4bE104211D5AB038628e477fE6;
     address internal constant EXPECTED_SLIS_BNB = 0xB0b84D294e0C75A6abe60171b70edEb2EFd14A1B;
 
     OutrunSlisBNBSY internal sy;
