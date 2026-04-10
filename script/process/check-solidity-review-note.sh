@@ -20,6 +20,11 @@ read_policy_value() {
 }
 
 load_changed_files_from_ci() {
+    if [ -n "${QUALITY_GATE_CHANGESET_FILE_LIST:-}" ] && [ -f "${QUALITY_GATE_CHANGESET_FILE_LIST}" ]; then
+        cat "${QUALITY_GATE_CHANGESET_FILE_LIST}"
+        return
+    fi
+
     if [ -n "${QUALITY_GATE_FILE_LIST:-}" ] && [ -f "${QUALITY_GATE_FILE_LIST}" ]; then
         cat "${QUALITY_GATE_FILE_LIST}"
         return

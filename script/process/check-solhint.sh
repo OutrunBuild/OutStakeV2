@@ -24,4 +24,22 @@ if [ "${#files[@]}" -eq 0 ]; then
 fi
 
 echo "[check-solhint] linting ${#files[@]} Solidity file(s)"
-npx solhint --disc --noPoster "${files[@]}"
+set +e
+solhint_output="$(npx solhint --disc --noPoster "${files[@]}" 2>&1)"
+solhint_status=$?
+set -e
+
+if [ "$solhint_status" -eq 0 ]; then
+    if [ -n "$solhint_output" ]; then
+        printf '%s\n' "$solhint_output"
+    fi
+    exit 0
+fi
+
+if printf '%s\n' "$solhint_output" | grep -q "No files to lint!"; then
+    echo "[check-solhint] selected files are ignored by .solhintignore, skipping."
+    exit 0
+fi
+
+printf '%s\n' "$solhint_output" >&2
+exit "$solhint_status"

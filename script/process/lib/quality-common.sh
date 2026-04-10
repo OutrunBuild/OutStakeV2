@@ -293,7 +293,7 @@ const [, , changedFilesPath, taskBriefDirectory] = process.argv;
 const changedFiles = fs.readFileSync(changedFilesPath, 'utf8').split(/\r?\n/).filter(Boolean);
 
 function readIfExists(targetPath) {
-  if (!targetPath || !fs.existsSync(targetPath)) return '';
+  if (!targetPath || !fs.existsSync(targetPath) || fs.statSync(targetPath).isDirectory()) return '';
   return fs.readFileSync(targetPath, 'utf8');
 }
 

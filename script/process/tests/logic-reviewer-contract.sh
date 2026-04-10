@@ -24,7 +24,7 @@ if ! grep -q 'logic-reviewer.*security-reviewer' AGENTS.md; then
     exit 1
 fi
 
-if ! grep -q 'Phase 4: Logic Review' AGENTS.md; then
+if ! grep -q 'Phase 6: Logic Review' AGENTS.md; then
     echo "Expected AGENTS.md to define a dedicated Logic Review phase"
     exit 1
 fi
