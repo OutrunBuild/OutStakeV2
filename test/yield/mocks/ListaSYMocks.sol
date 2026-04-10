@@ -28,9 +28,7 @@ contract MockListaStakeManager {
     }
 
     function deposit() external payable virtual {
-        uint256 slisBnbOut = exchangeRateQuote == 0
-            ? msg.value
-            : msg.value * exchangeRateQuote / 1 ether;
+        uint256 slisBnbOut = exchangeRateQuote == 0 ? msg.value : msg.value * exchangeRateQuote / 1 ether;
         slisBnb.mint(msg.sender, slisBnbOut);
     }
 

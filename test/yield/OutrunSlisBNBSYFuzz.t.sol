@@ -85,10 +85,7 @@ contract OutrunSlisBNBSYFuzzTest is Test {
     ///      and redeem across multiple rounds with varying exchange rates.
     ///      The invariant `totalSupply == slisBNB.balanceOf(address(sy))` must hold
     ///      after every single operation.
-    function testFuzz_MixedDepositRedeemInvariant(
-        uint256 seed,
-        uint8 rounds
-    ) external {
+    function testFuzz_MixedDepositRedeemInvariant(uint256 seed, uint8 rounds) external {
         rounds = uint8(bound(uint256(rounds), 3, 10));
 
         for (uint8 i = 0; i < rounds; i++) {

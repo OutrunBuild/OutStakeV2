@@ -1,7 +1,7 @@
 # Agent Report
 
 - Role: gas-reviewer
-- Summary: 未发现需要立即修复的 gas finding。`deposit(slisBNB)` 保持仓库既有 `_safeApproveInf` 模式，`STAKE_MANAGER` immutable 对 `previewDeposit(NATIVE)` 有确定收益；`exchangeRate()` 新增的 `convertSnBnbToBnb` staticcall 属于 native canonical asset 语义所需成本。
+- Summary: 最终 gas review 未发现需要立即修复的 finding。`deposit(slisBNB)` 保持仓库既有 `_safeApproveInf` 模式，`STAKE_MANAGER` immutable 对 `previewDeposit(NATIVE)` 有确定收益；新增的 `convertSnBnbToBnb` 与 `activitiesOnGoing()` staticcall 都属于必要语义成本。
 - Task Brief path: docs/task-briefs/2026-04-10-outrun-asbnbsy-task-brief.md
 - Scope / ownership respected: yes
 - Files touched/reviewed:
@@ -22,5 +22,6 @@
 - Evidence:
   - 首笔 `deposit(slisBNB)` 仍需 `allowance + approve(0) + approve(max)`；后续仅 allowance probe，无重复 approve
   - `exchangeRate()` 新增一跳 `convertSnBnbToBnb` staticcall，属于语义修复成本而不是可省略冗余
+  - `activitiesOnGoing()` 额外 staticcall 只在 0-share 回退路径触发，不影响 happy path
 - Residual risks:
   - `exchangeRate()` 依赖两跳外部只读调用；`deposit(slisBNB)` 每次仍有一次 allowance staticcall，超高频场景下存在累计成本
