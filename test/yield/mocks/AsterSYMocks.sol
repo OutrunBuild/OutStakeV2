@@ -42,10 +42,15 @@ contract MockListaBNBStakeManager {
     function convertBnbToSnBnb(uint256 amount) external view returns (uint256) {
         return quote == 0 ? amount : amount * quote / 1 ether;
     }
+
+    function convertSnBnbToBnb(uint256 amount) external view returns (uint256) {
+        return quote == 0 ? amount : amount * 1 ether / quote;
+    }
 }
 
 contract MockYieldProxy {
     address public stakeManager;
+    bool public activitiesOnGoing;
 
     constructor(address stakeManager_) {
         stakeManager = stakeManager_;
@@ -53,6 +58,10 @@ contract MockYieldProxy {
 
     function setStakeManager(address newStakeManager) external {
         stakeManager = newStakeManager;
+    }
+
+    function setActivitiesOnGoing(bool newStatus) external {
+        activitiesOnGoing = newStatus;
     }
 }
 

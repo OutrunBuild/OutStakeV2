@@ -1,0 +1,32 @@
+# Agent Report
+
+- Role: logic-reviewer
+- Summary: 本地控制流、queue revert、本地状态和 constructor fail-fast 顺序已对齐；未发现必须阻断提交的 confirmed logic finding。剩余逻辑风险是 native canonical asset 下，live `exchangeRate` 与真实 `BNB -> slisBNB -> asBNB` 路径存在有界 wei 级舍入偏差。
+- Task Brief path: docs/task-briefs/2026-04-10-outrun-asbnbsy-task-brief.md
+- Scope / ownership respected: yes
+- Files touched/reviewed:
+  - `src/integrations/aster/interfaces/IAsBnbMinter.sol`
+  - `src/integrations/aster/interfaces/IYieldProxy.sol`
+  - `src/integrations/aster/interfaces/IListaBNBStakeManager.sol`
+  - `src/yield/adapters/aster/OutrunAsBNBSY.sol`
+  - `test/yield/mocks/AsterSYMocks.sol`
+  - `test/yield/OutrunAsBNBSY.t.sol`
+  - `test/yield/OutrunAsBNBSYFuzz.t.sol`
+  - `test/yield/OutrunAsBNBSYFork.t.sol`
+  - `src/yield/SYBase.sol`
+  - `src/yield/interfaces/IStandardizedYield.sol`
+  - `src/position/OutrunStakingPosition.sol`
+- Findings:
+  - `queue revert` 路径没有半状态：`SYBase.deposit()` 的 `_transferIn`、adapter 外部调用与 `_mint` 在 `AsBnbMintQueued` 时一并回滚
+  - constructor 现已在 `SYBase(...)` 参数求值前对 `_asBNB/_slisBNB/_asBnbMinter` 做 zero-check
+  - 仍需接受一个 residual risk：主网 live `exchangeRate` 与 `previewDeposit(BNB)` 不保证 exact 相等，只保证有界 wei 级偏差
+- Commands run:
+  - `forge test --match-contract OutrunAsBNBSYTest`
+  - `forge test --match-contract OutrunAsBNBSYFuzzTest`
+  - `forge test --match-contract OutrunAsBNBSYForkTest`
+- Evidence:
+  - unit/fuzz/fork 本地均通过
+  - logic review 复核了 `OutrunStakingPosition` 对 `exchangeRate()` 的消费路径，确认当前 native-denominated fix 已修复之前把 `slisBNB` quote 当成 `BNB` asset 的更大语义错配
+- Residual risks:
+  - 真实链上 `exchangeRate` 与 `previewDeposit(BNB)` 在两跳取整后存在 bounded wei drift；若仓库要求 exact closure，需要额外定义容差并补 fork invariant
+

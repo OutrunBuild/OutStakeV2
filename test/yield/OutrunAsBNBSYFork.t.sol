@@ -28,7 +28,10 @@ contract OutrunAsBNBSYForkTest is Test {
     }
 
     function testFork_ExchangeRateMatchesMinter() external {
-        assertEq(sy.exchangeRate(), IAsBnbMinter(AS_BNB_MINTER).convertToTokens(1 ether));
+        uint256 slisBnbPerShare = IAsBnbMinter(AS_BNB_MINTER).convertToTokens(1 ether);
+        uint256 expectedRate = IListaBNBStakeManager(sy.STAKE_MANAGER()).convertSnBnbToBnb(slisBnbPerShare);
+
+        assertEq(sy.exchangeRate(), expectedRate);
     }
 
     function testFork_PreviewDepositNativeMatchesTwoHopQuote() external {

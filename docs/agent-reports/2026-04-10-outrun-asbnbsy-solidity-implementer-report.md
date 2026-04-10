@@ -1,0 +1,40 @@
+# Agent Report
+
+- Role: solidity-implementer
+- Summary: 新增 `OutrunAsBNBSY`、Aster 最小接口、mock/unit/fuzz/fork 测试，并在两轮 follow-up 中把 `exchangeRate()` 修正为 `asBNB -> slisBNB -> BNB` 闭环、把 constructor zero-check 前移到 `SYBase(...)` 参数求值之前、把 zero-share 与 queued mint 错误语义拆分为 `AsBnbMintZeroShares` / `AsBnbMintQueued`。
+- Task Brief path: docs/task-briefs/2026-04-10-outrun-asbnbsy-task-brief.md
+- Scope / ownership respected: yes
+- Files touched/reviewed:
+  - `src/integrations/aster/interfaces/IAsBnbMinter.sol`
+  - `src/integrations/aster/interfaces/IYieldProxy.sol`
+  - `src/integrations/aster/interfaces/IListaBNBStakeManager.sol`
+  - `src/yield/adapters/aster/OutrunAsBNBSY.sol`
+  - `test/yield/mocks/AsterSYMocks.sol`
+  - `test/yield/OutrunAsBNBSY.t.sol`
+  - `test/yield/OutrunAsBNBSYFuzz.t.sol`
+  - `test/yield/OutrunAsBNBSYFork.t.sol`
+- Findings:
+  - `OutrunAsBNBSY` 支持 `BNB / slisBNB / asBNB` 入金、仅 `asBNB` 赎回，Aster queued mint `return 0` 时直接 `revert AsBnbMintQueued()`
+  - constructor 缓存 `AS_BNB_MINTER / SLIS_BNB / YIELD_PROXY / STAKE_MANAGER`，并校验 `asBnb/token/yieldProxy/stakeManager`
+  - `exchangeRate()` 现在走 `convertToTokens(1 ether)` 后再 `convertSnBnbToBnb(...)`，与 `assetInfo() = (TOKEN, NATIVE, 18)` 保持同一计价域
+  - `sharesOut == 0` 现在按 `activitiesOnGoing()` 分流：queued 路径 `AsBnbMintQueued`，非 queued dust/zero path `AsBnbMintZeroShares`
+  - unit 新增 native canonical asset 闭环测试、constructor zero-check 顺序测试；fuzz 覆盖 supply/balance 一致性与 queue 无半状态；fork 覆盖主网 wiring 和 live quote
+- Required follow-up:
+  - verifier 仍需跑 review-note gate 与 `quality:gate:fast`
+- Commands run:
+  - `forge fmt --check src/integrations/aster/interfaces/IAsBnbMinter.sol src/integrations/aster/interfaces/IYieldProxy.sol src/integrations/aster/interfaces/IListaBNBStakeManager.sol src/yield/adapters/aster/OutrunAsBNBSY.sol test/yield/mocks/AsterSYMocks.sol test/yield/OutrunAsBNBSY.t.sol test/yield/OutrunAsBNBSYFuzz.t.sol test/yield/OutrunAsBNBSYFork.t.sol`
+  - `forge build`
+  - `forge test -vvv --match-path test/yield/OutrunAsBNBSY.t.sol`
+  - `forge test -vvv --match-path test/yield/OutrunAsBNBSYFuzz.t.sol`
+  - `forge test -vvv --match-path test/yield/OutrunAsBNBSYFork.t.sol`
+  - `CODEX_REVIEW_BACKEND=claude npm run codex:review`
+- Evidence:
+  - `forge build` 通过
+  - `forge test -vvv --match-path test/yield/OutrunAsBNBSY.t.sol`: `32 passed, 0 failed`
+  - `forge test -vvv --match-path test/yield/OutrunAsBNBSYFuzz.t.sol`: `4 passed, 0 failed`
+  - `forge test -vvv --match-path test/yield/OutrunAsBNBSYFork.t.sol`: `3 passed, 0 failed`
+  - fresh `CODEX_REVIEW_BACKEND=claude npm run codex:review` exit `0`
+- Residual risks:
+  - 主网 live `exchangeRate` 与 `previewDeposit(BNB)` 在真实两跳取整下存在有界 wei 级偏差，需要在 review note 中作为 residual risk 明确
+  - 最终 `quality:gate:fast` 与 review-note gate 尚未执行
+

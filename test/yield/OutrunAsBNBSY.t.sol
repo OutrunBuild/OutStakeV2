@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import {Test} from "forge-std/Test.sol";
 
 import {NativeAmountMismatch} from "../../src/libraries/CommonErrors.sol";
+import {SYUtils} from "../../src/libraries/SYUtils.sol";
 import {IStandardizedYield} from "../../src/yield/interfaces/IStandardizedYield.sol";
 import {OutrunAsBNBSY} from "../../src/yield/adapters/aster/OutrunAsBNBSY.sol";
 import {
@@ -22,7 +23,7 @@ contract OutrunAsBNBSYTest is Test {
     address internal constant NATIVE = address(0);
 
     uint256 internal constant AMOUNT = 5 ether;
-    uint256 internal constant SLIS_QUOTE = 0.97 ether;
+    uint256 internal constant SLIS_QUOTE = 1 ether * 1 ether / EXCHANGE_RATE_QUOTE;
     uint256 internal constant STAKE_RATIO = 0.98 ether;
     uint256 internal constant EXCHANGE_RATE_QUOTE = 1.03 ether;
 
@@ -33,6 +34,8 @@ contract OutrunAsBNBSYTest is Test {
     MockAsBnbMinter internal minter;
 
     OutrunAsBNBSY internal sy;
+
+    bytes4 internal constant AS_BNB_MINT_ZERO_SHARES_SELECTOR = bytes4(keccak256("AsBnbMintZeroShares()"));
 
     function setUp() external {
         asBNB = new MockAsBNB();
@@ -63,6 +66,13 @@ contract OutrunAsBNBSYTest is Test {
     function testConstructorRevertsWhenSlisBnbIsZero() external {
         vm.expectRevert(IStandardizedYield.SYZeroAddress.selector);
         _deploySY(address(asBNB), address(0), address(minter));
+    }
+
+    function testConstructorRevertsWithSYZeroAddressBeforeYieldTokenDecimals() external {
+        RevertingDecimalsToken revertingToken = new RevertingDecimalsToken();
+
+        vm.expectRevert(IStandardizedYield.SYZeroAddress.selector);
+        _deploySY(address(revertingToken), address(0), address(minter));
     }
 
     function testConstructorRevertsWhenMinterIsZero() external {
@@ -197,6 +207,7 @@ contract OutrunAsBNBSYTest is Test {
 
     function testDepositSlisBnbQueuedReverts() external {
         minter.setQueueMode(true);
+        yieldProxy.setActivitiesOnGoing(true);
         slisBNB.mint(USER, AMOUNT);
 
         vm.startPrank(USER);
@@ -212,6 +223,7 @@ contract OutrunAsBNBSYTest is Test {
 
     function testDepositNativeQueuedReverts() external {
         minter.setQueueMode(true);
+        yieldProxy.setActivitiesOnGoing(true);
         vm.deal(USER, AMOUNT);
 
         vm.prank(USER);
@@ -220,6 +232,27 @@ contract OutrunAsBNBSYTest is Test {
 
         assertEq(sy.balanceOf(USER), 0);
         assertEq(asBNB.balanceOf(address(sy)), 0);
+    }
+
+    function testDepositSlisBnbZeroSharesWithoutQueueReverts() external {
+        minter.setConvertToAsBnbQuote(1);
+        slisBNB.mint(USER, 1);
+
+        vm.startPrank(USER);
+        slisBNB.approve(address(sy), 1);
+        vm.expectRevert(AS_BNB_MINT_ZERO_SHARES_SELECTOR);
+        sy.deposit(USER, address(slisBNB), 1, 0);
+        vm.stopPrank();
+    }
+
+    function testDepositNativeZeroSharesWithoutQueueReverts() external {
+        stakeManager.setQuote(1);
+        minter.setConvertToAsBnbQuote(1);
+        vm.deal(USER, 1);
+
+        vm.prank(USER);
+        vm.expectRevert(AS_BNB_MINT_ZERO_SHARES_SELECTOR);
+        sy.deposit{value: 1}(USER, NATIVE, 1, 0);
     }
 
     function testRedeemAsBnbIsOneToOnePassthrough() external {
@@ -297,10 +330,19 @@ contract OutrunAsBNBSYTest is Test {
         sy.previewRedeem(OTHER, AMOUNT);
     }
 
-    function testExchangeRateReadsConvertToTokensForOneShare() external {
+    function testExchangeRateReturnsNativePerShareQuote() external {
         uint256 rate = sy.exchangeRate();
+        uint256 expectedRate = stakeManager.convertSnBnbToBnb(EXCHANGE_RATE_QUOTE);
 
-        assertEq(rate, EXCHANGE_RATE_QUOTE);
+        assertEq(rate, expectedRate);
+    }
+
+    function testPreviewDepositNativeClosesOverExchangeRate() external {
+        uint256 nativeAmount = 1 ether;
+        uint256 previewShares = sy.previewDeposit(NATIVE, nativeAmount);
+        uint256 expectedShares = SYUtils.assetToSy(sy.exchangeRate(), nativeAmount);
+
+        assertEq(previewShares, expectedShares);
     }
 
     function testMetadataMatchesNativeCanonicalAssetAndSupportedTokens() external {
@@ -332,5 +374,11 @@ contract OutrunAsBNBSYTest is Test {
 
     function _deploySY(address asBnb_, address slisBnb_, address minter_) internal returns (OutrunAsBNBSY) {
         return new OutrunAsBNBSY(OWNER, asBnb_, slisBnb_, minter_);
+    }
+}
+
+contract RevertingDecimalsToken {
+    function decimals() external pure returns (uint8) {
+        revert("NO_DECIMALS");
     }
 }

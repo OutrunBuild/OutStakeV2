@@ -70,6 +70,7 @@ contract OutrunAsBNBSYFuzzTest is Test {
     function testFuzz_DepositSlisBnbQueueLeavesNoHalfState(uint256 amount) external {
         amount = bound(amount, MIN_AMOUNT, MAX_AMOUNT);
         minter.setQueueMode(true);
+        yieldProxy.setActivitiesOnGoing(true);
         slisBNB.mint(USER, amount);
 
         vm.startPrank(USER);
@@ -87,6 +88,7 @@ contract OutrunAsBNBSYFuzzTest is Test {
     function testFuzz_DepositNativeQueueLeavesNoHalfState(uint256 amount) external {
         amount = bound(amount, MIN_AMOUNT, MAX_AMOUNT);
         minter.setQueueMode(true);
+        yieldProxy.setActivitiesOnGoing(true);
         vm.deal(USER, amount);
 
         vm.prank(USER);

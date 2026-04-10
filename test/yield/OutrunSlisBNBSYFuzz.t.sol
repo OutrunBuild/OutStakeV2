@@ -81,6 +81,56 @@ contract OutrunSlisBNBSYFuzzTest is Test {
         assertEq(slisBNB.balanceOf(address(sy)), sy.totalSupply());
     }
 
+    /// @dev Mixed-sequence fuzz: randomly interleaves deposit(BNB), deposit(slisBNB),
+    ///      and redeem across multiple rounds with varying exchange rates.
+    ///      The invariant `totalSupply == slisBNB.balanceOf(address(sy))` must hold
+    ///      after every single operation.
+    function testFuzz_MixedDepositRedeemInvariant(
+        uint256 seed,
+        uint8 rounds
+    ) external {
+        rounds = uint8(bound(uint256(rounds), 3, 10));
+
+        for (uint8 i = 0; i < rounds; i++) {
+            // Derive action and amount from seed — each round consumes a different
+            // portion of the seed via shift so actions are independently random.
+            uint256 roundSeed = uint256(keccak256(abi.encode(seed, i)));
+            uint8 action = uint8((roundSeed >> 248) % 3);
+            // Bound amount so deposits stay within reasonable range.
+            // Min 2 ether for native deposits to survive worst-case rate conversion.
+            uint256 amount = bound(uint256(roundSeed >> 128), 2 ether, 100 ether);
+
+            // Randomize exchange rate each round to stress the native deposit path.
+            uint256 rate = bound(uint256(keccak256(abi.encode(seed, i, "rate"))), 0.5 ether, 1.5 ether);
+            stakeManager.setExchangeRateQuote(rate);
+
+            if (action == 0) {
+                // --- deposit(BNB) ---
+                vm.deal(USER, amount);
+                vm.prank(USER);
+                sy.deposit{value: amount}(USER, NATIVE, amount, 0);
+            } else if (action == 1) {
+                // --- deposit(slisBNB) ---
+                // Mint slisBNB to USER (simulates holding from prior redeem or external source)
+                slisBNB.mint(USER, amount);
+                vm.startPrank(USER);
+                slisBNB.approve(address(sy), amount);
+                sy.deposit(USER, address(slisBNB), amount, 0);
+                vm.stopPrank();
+            } else {
+                // --- redeem(slisBNB) ---
+                uint256 syBal = sy.balanceOf(USER);
+                if (syBal == 0) continue;
+                uint256 redeemAmt = bound(amount, 1, syBal);
+                vm.prank(USER);
+                sy.redeem(USER, redeemAmt, address(slisBNB), 0, false);
+            }
+
+            // Invariant must hold after every single operation.
+            assertEq(sy.totalSupply(), slisBNB.balanceOf(address(sy)));
+        }
+    }
+
     function testFuzz_DepositNativeZeroOutputLeavesNoHalfState(uint256 amount) external {
         amount = bound(amount, MIN_AMOUNT, MAX_AMOUNT);
 
