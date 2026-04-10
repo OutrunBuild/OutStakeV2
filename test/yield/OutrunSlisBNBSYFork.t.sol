@@ -39,4 +39,18 @@ contract OutrunSlisBNBSYForkTest is Test {
     function testFork_GetTotalPooledBnbIsNonZero() external {
         assertGt(IListaStakeManager(STAKE_MANAGER_PROXY).getTotalPooledBnb(), 0);
     }
+
+    function testFork_PreviewDepositMatchesActualDeposit() external {
+        uint256 amount = 1 ether;
+
+        // 获取 preview 报价
+        uint256 previewShares = sy.previewDeposit(address(0), amount);
+
+        // 执行实际 deposit
+        vm.deal(address(this), amount);
+        uint256 actualShares = sy.deposit{value: amount}(address(this), address(0), amount, 0);
+
+        // preview 和 actual 应该相等（同一区块，状态不变）
+        assertEq(previewShares, actualShares);
+    }
 }
