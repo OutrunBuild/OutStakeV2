@@ -8,7 +8,9 @@
 
 - 证据先于结论。
 - `npm run quality:quick` 只用于本地快速反馈，不是 finish gate。
-- `npm run quality:gate` 是唯一 finish gate。
+- `npm run quality:gate:fast` 是 agent workflow 常用的本地默认收尾 gate。
+- `npm run quality:gate` 是最终严格 finish gate。
+- `npm run quality:gate:fast` / `npm run quality:gate` 命中特定路径时都会自动补跑 `npm run process:selftest`。
 - 改动命中 `src/**/*.sol` 时，不能跳过 review note。
 - 语义敏感改动不能跳过 source-of-truth、外部事实与关键假设收敛。
 - 文档修改也至少要跑对应的最低验证命令。
@@ -48,7 +50,9 @@ npm run process:selftest
 说明：
 
 - 命中 `CLAUDE.md`、`docs/process/**`、`docs/reviews/TEMPLATE.md`、`.claude/agents/*.md`、`.codex/**`、`.github/**`、`script/process/**` 时，不要只看文档表述，还要确认脚本入口和机器真源没有被文档改动带偏。
+- `docs/spec/**`、`docs/superpowers/specs/**`，以及由当前 Task Brief / Follow-up Brief 声明 `Artifact type: spec`、`Spec review required: yes`、`Spec artifact paths` 的产物，都属于 spec surface；本地 gate 会校验 `spec-reviewer Agent Report` 的 freshness 和 brief 元数据链。
 - 若仓库启用了额外机器真源（例如 `docs/process/rule-map.json`），验证时也必须确认它和人类文档没有漂移。
+- agent workflow 常用本地收尾时，优先跑 `npm run quality:gate:fast`；给出最终严格完成结论前，仍以 `npm run quality:gate` 为准。
 
 ### 3.3 改 `src/**/*.sol`
 

@@ -20,6 +20,10 @@ required_files=(
     ".codex/agents/gas-reviewer.md"
     ".codex/agents/verifier.toml"
     ".codex/agents/verifier.md"
+    ".codex/agents/spec-reviewer.toml"
+    ".codex/agents/spec-reviewer.md"
+    ".claude/agents/spec-reviewer.md"
+    ".claude/rules/spec-surface.md"
     ".codex/agents/solidity-explorer.toml"
     ".codex/agents/solidity-explorer.md"
     ".codex/agents/security-test-writer.toml"
@@ -42,6 +46,8 @@ required_files=(
     "script/process/check-coverage.sh"
     "script/process/check-review-note.sh"
     "script/process/check-solidity-review-note.sh"
+    "script/process/check-spec-reviewer-evidence.sh"
+    "script/process/check-spec-reviewer-report.sh"
     "script/process/quality-quick.sh"
     "script/process/quality-gate.sh"
     "script/process/tests/run-all.sh"
@@ -274,7 +280,24 @@ const policy = JSON.parse(fs.readFileSync('docs/process/policy.json', 'utf8'));
 const runtime = JSON.parse(fs.readFileSync('.codex/runtime/subagent-runtime.json', 'utf8'));
 const workflow = JSON.parse(fs.readFileSync('.codex/workflows/solidity-subagent-workflow.json', 'utf8'));
 const taskBriefTemplate = fs.readFileSync('.codex/templates/task-brief.md', 'utf8');
+const followUpBriefTemplate = fs.readFileSync('.codex/templates/follow-up-brief.md', 'utf8');
 const agentReportTemplate = fs.readFileSync('.codex/templates/agent-report.md', 'utf8');
+const claudeSpecReviewerContract = fs.readFileSync('.claude/agents/spec-reviewer.md', 'utf8');
+const claudeSpecSurfaceRules = fs.readFileSync('.claude/rules/spec-surface.md', 'utf8');
+const claudeRequiredSections = [
+  "## 角色",
+  "## 适用场景",
+  "## 不适用场景",
+  "## Inputs",
+  "## 允许写入",
+  "## 读取范围",
+  "## 执行清单",
+  "## 决策规则",
+  "## 输出",
+  "## Review Note Mapping",
+  "## 升级规则",
+  "## 不需要读的文件",
+];
 const scripts = packageJson.scripts || {};
 const requiredScripts = [
   'docs:check',
@@ -337,9 +360,101 @@ for (const key of ['default_roles', 'on_demand_roles']) {
   }
 }
 
+if (!policy.agents.default_roles.includes('spec-reviewer')) {
+  console.error('[check-docs] ERROR: policy.agents.default_roles must include spec-reviewer');
+  process.exit(1);
+}
+
+if (JSON.stringify(policy.quality_gate.spec_default_roles) !== JSON.stringify(['process-implementer', 'spec-reviewer', 'verifier'])) {
+  console.error('[check-docs] ERROR: quality_gate.spec_default_roles must be ["process-implementer","spec-reviewer","verifier"]');
+  process.exit(1);
+}
+
+if (!Array.isArray(policy.workflow?.artifact_sequences?.spec_surface) || JSON.stringify(policy.workflow.artifact_sequences.spec_surface) !== JSON.stringify([
+  'Task Brief',
+  'writer evidence',
+  'spec review evidence',
+  'verifier evidence',
+  'docs:check',
+  'process:selftest',
+])) {
+  console.error('[check-docs] ERROR: workflow.artifact_sequences.spec_surface must describe the spec-reviewer evidence chain');
+  process.exit(1);
+}
+
+if (!Array.isArray(runtime.roles.default_roles) || !runtime.roles.default_roles.includes('spec-reviewer')) {
+  console.error('[check-docs] ERROR: runtime.roles.default_roles must include spec-reviewer');
+  process.exit(1);
+}
+
+if (!Array.isArray(workflow.roles.default_roles) || !workflow.roles.default_roles.includes('spec-reviewer')) {
+  console.error('[check-docs] ERROR: workflow.roles.default_roles must include spec-reviewer');
+  process.exit(1);
+}
+
+for (const field of ['Artifact type', 'Spec review required', 'Spec artifact paths']) {
+  if (!Array.isArray(policy.task_brief.required_fields) || !policy.task_brief.required_fields.includes(field)) {
+    console.error(`[check-docs] ERROR: policy.task_brief.required_fields must include ${field}`);
+    process.exit(1);
+  }
+  if (!Array.isArray(policy.follow_up_brief.required_fields) || !policy.follow_up_brief.required_fields.includes(field)) {
+    console.error(`[check-docs] ERROR: policy.follow_up_brief.required_fields must include ${field}`);
+    process.exit(1);
+  }
+}
+
 for (const requiredField of ['- Change classification rationale:', '- Verifier profile:', '- Implementation owner:', '- Writer dispatch backend:', '- Required verifier commands:', '- Required artifacts:']) {
   if (!taskBriefTemplate.includes(requiredField)) {
     console.error(`[check-docs] ERROR: task brief template is missing required field ${requiredField}`);
+    process.exit(1);
+  }
+}
+
+for (const requiredField of ['- Artifact type:', '- Spec review required:', '- Spec artifact paths:']) {
+  if (!taskBriefTemplate.includes(requiredField)) {
+    console.error(`[check-docs] ERROR: task brief template is missing required field ${requiredField}`);
+    process.exit(1);
+  }
+  if (!followUpBriefTemplate.includes(requiredField)) {
+    console.error(`[check-docs] ERROR: follow-up brief template is missing required field ${requiredField}`);
+    process.exit(1);
+  }
+}
+
+for (const requiredField of ['- Trigger artifact:', '- Trigger stale findings:']) {
+  if (!followUpBriefTemplate.includes(requiredField)) {
+    console.error(`[check-docs] ERROR: follow-up brief template is missing required field ${requiredField}`);
+    process.exit(1);
+  }
+}
+
+for (const requiredSection of claudeRequiredSections) {
+  if (!claudeSpecReviewerContract.includes(requiredSection)) {
+    console.error(`[check-docs] ERROR: .claude/agents/spec-reviewer.md is missing section ${requiredSection}`);
+    process.exit(1);
+  }
+}
+
+for (const requiredPhrase of [
+  'docs/spec/**',
+  'docs/superpowers/specs/**',
+  'spec review evidence',
+]) {
+  if (!claudeSpecReviewerContract.includes(requiredPhrase)) {
+    console.error(`[check-docs] ERROR: .claude/agents/spec-reviewer.md is missing required phrase ${requiredPhrase}`);
+    process.exit(1);
+  }
+}
+
+for (const requiredPhrase of [
+  'docs/spec/**',
+  'docs/superpowers/specs/**',
+  'spec-reviewer',
+  'npm run docs:check',
+  'spec review evidence',
+]) {
+  if (!claudeSpecSurfaceRules.includes(requiredPhrase)) {
+    console.error(`[check-docs] ERROR: .claude/rules/spec-surface.md is missing required phrase ${requiredPhrase}`);
     process.exit(1);
   }
 }

@@ -33,6 +33,7 @@
     "default_roles": [
       "solidity-implementer",
       "process-implementer",
+      "spec-reviewer",
       "logic-reviewer",
       "security-reviewer",
       "gas-reviewer",
@@ -73,6 +74,13 @@
       "optional_roles": []
     },
     {
+      "name": "spec_surface",
+      "path_patterns": ["^docs/spec/.*$", "^docs/superpowers/specs/.*$"],
+      "default_writer_role": "process-implementer",
+      "required_roles": ["spec-reviewer", "verifier"],
+      "optional_roles": []
+    },
+    {
       "name": "shell_surface",
       "path_patterns": ["^(script/.*\\.sh|\\.githooks/.*)$"],
       "default_writer_role": "process-implementer",
@@ -99,6 +107,14 @@
   },
   "artifact_chain": {
     "solidity": ["Task Brief", "Agent Report", "review note", "verifier evidence", "quality:gate", "CI"],
+    "spec_surface": [
+      "Task Brief",
+      "writer evidence",
+      "spec review evidence",
+      "verifier evidence",
+      "docs:check",
+      "process:selftest"
+    ],
     "process": ["Task Brief", "Agent Report", "verifier evidence", "docs:check", "process:selftest"]
   },
   "change_classifier": {

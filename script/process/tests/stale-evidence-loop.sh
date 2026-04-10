@@ -14,13 +14,19 @@ security_evidence_file="docs/reviews/2026-04-01-stale-evidence-loop-security.md"
 gas_evidence_file="docs/reviews/2026-04-01-stale-evidence-loop-gas.md"
 verification_evidence_file="docs/reviews/2026-04-01-stale-evidence-loop-verifier.md"
 changed_files_path="$tmp_dir/changed-files.txt"
+spec_changed_files_path="$tmp_dir/spec-changed-files.txt"
+spec_brief_changed_files_path="$tmp_dir/spec-brief-changed-files.txt"
 follow_up_dir="$tmp_dir/follow-up-briefs"
+spec_changed_file="docs/superpowers/specs/__stale_evidence_loop_fixture.md"
+spec_task_brief_file="docs/task-briefs/2026-04-01-stale-evidence-loop-spec-task-brief.md"
+spec_agent_report_file="docs/agent-reports/2026-04-01-stale-evidence-loop-spec-agent-report.md"
 
 cleanup() {
     rm -rf "$tmp_dir"
     rm -f "$changed_solidity_file"
     rm -f "$task_brief_file" "$agent_report_file" "$review_file"
     rm -f "$logic_evidence_file" "$security_evidence_file" "$gas_evidence_file" "$verification_evidence_file"
+    rm -f "$spec_changed_file" "$spec_task_brief_file" "$spec_agent_report_file"
 }
 trap cleanup EXIT
 
@@ -57,6 +63,9 @@ cat > "$task_brief_file" <<EOF
 - Optional roles: none
 - Default writer role: solidity-implementer
 - Implementation owner: solidity-implementer
+- Artifact type: solidity
+- Spec review required: no
+- Spec artifact paths: none
 - Write permissions: $changed_solidity_file
 - Writer dispatch backend: native-codex-subagents
 - Writer dispatch target: .codex/agents/solidity-implementer.toml
@@ -242,6 +251,150 @@ if ! grep -q "Dispatch order: solidity-implementer -> logic-reviewer -> security
     exit 1
 fi
 
+mkdir -p "$(dirname "$spec_changed_file")" "$(dirname "$spec_task_brief_file")" "$(dirname "$spec_agent_report_file")"
+
+cat > "$spec_changed_file" <<'EOF'
+# Spec Surface Fixture
+
+- Goal: stale evidence remediation loop selftest for spec surface
+EOF
+
+cat > "$spec_changed_files_path" <<EOF
+$spec_changed_file
+EOF
+
+cat > "$spec_brief_changed_files_path" <<EOF
+$spec_task_brief_file
+EOF
+
+cat > "$spec_task_brief_file" <<EOF
+# Task Brief
+
+- Goal: stale evidence remediation loop selftest for spec surface
+- Change classification: process-surface
+- Change type: none
+- Artifact type: spec
+- Spec review required: yes
+- Spec artifact paths: $spec_changed_file
+- Files in scope: $spec_changed_file
+- Out of scope: none
+- Known facts: current spec-reviewer Agent Report should become the freshness anchor
+- Open questions / assumptions: none
+- Risks to check: stale spec-reviewer Agent Report evidence
+- Required roles: process-implementer, spec-reviewer, verifier
+- Optional roles: none
+- Verifier profile: light
+- Default writer role: process-implementer
+- Implementation owner: process-implementer
+- Write permissions: $spec_changed_file
+- Writer dispatch backend: native-codex-subagents
+- Writer dispatch target: .codex/agents/process-implementer.toml
+- Writer dispatch scope: $spec_changed_file
+- Non-goals: none
+- Acceptance checks: rerun spec-reviewer and verifier after a follow-up writer pass
+- Required verifier commands: npm run docs:check; npm run process:selftest
+- Required artifacts: Task Brief, writer evidence, spec review evidence
+- Review note required: no
+- Semantic review dimensions: none
+- Source-of-truth docs: none
+- External sources required: none
+- Critical assumptions to prove or reject: none
+- Required output fields: none
+- Review note impact: no
+- If blocked: stop and return the stale evidence blocker
+EOF
+
+cat > "$spec_agent_report_file" <<EOF
+# Agent Report
+
+- Role: spec-reviewer
+- Summary: reviewed the scoped spec surface
+- Task Brief path: $spec_task_brief_file
+- Scope / ownership respected: yes
+- Files touched/reviewed: $spec_changed_file
+- Findings: none
+- Required follow-up: rerun verifier after the follow-up writer pass
+- Commands run: npm run codex:review; npm run docs:check
+- Evidence: selftest fixture
+- Residual risks: stale evidence still needs to be cleared
+EOF
+
+sleep 1
+touch "$spec_changed_file"
+
+set +e
+spec_output="$(QUALITY_GATE_MODE=ci QUALITY_GATE_FILE_LIST="$spec_changed_files_path" QUALITY_GATE_REVIEW_NOTE="$spec_agent_report_file" FOLLOW_UP_BRIEF_OUTPUT_DIR="$follow_up_dir" REMEDIATION_LOOP_DATE="2026-04-10" bash ./script/process/run-stale-evidence-loop.sh 2>&1)"
+spec_status=$?
+set -e
+
+if [ "$spec_status" -ne 2 ]; then
+    echo "Expected stale-evidence loop to exit with status 2 after generating a spec follow-up brief"
+    printf '%s\n' "$spec_output"
+    exit 1
+fi
+
+if ! printf '%s\n' "$spec_output" | grep -q "re-dispatch order: process-implementer -> spec-reviewer -> verifier"; then
+    echo "Expected stale-evidence loop output to report the spec rerun order"
+    printf '%s\n' "$spec_output"
+    exit 1
+fi
+
+mapfile -t generated_follow_ups < <(find "$follow_up_dir" -maxdepth 1 -type f -name '*.md' | sort)
+spec_follow_up_file="$(grep -l "Artifact type: spec" "${generated_follow_ups[@]}" | tail -n 1)"
+
+if ! grep -q "Spec review required: yes" "$spec_follow_up_file"; then
+    echo "Expected spec follow-up brief to preserve Spec review required: yes"
+    cat "$spec_follow_up_file"
+    exit 1
+fi
+
+if ! grep -q "Spec artifact paths: $spec_changed_file" "$spec_follow_up_file"; then
+    echo "Expected spec follow-up brief to preserve the spec artifact path"
+    cat "$spec_follow_up_file"
+    exit 1
+fi
+
+if ! grep -q "Required rerun roles: process-implementer, verifier, spec-reviewer" "$spec_follow_up_file"; then
+    echo "Expected spec follow-up brief to require process-implementer, verifier, and spec-reviewer reruns"
+    cat "$spec_follow_up_file"
+    exit 1
+fi
+
+if ! grep -q "Dispatch order: process-implementer -> spec-reviewer -> verifier" "$spec_follow_up_file"; then
+    echo "Expected spec follow-up brief to encode the spec rerun dispatch order"
+    cat "$spec_follow_up_file"
+    exit 1
+fi
+
+sleep 1
+touch "$spec_changed_file"
+
+set +e
+brief_declared_output="$(QUALITY_GATE_MODE=ci QUALITY_GATE_FILE_LIST="$spec_brief_changed_files_path" FOLLOW_UP_BRIEF_OUTPUT_DIR="$follow_up_dir" REMEDIATION_LOOP_DATE="2026-04-10" bash ./script/process/run-stale-evidence-loop.sh 2>&1)"
+brief_declared_status=$?
+set -e
+
+if [ "$brief_declared_status" -ne 2 ]; then
+    echo "Expected stale-evidence loop to discover spec-reviewer evidence from the brief-declared spec output"
+    printf '%s\n' "$brief_declared_output"
+    exit 1
+fi
+
+if ! printf '%s\n' "$brief_declared_output" | grep -q "trigger artifact: $spec_agent_report_file"; then
+    echo "Expected stale-evidence loop to discover the spec-reviewer Agent Report trigger artifact from the task brief"
+    printf '%s\n' "$brief_declared_output"
+    exit 1
+fi
+
+mapfile -t generated_follow_ups < <(find "$follow_up_dir" -maxdepth 1 -type f -name '*.md' | sort)
+brief_declared_follow_up_file="$(grep -l "Trigger artifact: $spec_agent_report_file" "${generated_follow_ups[@]}" | tail -n 1)"
+
+if ! grep -q "Trigger stale findings:" "$brief_declared_follow_up_file"; then
+    echo "Expected follow-up brief to record Trigger stale findings"
+    cat "$brief_declared_follow_up_file"
+    exit 1
+fi
+
 cat > "$task_brief_file" <<EOF
 # Task Brief
 
@@ -257,6 +410,9 @@ cat > "$task_brief_file" <<EOF
 - Optional roles: none
 - Default writer role: solidity-implementer
 - Implementation owner: solidity-implementer
+- Artifact type: solidity
+- Spec review required: no
+- Spec artifact paths: none
 - Write permissions: $changed_solidity_file
 - Writer dispatch backend: native-codex-subagents
 - Writer dispatch target: .codex/agents/solidity-implementer.toml

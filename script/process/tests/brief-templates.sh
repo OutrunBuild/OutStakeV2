@@ -50,6 +50,37 @@ if ! grep -q '^- Verifier profile:' .codex/templates/task-brief.md; then
     exit 1
 fi
 
+if ! grep -q '^## Spec Surface（追加 3 字段）' .codex/templates/task-brief.md; then
+    echo "Expected Task Brief template to include a dedicated Spec Surface section"
+    exit 1
+fi
+
+for required_field in \
+    '- Artifact type:' \
+    '- Spec review required:' \
+    '- Spec artifact paths:'
+do
+    if ! grep -qF -- "$required_field" .codex/templates/task-brief.md; then
+        echo "Expected Task Brief template to require ${required_field#^- }"
+        exit 1
+    fi
+    if ! grep -qF -- "$required_field" .codex/templates/follow-up-brief.md; then
+        echo "Expected Follow-up Brief template to require ${required_field#^- }"
+        exit 1
+    fi
+done
+
+for spec_field in \
+    '- Artifact type:' \
+    '- Spec review required:' \
+    '- Spec artifact paths:'
+do
+    if ! grep -qF -- "$spec_field" .codex/templates/task-brief.md; then
+        echo "Expected Task Brief template to retain ${spec_field#^- } for the spec surface"
+        exit 1
+    fi
+done
+
 if ! grep -q '^- Parent Task Brief path:' .codex/templates/role-delta-brief.md; then
     echo "Expected Role Delta Brief template to reference the parent task brief"
     exit 1
@@ -62,6 +93,16 @@ fi
 
 if ! grep -q '^- Parent Task Brief path:' .codex/templates/follow-up-brief.md; then
     echo "Expected Follow-up Brief template to reference the parent task brief"
+    exit 1
+fi
+
+if ! grep -q '^- Trigger artifact:' .codex/templates/follow-up-brief.md; then
+    echo "Expected Follow-up Brief template to require Trigger artifact"
+    exit 1
+fi
+
+if ! grep -q '^- Trigger stale findings:' .codex/templates/follow-up-brief.md; then
+    echo "Expected Follow-up Brief template to require Trigger stale findings"
     exit 1
 fi
 

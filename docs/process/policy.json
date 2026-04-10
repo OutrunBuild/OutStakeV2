@@ -138,6 +138,8 @@
     "main_session_forbidden_write_patterns": [
       "^AGENTS\\.md$",
       "^docs/process/.*$",
+      "^docs/spec/.*$",
+      "^docs/superpowers/specs/.*$",
       "^docs/reviews/(README|TEMPLATE)\\.md$",
       "^docs/agent-reports/README\\.md$",
       "^docs/task-briefs/README\\.md$",
@@ -163,6 +165,8 @@
       "^script/.*\\.sol$",
       "^AGENTS\\.md$",
       "^docs/process/.*$",
+      "^docs/spec/.*$",
+      "^docs/superpowers/specs/.*$",
       "^\\.codex/.*$",
       "^script/process/.*$",
       "^package\\.json$",
@@ -173,6 +177,7 @@
       "^test/.*\\.sol$": "solidity-implementer",
       "^test/.*\\.t\\.sol$": "solidity-implementer",
       "^(AGENTS\\.md|README\\.md|docs/process/.*|docs/reviews/(TEMPLATE|README)\\.md|docs/task-briefs/README\\.md|docs/agent-reports/README\\.md|docs/(ARCHITECTURE|GLOSSARY|TRACEABILITY|VERIFICATION)\\.md|docs/spec/.*|docs/adr/.*|\\.github/.*|\\.codex/.*|\\.gitignore|\\.solhint\\.json|\\.solhintignore)$": "process-implementer",
+      "^(docs/spec/.*|docs/superpowers/specs/.*)$": "process-implementer",
       "^(script/.*\\.sh|\\.githooks/.*)$": "process-implementer",
       "^script/process/.*$": "process-implementer",
       "^package\\.json$": "process-implementer",
@@ -182,6 +187,7 @@
     "default_roles": [
       "solidity-implementer",
       "process-implementer",
+      "spec-reviewer",
       "logic-reviewer",
       "security-reviewer",
       "gas-reviewer",
@@ -344,6 +350,7 @@
     "test_sol_pattern": "^test/.*\\.sol$",
     "shell_pattern": "^(script/.*\\.sh|\\.githooks/.*)$",
     "process_surface_pattern": "^(AGENTS\\.md|docs/process/.*|\\.codex/.*|script/process/.*|\\.github/.*|\\.githooks/.*|README\\.md|docs/reviews/(README|TEMPLATE)\\.md|docs/task-briefs/README\\.md|docs/agent-reports/README\\.md|\\.solhint\\.json|\\.solhintignore)$",
+    "spec_surface_pattern": "^(docs/spec/.*|docs/superpowers/specs/.*)$",
     "process_js_pattern": "^script/process/.*\\.js$",
     "package_pattern": "^(package\\.json|package-lock\\.json)$",
     "docs_contract_pattern": "^(AGENTS\\.md|\\.gitignore|\\.solhint\\.json|\\.solhintignore|docs/process/.*|docs/reviews/TEMPLATE\\.md|docs/reviews/README\\.md|docs/task-briefs/README\\.md|docs/agent-reports/README\\.md|\\.githooks/.*|\\.github/pull_request_template\\.md|\\.github/workflows/.*|\\.codex/.*)$",
@@ -363,6 +370,11 @@
       "logic-reviewer",
       "security-reviewer",
       "gas-reviewer",
+      "verifier"
+    ],
+    "spec_default_roles": [
+      "process-implementer",
+      "spec-reviewer",
       "verifier"
     ],
     "src_optional_roles": [
@@ -441,6 +453,14 @@
         "quality:gate",
         "CI"
       ],
+      "spec_surface": [
+        "Task Brief",
+        "writer evidence",
+        "spec review evidence",
+        "verifier evidence",
+        "docs:check",
+        "process:selftest"
+      ],
       "process": [
         "Task Brief",
         "Agent Report",
@@ -457,6 +477,9 @@
       "Files in scope",
       "Change classification",
       "Change classification rationale",
+      "Artifact type",
+      "Spec review required",
+      "Spec artifact paths",
       "Out of scope",
       "Known facts",
       "Open questions / assumptions",
@@ -484,7 +507,8 @@
       "If blocked"
     ],
     "boolean_fields": [
-      "Review note required"
+      "Review note required",
+      "Spec review required"
     ],
     "implementation_owner_field": "Implementation owner",
     "dispatch_backend_field": "Writer dispatch backend",
@@ -497,7 +521,47 @@
     "default_writer_role_field": "Default writer role",
     "write_permissions_field": "Write permissions",
     "change_classification_field": "Change classification",
-    "verifier_profile_field": "Verifier profile"
+    "verifier_profile_field": "Verifier profile",
+    "artifact_type_field": "Artifact type",
+    "spec_review_required_field": "Spec review required",
+    "spec_artifact_paths_field": "Spec artifact paths"
+  },
+  "follow_up_brief": {
+    "required_fields": [
+      "Goal",
+      "Change classification",
+      "Parent Task Brief path",
+      "Parent Agent Report path",
+      "Trigger artifact",
+      "Trigger stale findings",
+      "Artifact type",
+      "Spec review required",
+      "Spec artifact paths",
+      "Files in scope",
+      "Out of scope",
+      "Known facts",
+      "Open questions / assumptions",
+      "Required rerun roles",
+      "Dispatch order",
+      "Acceptance checks",
+      "Required artifacts",
+      "If blocked"
+    ],
+    "boolean_fields": [
+      "Spec review required"
+    ],
+    "parent_task_brief_field": "Parent Task Brief path",
+    "parent_agent_report_field": "Parent Agent Report path",
+    "trigger_artifact_field": "Trigger artifact",
+    "trigger_stale_findings_field": "Trigger stale findings",
+    "artifact_type_field": "Artifact type",
+    "spec_review_required_field": "Spec review required",
+    "spec_artifact_paths_field": "Spec artifact paths",
+    "required_rerun_roles_field": "Required rerun roles",
+    "dispatch_order_field": "Dispatch order",
+    "acceptance_checks_field": "Acceptance checks",
+    "required_artifacts_field": "Required artifacts",
+    "if_blocked_field": "If blocked"
   },
   "agent_report": {
     "required_fields": [

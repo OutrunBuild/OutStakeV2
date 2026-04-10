@@ -21,6 +21,12 @@
 - Open questions / assumptions:
 - Risks to check:
 
+## Spec Surface（追加 3 字段）
+
+- Artifact type:
+- Spec review required:
+- Spec artifact paths:
+
 ## Prod-semantic / High-risk 分级（追加 18 字段 = 33 字段）
 
 - Change type:

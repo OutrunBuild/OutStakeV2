@@ -78,6 +78,7 @@ quality_initialize_runtime() {
     cd "$repo_root"
 
     mode="${QUALITY_GATE_MODE:-staged}"
+    workflow_changed_files=""
 
     if [ -n "${QUALITY_GATE_FILE_LIST:-}" ] && [ -f "${QUALITY_GATE_FILE_LIST}" ]; then
         changed_files="$(cat "${QUALITY_GATE_FILE_LIST}")"
@@ -85,6 +86,12 @@ quality_initialize_runtime() {
         changed_files="$(load_file_list_from_ci)"
     else
         changed_files="$(git diff --cached --name-only --diff-filter=ACMRD)"
+    fi
+
+    if [ -n "${QUALITY_GATE_CHANGESET_FILE_LIST:-}" ] && [ -f "${QUALITY_GATE_CHANGESET_FILE_LIST}" ]; then
+        workflow_changed_files="$(cat "${QUALITY_GATE_CHANGESET_FILE_LIST}")"
+    else
+        workflow_changed_files="$changed_files"
     fi
 }
 
@@ -101,6 +108,13 @@ quality_prepare_changed_files_tmp() {
     quality_register_cleanup_path "$changed_files_tmp"
     trap quality_cleanup EXIT
     printf '%s\n' "$changed_files" > "$changed_files_tmp"
+}
+
+quality_prepare_workflow_changed_files_tmp() {
+    workflow_changed_files_tmp="$(mktemp)"
+    quality_register_cleanup_path "$workflow_changed_files_tmp"
+    trap quality_cleanup EXIT
+    printf '%s\n' "$workflow_changed_files" > "$workflow_changed_files_tmp"
 }
 
 read_classifier_field() {
@@ -122,6 +136,71 @@ if (typeof value === "object") {
   process.stdout.write(String(value));
 }
 ' "$field"
+}
+
+quality_file_declares_spec_surface() {
+    local candidate="$1"
+
+    TASK_BRIEF_DIRECTORY="$task_brief_directory" \
+    AGENT_REPORT_DIRECTORY="$agent_report_directory" \
+    node - "$candidate" <<'EOF'
+const fs = require('fs');
+
+const candidate = process.argv[2];
+const taskBriefDirectory = process.env.TASK_BRIEF_DIRECTORY || 'docs/task-briefs';
+const agentReportDirectory = process.env.AGENT_REPORT_DIRECTORY || 'docs/agent-reports';
+
+function extractField(document, field) {
+  const prefix = `- ${field}:`;
+  const lines = document.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line.startsWith(prefix)) continue;
+
+    let value = line.slice(prefix.length).trim();
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+      const next = lines[cursor];
+      if (/^- [^:]+:/.test(next)) break;
+      if (next.startsWith('  ') || next === '') {
+        value += `\n${next}`;
+        continue;
+      }
+      break;
+    }
+    return value.trim();
+  }
+  return '';
+}
+
+function isSpecBrief(document) {
+  const artifactType = extractField(document, 'Artifact type').trim().toLowerCase();
+  const specReviewRequired = extractField(document, 'Spec review required').trim().toLowerCase();
+  return artifactType === 'spec' || specReviewRequired === 'yes';
+}
+
+if (!candidate || !fs.existsSync(candidate) || !fs.statSync(candidate).isFile()) {
+  process.exit(1);
+}
+
+const document = fs.readFileSync(candidate, 'utf8');
+if ((candidate.startsWith(`${taskBriefDirectory}/`) || document.startsWith('# Task Brief') || document.startsWith('# Follow-up Brief')) && isSpecBrief(document)) {
+  process.exit(0);
+}
+
+if (candidate.startsWith(`${agentReportDirectory}/`) && document.startsWith('# Agent Report')) {
+  const taskBriefPath = extractField(document, 'Task Brief path').trim();
+  if (!taskBriefPath || !fs.existsSync(taskBriefPath)) {
+    process.exit(1);
+  }
+
+  const taskBrief = fs.readFileSync(taskBriefPath, 'utf8');
+  if (isSpecBrief(taskBrief)) {
+    process.exit(0);
+  }
+}
+
+process.exit(1);
+EOF
 }
 
 quality_load_classifier_metadata() {
@@ -202,8 +281,98 @@ quality_print_solidity_context() {
     echo "[$label] verifier profile: $verifier_profile"
 }
 
+quality_changed_files_have_declared_spec_surface() {
+    local changed_files_file="$1"
+    local task_brief_directory="$2"
+
+    node - "$changed_files_file" "$task_brief_directory" <<'EOF'
+const fs = require('fs');
+const path = require('path');
+
+const [, , changedFilesPath, taskBriefDirectory] = process.argv;
+const changedFiles = fs.readFileSync(changedFilesPath, 'utf8').split(/\r?\n/).filter(Boolean);
+
+function readIfExists(targetPath) {
+  if (!targetPath || !fs.existsSync(targetPath)) return '';
+  return fs.readFileSync(targetPath, 'utf8');
+}
+
+function extractField(document, field) {
+  const prefix = `- ${field}:`;
+  const lines = document.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line.startsWith(prefix)) continue;
+
+    let value = line.slice(prefix.length).trim();
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+      const next = lines[cursor];
+      if (/^- [^:]+:/.test(next)) break;
+      if (next.startsWith('  ') || next === '') {
+        value += `\n${next}`;
+        continue;
+      }
+      break;
+    }
+    return value.trim();
+  }
+  return '';
+}
+
+function extractPathTokens(value) {
+  const matches = value.match(/(?:^|[\s,;()[\]{}])((?:\/|(?:\.\.\/)+|\.\/)?[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)+)(?=$|[\s,;()[\]{}:])/g) || [];
+  return matches
+    .map((entry) => entry.trim().replace(/^[\s,;()[\]{}]+/, '').replace(/[\s,;()[\]{}:]+$/, ''))
+    .filter(Boolean);
+}
+
+function isTruthy(value) {
+  return /^(yes|true|1)$/i.test(String(value || '').trim());
+}
+
+function isBrief(document) {
+  return document.startsWith('# Task Brief') || document.startsWith('# Follow-up Brief');
+}
+
+function isSpecBrief(document) {
+  return extractField(document, 'Artifact type').trim() === 'spec'
+    || isTruthy(extractField(document, 'Spec review required'));
+}
+
+const changedSet = new Set(changedFiles);
+const changedBriefs = changedFiles
+  .map((file) => [file, readIfExists(file)])
+  .filter(([, document]) => document && isBrief(document) && isSpecBrief(document));
+
+if (changedBriefs.length > 0) {
+  process.exit(0);
+}
+
+if (!taskBriefDirectory || !fs.existsSync(taskBriefDirectory)) {
+  process.exit(1);
+}
+
+const historicalBriefs = fs
+  .readdirSync(taskBriefDirectory)
+  .filter((entry) => entry.endsWith('.md') && entry !== 'README.md' && entry !== 'TEMPLATE.md')
+  .map((entry) => path.join(taskBriefDirectory, entry))
+  .map((briefPath) => [briefPath, readIfExists(briefPath)])
+  .filter(([, document]) => document && isBrief(document) && isSpecBrief(document));
+
+for (const [, document] of historicalBriefs) {
+  const specArtifactPaths = extractPathTokens(extractField(document, 'Spec artifact paths'));
+  if (specArtifactPaths.some((artifactPath) => changedSet.has(artifactPath))) {
+    process.exit(0);
+  }
+}
+
+process.exit(1);
+EOF
+}
+
 quality_prepare_standard_context() {
     quality_prepare_changed_files_tmp
+    quality_prepare_workflow_changed_files_tmp
 
     src_sol_pattern="$(read_policy_value quality_gate.src_sol_pattern)"
     script_sol_pattern="$(read_policy_value quality_gate.script_sol_pattern '^script/.*\.sol$')"
@@ -211,17 +380,23 @@ quality_prepare_standard_context() {
     test_sol_pattern="$(read_policy_value quality_gate.test_sol_pattern)"
     shell_pattern="$(read_policy_value quality_gate.shell_pattern)"
     process_surface_pattern="$(read_policy_value quality_gate.process_surface_pattern)"
+    spec_surface_pattern="$(read_policy_value quality_gate.spec_surface_pattern '^(docs/spec/.*|docs/superpowers/specs/.*)$')"
+    claude_spec_surface_pattern='^\.claude/(agents/spec-reviewer\.md|rules/spec-surface\.md)$'
     process_js_pattern="$(read_policy_value quality_gate.process_js_pattern)"
     package_pattern="$(read_policy_value quality_gate.package_pattern)"
     docs_contract_pattern="$(read_policy_value quality_gate.docs_contract_pattern)"
+    task_brief_directory="$(read_policy_value agents.task_brief_directory 'docs/task-briefs')"
+    agent_report_directory="$(read_policy_value agents.agent_report_directory 'docs/agent-reports')"
     mapfile -t process_selftest_patterns < <(read_policy_lines quality_gate.process_selftest_patterns)
+    mapfile -t spec_default_roles < <(read_policy_lines quality_gate.spec_default_roles)
     mapfile -t process_default_roles < <(read_policy_lines quality_gate.process_default_roles)
     mapfile -t package_default_roles < <(read_policy_lines quality_gate.package_default_roles)
     mapfile -t docs_contract_default_roles < <(read_policy_lines quality_gate.docs_contract_default_roles)
+    task_brief_directory="$(read_policy_value agents.task_brief_directory 'docs/task-briefs')"
 
     classification_json="$(
         QUALITY_GATE_MODE="$mode" \
-        QUALITY_GATE_FILE_LIST="$changed_files_tmp" \
+        QUALITY_GATE_FILE_LIST="$workflow_changed_files_tmp" \
         CHANGE_CLASSIFIER_FORCE="${CHANGE_CLASSIFIER_FORCE:-}" \
         CHANGE_CLASSIFIER_DIFF_FILE="${CHANGE_CLASSIFIER_DIFF_FILE:-}" \
         node ./script/process/classify-change.js
@@ -234,13 +409,18 @@ quality_prepare_standard_context() {
     has_package_metadata=0
     has_docs_contract=0
     has_process_surface=0
+    has_spec_surface=0
     should_run_docs_check=0
     should_run_process_selftest=0
+    workflow_has_src_sol=0
+    workflow_has_script_sol=0
     src_solidity_candidates=()
     script_solidity_candidates=()
     test_solidity_candidates=()
     solidity_files=()
     src_solidity_files=()
+    workflow_src_solidity_files=()
+    workflow_script_solidity_files=()
     changed_test_files=()
     shell_candidates=()
     shell_files=()
@@ -268,6 +448,24 @@ quality_prepare_standard_context() {
         if [[ "$file" =~ $process_surface_pattern ]]; then
             has_process_surface=1
             should_run_docs_check=1
+        fi
+
+        if [[ "$file" =~ $spec_surface_pattern ]]; then
+            has_spec_surface=1
+            should_run_docs_check=1
+            should_run_process_selftest=1
+        fi
+
+        if [[ "$file" =~ $claude_spec_surface_pattern ]]; then
+            has_process_surface=1
+            should_run_docs_check=1
+            should_run_process_selftest=1
+        fi
+
+        if quality_file_declares_spec_surface "$file"; then
+            has_spec_surface=1
+            should_run_docs_check=1
+            should_run_process_selftest=1
         fi
 
         if [[ "$file" =~ $shell_pattern ]]; then
@@ -299,6 +497,28 @@ quality_prepare_standard_context() {
             fi
         done
     done <<< "$changed_files"
+
+    if quality_changed_files_have_declared_spec_surface "$changed_files_tmp" "$task_brief_directory"; then
+        has_spec_surface=1
+        should_run_docs_check=1
+        should_run_process_selftest=1
+    fi
+
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+
+        if [[ "$file" =~ $src_sol_pattern ]]; then
+            workflow_has_src_sol=1
+            if [ -f "$file" ]; then
+                workflow_src_solidity_files+=("$file")
+            fi
+        elif [[ "$file" =~ $script_sol_pattern ]]; then
+            workflow_has_script_sol=1
+            if [ -f "$file" ]; then
+                workflow_script_solidity_files+=("$file")
+            fi
+        fi
+    done <<< "$workflow_changed_files"
 
     for file in "${src_solidity_candidates[@]}" "${script_solidity_candidates[@]}" "${test_solidity_candidates[@]}"; do
         [ -z "$file" ] && continue

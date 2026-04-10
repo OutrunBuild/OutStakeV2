@@ -13,7 +13,9 @@ run_stale_evidence_remediation() {
         env \
             QUALITY_GATE_MODE="$mode" \
             QUALITY_GATE_FILE_LIST="${QUALITY_GATE_FILE_LIST:-}" \
+            QUALITY_GATE_CHANGESET_FILE_LIST="${QUALITY_GATE_CHANGESET_FILE_LIST:-}" \
             QUALITY_GATE_REVIEW_NOTE="${QUALITY_GATE_REVIEW_NOTE:-}" \
+            QUALITY_GATE_SPEC_REVIEWER_REPORT="${QUALITY_GATE_SPEC_REVIEWER_REPORT:-}" \
             FOLLOW_UP_BRIEF_OUTPUT_DIR="${FOLLOW_UP_BRIEF_OUTPUT_DIR:-}" \
             REMEDIATION_LOOP_DATE="${REMEDIATION_LOOP_DATE:-}" \
             bash -lc "$remediation_command" 2>&1
@@ -174,7 +176,7 @@ if quality_has_any_solidity_change; then
     esac
 fi
 
-if [ "$has_src_sol" -eq 1 ] || [ "$has_script_sol" -eq 1 ]; then
+if [ "$workflow_has_src_sol" -eq 1 ] || [ "$workflow_has_script_sol" -eq 1 ]; then
     local_codex_review_required=0
     if [ "$mode" != "ci" ]; then
         if is_truthy "${!local_codex_review_force_env:-}"; then
@@ -185,9 +187,9 @@ if [ "$has_src_sol" -eq 1 ] || [ "$has_script_sol" -eq 1 ]; then
     fi
 
     if [ "$classification" = "prod-semantic" ] || [ "$classification" = "high-risk" ]; then
-        if [ "${#src_solidity_files[@]}" -gt 0 ]; then
+        if [ "${#workflow_src_solidity_files[@]}" -gt 0 ]; then
             echo "[quality-gate] bash ./script/process/check-slither.sh"
-            bash ./script/process/check-slither.sh "${src_solidity_files[@]}"
+            bash ./script/process/check-slither.sh "${workflow_src_solidity_files[@]}"
         else
             echo "[quality-gate] skip slither (script Solidity surface; no src Solidity files in scope)"
         fi
@@ -234,6 +236,38 @@ if [ "$has_process_surface" -eq 1 ]; then
     echo "[quality-gate] default roles: $(join_by_semicolon "${process_default_roles[@]}")"
 fi
 
+if [ "$has_spec_surface" -eq 1 ]; then
+    echo "[quality-gate] default roles: $(join_by_semicolon "${spec_default_roles[@]}")"
+    echo "[quality-gate] bash ./script/process/check-spec-reviewer-evidence.sh"
+    set +e
+    spec_review_output="$(bash ./script/process/check-spec-reviewer-evidence.sh 2>&1)"
+    spec_review_status=$?
+    set -e
+
+    if [ "$spec_review_status" -ne 0 ]; then
+        printf '%s\n' "$spec_review_output" >&2
+    elif [ "$errors_only_mode" -eq 0 ]; then
+        printf '%s\n' "$spec_review_output"
+    fi
+
+    if [ "$spec_review_status" -ne 0 ]; then
+        if printf '%s\n' "$spec_review_output" | grep -qi "stale"; then
+            set +e
+            run_stale_evidence_remediation "$stale_evidence_remediation_command"
+            remediation_status=$?
+            set -e
+
+            if [ "$remediation_status" -eq 0 ]; then
+                exit "$stale_evidence_exit_code"
+            fi
+
+            exit "$remediation_status"
+        fi
+
+        exit "$spec_review_status"
+    fi
+fi
+
 if [ "${#shell_files[@]}" -gt 0 ]; then
     echo "[quality-gate] bash -n (changed shell scripts)"
     bash -n "${shell_files[@]}"
@@ -259,11 +293,24 @@ if [ "$should_run_docs_check" -eq 1 ]; then
 fi
 
 if [ "$should_run_process_selftest" -eq 1 ]; then
-    if [ "$has_process_surface" -eq 0 ] && [ "$has_package_metadata" -eq 0 ]; then
+    if [ "$has_spec_surface" -eq 1 ] && [ "$has_process_surface" -eq 0 ] && [ "$has_package_metadata" -eq 0 ]; then
+        echo "[quality-gate] default roles: $(join_by_semicolon "${spec_default_roles[@]}")"
+    elif [ "$has_process_surface" -eq 0 ] && [ "$has_package_metadata" -eq 0 ]; then
         echo "[quality-gate] default roles: $(join_by_semicolon "${process_default_roles[@]}")"
     fi
     echo "[quality-gate] npm run process:selftest"
-    npm run process:selftest
+    env \
+        -u QUALITY_GATE_MODE \
+        -u QUALITY_GATE_FILE_LIST \
+        -u QUALITY_GATE_CHANGESET_FILE_LIST \
+        -u QUALITY_GATE_REVIEW_NOTE \
+        -u CHANGE_CLASSIFIER_FORCE \
+        -u CHANGE_CLASSIFIER_DIFF_FILE \
+        -u QUALITY_GATE_FAST \
+        -u QUALITY_GATE_ERRORS_ONLY \
+        -u QUALITY_GATE_HIDE_PASS \
+        -u FORGE_TEST_VERBOSITY \
+        npm run process:selftest
 fi
 
 if ! is_truthy "${QUALITY_GATE_HIDE_PASS:-0}"; then

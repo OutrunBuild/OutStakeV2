@@ -4,8 +4,11 @@
 - Change classification:
 - Parent Task Brief path:
 - Parent Agent Report path:
-- Trigger review note:
-- Trigger findings:
+- Trigger artifact:
+- Trigger stale findings:
+- Artifact type:
+- Spec review required:
+- Spec artifact paths:
 - Files in scope:
 - Out of scope:
 - Known facts:

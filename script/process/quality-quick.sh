@@ -64,6 +64,12 @@ if [ "$has_process_surface" -eq 1 ]; then
     echo "[quality-quick] default roles: $(join_by_semicolon "${process_default_roles[@]}")"
 fi
 
+if [ "$has_spec_surface" -eq 1 ]; then
+    echo "[quality-quick] default roles: $(join_by_semicolon "${spec_default_roles[@]}")"
+    echo "[quality-quick] bash ./script/process/check-spec-reviewer-evidence.sh"
+    bash ./script/process/check-spec-reviewer-evidence.sh
+fi
+
 if [ "${#shell_files[@]}" -gt 0 ]; then
     echo "[quality-quick] bash -n (changed shell scripts)"
     bash -n "${shell_files[@]}"
@@ -89,7 +95,9 @@ if [ "$should_run_docs_check" -eq 1 ]; then
 fi
 
 if [ "$should_run_process_selftest" -eq 1 ]; then
-    if [ "$has_process_surface" -eq 0 ] && [ "$has_package_metadata" -eq 0 ]; then
+    if [ "$has_spec_surface" -eq 1 ] && [ "$has_process_surface" -eq 0 ] && [ "$has_package_metadata" -eq 0 ]; then
+        echo "[quality-quick] default roles: $(join_by_semicolon "${spec_default_roles[@]}")"
+    elif [ "$has_process_surface" -eq 0 ] && [ "$has_package_metadata" -eq 0 ]; then
         echo "[quality-quick] default roles: $(join_by_semicolon "${process_default_roles[@]}")"
     fi
     echo "[quality-quick] npm run process:selftest"

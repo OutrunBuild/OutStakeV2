@@ -5,14 +5,15 @@
 前置说明：
 
 - 当前仓库 reality 仍是 Foundry-only，已接通的直接命令以 `forge build`、`forge test`、`forge fmt --check`、`forge coverage --ir-minimum` 为主。
-- 本矩阵中出现的 `npm run docs:check`、`npm run process:selftest`、`npm run quality:quick`、`npm run quality:gate` 以及 `script/process/*`，属于当前已落盘并由本地 gate / CI 消费的 Harness contract surface。
+- 本矩阵中出现的 `npm run docs:check`、`npm run process:selftest`、`npm run quality:quick`、`npm run quality:gate:fast`、`npm run quality:gate` 以及 `script/process/*`，属于当前已落盘并由本地 gate / CI 消费的 Harness contract surface。
 
 ## 快速反馈与 finish gate
 
 - `npm run quality:quick` 只用于本地高频快速反馈，不是 finish gate。
-- `npm run quality:quick` 也不能替代 `npm run quality:gate`。
-- `npm run quality:gate` 是唯一 finish gate。
-- 如果仓库启用了额外流程真源（例如 `docs/process/rule-map.json`），`quality:quick` / `quality:gate` 接通后的证据要求也要一并满足。
+- `npm run quality:quick` 也不能替代 `npm run quality:gate:fast` 或 `npm run quality:gate`。
+- `npm run quality:gate:fast` 是 agent workflow 常用的本地默认收尾 gate。
+- `npm run quality:gate` 是最终严格 finish gate。
+- 如果仓库启用了额外流程真源（例如 `docs/process/rule-map.json`），`quality:quick` / `quality:gate:fast` / `quality:gate` 接通后的证据要求也要一并满足。
 
 ## `src/**/*.sol`、`script/**/*.sol`
 
@@ -64,6 +65,27 @@
 - 命中 `script/process/**`、`docs/process/policy.json`、`package.json`、`package-lock.json` 或 `.codex/runtime/**` 时，执行 `npm run process:selftest`
 - `Task Brief` 与 `Agent Report` 必须落盘，且 `Task Brief` 写明 `Implementation owner`、`Writer dispatch backend`、`Required verifier commands` 与 `Required artifacts`
 
+## `docs/spec/**`、`docs/superpowers/specs/**`、brief 声明 `Artifact type: spec`
+
+本段描述 spec surface 的流程。
+
+默认角色：`process-implementer` → `spec-reviewer` → `verifier`
+
+必须满足：
+
+- `Task Brief` 必须写明 `Artifact type: spec`、`Spec review required` 与 `Spec artifact paths`，但这些字段只是 spec surface 的契约标记，不是独立路由键
+- spec surface 同时覆盖路径命中和 brief 声明的 spec 产物；spec review evidence 是约定 reviewer artifact，`quality:quick` / `quality:gate` 会检查其 freshness 与 scope coverage
+- spec review evidence 必须晚于当前 writer Agent Report
+- writer 再次写入同一 spec scope 后，上一轮 spec review evidence 视为 stale；stale loop 会基于当前 brief 声明的 spec scope 生成 follow-up brief 和 rerun order
+- `spec-reviewer` 只做只读审阅，不承担实现写入
+- `spec-reviewer` 必须先完成并通过，之后才能进入后续动作
+- `review note` 不能把 process-implementer 的普通流程工件当作 spec reviewer evidence
+- 必须执行 `npm run docs:check`
+- 若命中 `script/process/**`、`docs/process/policy.json`、`package.json`、`package-lock.json` 或 `.codex/runtime/**`，必须执行 `npm run process:selftest`
+- 本地默认收尾 gate 口径是 `npm run quality:gate:fast`
+- 最终严格 finish gate 口径是 `npm run quality:gate`
+- `npm run quality:gate:fast` / `npm run quality:gate` 命中特定路径时都会自动补跑 `npm run process:selftest`
+
 ## `package.json`、`package-lock.json`、CI 与工具链入口
 
 默认角色：见 AGENTS.md §5。
@@ -100,6 +122,7 @@
 
 - 这类改动默认不允许把 product-specific 规则偷偷沉淀进 Harness 文档。
 - 如果文档改动同时改变了脚本、CI 或 gate 语义，人类文档、机器真源与脚本必须同批收敛。
+- spec surface 仍属于文档真源收敛的一部分，但其 reviewer artifact 是 `spec-reviewer Agent Report`，不能被普通流程 review note 代替；`docs:check` 负责仓库契约基线，spec freshness / brief 元数据链由 spec evidence check 和 stale loop 收口。
 - 当前工作树若被无关产品改动阻塞，`verifier` 可以把本类流程任务标记为“局部流程验证已收敛，但 repo-wide compile / final gate 延后归因”，不能伪称全仓 gate 已通过。
 - `.codex/workflows/solidity-subagent-workflow.json` 与 `.codex/runtime/subagent-runtime.json` 只作索引，不得在文档中被描述成实际 dispatch helper。
 

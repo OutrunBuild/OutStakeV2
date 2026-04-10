@@ -23,6 +23,7 @@
     "default_roles": [
       "solidity-implementer",
       "process-implementer",
+      "spec-reviewer",
       "logic-reviewer",
       "security-reviewer",
       "gas-reviewer",
@@ -52,6 +53,11 @@
     "process_surface": {
       "default_writer_role": "process-implementer",
       "required_roles": ["verifier"],
+      "optional_roles": []
+    },
+    "spec_surface": {
+      "default_writer_role": "process-implementer",
+      "required_roles": ["spec-reviewer", "verifier"],
       "optional_roles": []
     },
     "shell_surface": {
