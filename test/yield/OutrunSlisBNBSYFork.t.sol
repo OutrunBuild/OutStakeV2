@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity ^0.8.28;
+
+import {Test} from "forge-std/Test.sol";
+
+import {IListaStakeManager} from "../../src/integrations/lista/interfaces/IListaStakeManager.sol";
+import {OutrunSlisBNBSY} from "../../src/yield/adapters/lista/OutrunSlisBNBSY.sol";
+
+contract OutrunSlisBNBSYForkTest is Test {
+    address internal constant OWNER = address(0xA11CE);
+    address internal constant STAKE_MANAGER_PROXY = 0xFD6B9CC40A30C1b57799db95e59C0B73E3aEB4eF;
+    address internal constant EXPECTED_SLIS_BNB = 0xB0b84D294e0C75A6abe60171b70edEb2EFd14A1B;
+
+    OutrunSlisBNBSY internal sy;
+
+    function setUp() external {
+        vm.createSelectFork(vm.rpcUrl("bsc_mainnet"));
+
+        sy = new OutrunSlisBNBSY(OWNER, EXPECTED_SLIS_BNB, STAKE_MANAGER_PROXY);
+    }
+
+    function testFork_ExchangeRateMatchesOnchainQuote() external {
+        uint256 expected = IListaStakeManager(STAKE_MANAGER_PROXY).convertSnBnbToBnb(1 ether);
+
+        assertEq(sy.exchangeRate(), expected);
+    }
+
+    function testFork_ExchangeRateGTEOne() external {
+        assertGe(sy.exchangeRate(), 1 ether);
+    }
+
+    function testFork_PreviewDepositNativeMatchesConvertQuote() external {
+        uint256 amount = 1 ether;
+        uint256 expected = IListaStakeManager(STAKE_MANAGER_PROXY).convertBnbToSnBnb(amount);
+
+        assertEq(sy.previewDeposit(address(0), amount), expected);
+    }
+
+    function testFork_GetTotalPooledBnbIsNonZero() external {
+        assertGt(IListaStakeManager(STAKE_MANAGER_PROXY).getTotalPooledBnb(), 0);
+    }
+}

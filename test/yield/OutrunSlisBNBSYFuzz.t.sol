@@ -3,7 +3,6 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 
-import {IStandardizedYield} from "../../src/yield/interfaces/IStandardizedYield.sol";
 import {OutrunSlisBNBSY} from "../../src/yield/adapters/lista/OutrunSlisBNBSY.sol";
 import {MockListaSlisBNB, MockListaStakeManager, MockListaStakeManagerZeroDeposit} from "./mocks/ListaSYMocks.sol";
 
