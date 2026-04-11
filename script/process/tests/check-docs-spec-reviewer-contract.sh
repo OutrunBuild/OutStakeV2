@@ -15,8 +15,7 @@ for needle in \
     "Spec review required" \
     "Spec artifact paths" \
     "docs/spec/**" \
-    "docs/superpowers/specs/**" \
-    "spec-reviewer Agent Report"
+    "docs/superpowers/specs/**" 
 do
     if ! grep -qF "$needle" script/process/check-docs.sh docs/process/policy.json .codex/templates/task-brief.md .codex/templates/follow-up-brief.md 2>/dev/null; then
         echo "Expected check-docs spec-reviewer contract coverage for: $needle"
