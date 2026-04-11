@@ -38,7 +38,7 @@
 
 - 根据触及的路径面和分类器选择的 `light` / `full` 验证者配置选择命令
 - 在运行任何命令之前枚举所需的命令集；不要将验证坍缩为单个 gate 命令
-- 确保在任何写入者面上，写入者完成之后、最终验证者裁定之前，已执行 `npm run codex:review`（或等效的 `codex review --uncommitted`）
+- 确保在任何写入者面上，写入者完成之后、最终验证者裁定之前，已执行 `npm run codex:review`（或等效的 `codex review --uncommitted`）；agent 工作流中必须使用 `npm run codex:review -- --files path1,path2,...` 限定范围（避免并行会话交叉审查），不带 `--files` 仅限人工手动全量审查
 - 运行每条必需命令，或解释为何某条命令不适用
 - 当分类器将变更保持在 `prod-semantic` 以下时，`verifier(light)` 可跳过重度覆盖/静态分析/Gas 命令；`verifier(full)` 必须运行完整的 Solidity gate
 - 在接受引用的 `Task Brief` 和 `Agent Report` 作为证据之前，验证两者均存在且满足当前策略契约

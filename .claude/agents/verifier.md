@@ -49,7 +49,7 @@ tools:
 
 - 根据触碰路径面和分类器选择的 `light` / `full` 验证器配置选择命令
 - 在运行任何内容前列举必要命令集；不得将验证折叠为单个 gate 命令
-- 确保在任何 writer 面的 writer 完成后和最终验证裁决前，已执行 `npm run codex:review`（或等效的 `codex review --uncommitted`）
+- 确保在任何 writer 面的 writer 完成后和最终验证裁决前，已执行 `npm run codex:review`（或等效的 `codex review --uncommitted`）；agent 工作流中必须使用 `npm run codex:review -- --files path1,path2,...` 限定范围（避免并行会话交叉审查），不带 `--files` 仅限人工手动全量审查
 - 运行每个必要命令或解释为何命令不适用
 - `verifier(light)` 可在分类器将变更保持在 `prod-semantic` 以下时跳过重覆盖/静态分析/Gas 命令；`verifier(full)` 必须运行完整 Solidity gate
 - 在接受为证据前，验证引用的 `Task Brief` 和 `Agent Report` 都存在且满足当前策略契约
