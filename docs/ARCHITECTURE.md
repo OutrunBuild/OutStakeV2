@@ -277,11 +277,15 @@ Harvest:
 
 当前文档系统按四层组织：
 
-1. Harness / Process 层（流程契约与质量门禁）
+1. Harness Contract 层
+   - `AGENTS.md`
    - `CLAUDE.md`
-   - `docs/process/*`
-   - `script/process/*`
-   - `.claude/agents/*.md`
+   - `.harness/policy.json`
+   - `script/harness/gate.sh`
+   - `README.md`
+   - `.github/workflows/test.yml`
+   - `.githooks/*`
+   - `.claude/settings.json`
 2. Product Truth 层（当前规则真源）
    - `docs/spec/protocol.md`（系统目标与模块边界）
    - `docs/spec/router-and-user-flows.md`（完整路由路径分析）
@@ -305,9 +309,6 @@ Harvest:
 4. Topic Guides 层（设计稿与计划工件，不是当前规则真源）
    - `docs/superpowers/specs/*`
    - `docs/superpowers/plans/*`
-   - `docs/task-briefs/*`
-   - `docs/agent-reports/*`
-   - `docs/reviews/*`
 
 冲突处理顺序：
 

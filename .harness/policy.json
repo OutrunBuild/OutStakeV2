@@ -1,0 +1,333 @@
+{
+  "version": 1,
+  "repo": "OutStakeV2",
+  "retained_harness_files": [
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".harness/policy.json",
+    "script/harness/gate.sh",
+    "package.json",
+    ".gitignore",
+    ".githooks/pre-commit",
+    ".githooks/pre-push",
+    ".github/workflows/test.yml",
+    "README.md",
+    ".claude/settings.json"
+  ],
+  "deleted_legacy_roots": [
+    "docs/process",
+    "docs/task-briefs",
+    "docs/agent-reports",
+    "docs/reviews",
+    ".github/pull_request_template.md",
+    ".claude/agents",
+    ".claude/rules",
+    ".codex",
+    "script/process"
+  ],
+  "surfaces": {
+    "solidity_prod": [
+      "^src/.*\\.sol$",
+      "^script/.*\\.sol$"
+    ],
+    "solidity_test": [
+      "^test/.*\\.sol$"
+    ],
+    "harness_control": [
+      "^AGENTS\\.md$",
+      "^README\\.md$",
+      "^CLAUDE\\.md$",
+      "^package\\.json$",
+      "^\\.gitignore$",
+      "^\\.github/workflows/.*$",
+      "^\\.github/pull_request_template\\.md$",
+      "^\\.githooks/.*$",
+      "^script/harness/.*$",
+      "^script/process/.*$",
+      "^\\.harness/.*$",
+      "^\\.claude/settings\\.json$",
+      "^\\.claude/agents/.*$",
+      "^\\.claude/rules/.*$",
+      "^\\.codex/.*$",
+      "^docs/ARCHITECTURE\\.md$",
+      "^docs/TRACEABILITY\\.md$",
+      "^docs/VERIFICATION\\.md$",
+      "^docs/GLOSSARY\\.md$",
+      "^docs/SECURITY_AND_APPROVALS\\.md$",
+      "^docs/spec/implementation-map\\.md$",
+      "^docs/process/.*$",
+      "^docs/task-briefs/.*$",
+      "^docs/agent-reports/.*$",
+      "^docs/reviews/.*$"
+    ]
+  },
+  "write_roles": {
+    "solidity_prod": "solidity-implementer",
+    "solidity_test": "solidity-implementer",
+    "harness_control": "process-implementer"
+  },
+  "risk_rules": {
+    "high_risk_paths": [
+      "^src/assets/.*\\.sol$",
+      "^src/position/.*\\.sol$",
+      "^src/yield/.*\\.sol$",
+      "^src/router/.*\\.sol$",
+      "^src/integrations/.*\\.sol$",
+      "^src/libraries/.*\\.sol$",
+      "^script/.*\\.sol$"
+    ],
+    "high_risk_tokens": [
+      "\\bdelegatecall\\b",
+      "\\bselfdestruct\\b",
+      "\\bassembly\\b",
+      "\\bcallcode\\b"
+    ],
+    "slither_filter_paths": "lib|test|script|node_modules",
+    "slither_exclude_detectors": "naming-convention,too-many-digits,unindexed-event-address,immutable-states,unimplemented-functions"
+  },
+  "review_matrix": {
+    "non-semantic": [],
+    "test-semantic": [
+      "logic-reviewer"
+    ],
+    "prod-semantic": [
+      "logic-reviewer",
+      "security-reviewer",
+      "gas-reviewer"
+    ],
+    "high-risk": [
+      "logic-reviewer",
+      "security-reviewer",
+      "gas-reviewer"
+    ]
+  },
+  "verification_profiles": {
+    "fast": {
+      "required_commands": [
+        "fmt_changed_solidity",
+        "lint_changed_solidity",
+        "forge_build",
+        "targeted_tests",
+        "bash_syntax_changed_shell",
+        "node_syntax_changed_js",
+        "npm_ci_when_package_changes"
+      ]
+    },
+    "full": {
+      "required_commands": [
+        "fmt_changed_solidity",
+        "lint_changed_solidity",
+        "forge_build",
+        "forge_test_full",
+        "coverage_when_required",
+        "slither_when_required",
+        "bash_syntax_changed_shell",
+        "node_syntax_changed_js",
+        "npm_ci_when_package_changes"
+      ]
+    },
+    "ci": {
+      "required_commands": [
+        "fmt_changed_solidity",
+        "lint_changed_solidity",
+        "forge_build",
+        "forge_test_full",
+        "coverage_when_required",
+        "slither_when_required",
+        "bash_syntax_changed_shell",
+        "node_syntax_changed_js",
+        "npm_ci_when_package_changes"
+      ]
+    }
+  },
+  "hard_blocks": [
+    {
+      "id": "mixed-harness-control-and-solidity",
+      "message": "harness_control changes must not be mixed with Solidity surfaces",
+      "mixed_surface_sets": [
+        [
+          "harness_control",
+          "solidity_prod"
+        ],
+        [
+          "harness_control",
+          "solidity_test"
+        ]
+      ]
+    },
+    {
+      "id": "legacy-harness-roots-present",
+      "message": "legacy harness roots or terminology are still present",
+      "legacy_roots": true
+    },
+    {
+      "id": "legacy-harness-terminology",
+      "message": "legacy harness terminology must not appear in retained harness files",
+      "paths": [
+        "^AGENTS\\.md$",
+        "^README\\.md$",
+        "^CLAUDE\\.md$",
+        "^package\\.json$",
+        "^\\.github/workflows/.*$",
+        "^\\.githooks/.*$",
+        "^script/harness/.*$",
+        "^\\.claude/settings\\.json$"
+      ],
+      "tokens": [
+        "quality:gate",
+        "quality:quick",
+        "script/process/",
+        "docs/process",
+        "QUALITY_GATE_",
+        "task-brief",
+        "agent-report",
+        "review note"
+      ]
+    }
+  ],
+  "soft_blocks": [],
+  "testing_gaps": {},
+  "run_record": {
+    "schema": "schemas/run-record.schema.json",
+    "default_output_dir": ".harness/.runs",
+    "file_name_template": "{timestamp}-{profile}.json",
+    "emit_on_noop": false
+  },
+  "test_mapping": {
+    "assets": {
+      "tests": [
+        "test/assets/OutrunOFT.t.sol",
+        "test/assets/OutrunUniversalAssets.t.sol"
+      ],
+      "rules": [
+        {
+          "id": "assets-core",
+          "paths": [
+            "^src/assets/.*\\.sol$"
+          ],
+          "change_tests": [
+            "test/assets/OutrunOFT.t.sol",
+            "test/assets/OutrunUniversalAssets.t.sol"
+          ],
+          "evidence_tests": [
+            "test/assets/OutrunOFT.t.sol",
+            "test/assets/OutrunUniversalAssets.t.sol"
+          ]
+        }
+      ]
+    },
+    "position": {
+      "tests": [
+        "test/position/OutrunStakingPosition.t.sol",
+        "test/position/OutrunStakingPositionFuzz.t.sol",
+        "test/position/OutrunStakingPositionInvariant.t.sol"
+      ],
+      "rules": [
+        {
+          "id": "position-core",
+          "paths": [
+            "^src/position/.*\\.sol$"
+          ],
+          "change_tests": [
+            "test/position/OutrunStakingPosition.t.sol",
+            "test/position/OutrunStakingPositionFuzz.t.sol",
+            "test/position/OutrunStakingPositionInvariant.t.sol"
+          ],
+          "evidence_tests": [
+            "test/position/OutrunStakingPosition.t.sol",
+            "test/position/OutrunStakingPositionFuzz.t.sol",
+            "test/position/OutrunStakingPositionInvariant.t.sol"
+          ]
+        }
+      ]
+    },
+    "router": {
+      "tests": [
+        "test/router/OutrunRouter.t.sol",
+        "test/router/OutrunRouterFuzz.t.sol",
+        "test/integration/RouterPositionSy.t.sol"
+      ],
+      "rules": [
+        {
+          "id": "router-core",
+          "paths": [
+            "^src/router/.*\\.sol$"
+          ],
+          "change_tests": [
+            "test/router/OutrunRouter.t.sol",
+            "test/router/OutrunRouterFuzz.t.sol",
+            "test/integration/RouterPositionSy.t.sol"
+          ],
+          "evidence_tests": [
+            "test/router/OutrunRouter.t.sol",
+            "test/router/OutrunRouterFuzz.t.sol",
+            "test/integration/RouterPositionSy.t.sol"
+          ]
+        }
+      ]
+    },
+    "yield": {
+      "tests": [
+        "test/yield/OutrunAaveV3SY.t.sol",
+        "test/yield/OutrunAsBNBSY.t.sol",
+        "test/yield/OutrunL2StakedTokenSY.t.sol",
+        "test/yield/OutrunStakedUSDeSY.t.sol",
+        "test/yield/SYAdapterFuzz.t.sol",
+        "test/yield/SYBaseDeposit.t.sol",
+        "test/yield/SYBaseFuzz.t.sol"
+      ],
+      "rules": [
+        {
+          "id": "yield-core",
+          "paths": [
+            "^src/yield/.*\\.sol$",
+            "^src/integrations/.*\\.sol$"
+          ],
+          "change_tests": [
+            "test/yield/OutrunAaveV3SY.t.sol",
+            "test/yield/OutrunAsBNBSY.t.sol",
+            "test/yield/OutrunL2StakedTokenSY.t.sol",
+            "test/yield/OutrunStakedUSDeSY.t.sol",
+            "test/yield/SYAdapterFuzz.t.sol",
+            "test/yield/SYBaseDeposit.t.sol",
+            "test/yield/SYBaseFuzz.t.sol"
+          ],
+          "evidence_tests": [
+            "test/yield/OutrunAaveV3SY.t.sol",
+            "test/yield/OutrunAsBNBSY.t.sol",
+            "test/yield/OutrunL2StakedTokenSY.t.sol",
+            "test/yield/OutrunStakedUSDeSY.t.sol",
+            "test/yield/SYAdapterFuzz.t.sol",
+            "test/yield/SYBaseDeposit.t.sol",
+            "test/yield/SYBaseFuzz.t.sol"
+          ]
+        }
+      ]
+    },
+    "security": {
+      "tests": [
+        "test/security/AdversarialTests.t.sol"
+      ],
+      "rules": [
+        {
+          "id": "security-high-risk",
+          "paths": [
+            "^src/assets/.*\\.sol$",
+            "^src/position/.*\\.sol$",
+            "^src/yield/.*\\.sol$",
+            "^src/router/.*\\.sol$",
+            "^src/integrations/.*\\.sol$",
+            "^src/libraries/.*\\.sol$",
+            "^script/.*\\.sol$"
+          ],
+          "change_tests": [
+            "test/security/AdversarialTests.t.sol"
+          ],
+          "evidence_tests": [
+            "test/security/AdversarialTests.t.sol"
+          ]
+        }
+      ]
+    }
+  }
+}

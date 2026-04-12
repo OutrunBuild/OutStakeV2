@@ -12,7 +12,7 @@ env:
 
 jobs:
   check:
-    name: Quality gate
+    name: Gate CI
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -52,6 +52,10 @@ jobs:
         run: |
           set -euo pipefail
           output="${RUNNER_TEMP}/changed-files.txt"
+          diff_output="${RUNNER_TEMP}/changed-files.diff"
+          zero_sha="0000000000000000000000000000000000000000"
+          empty_tree="4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             base="${{ github.event.pull_request.base.sha }}"
             head="${{ github.sha }}"
@@ -60,16 +64,20 @@ jobs:
             head="${{ github.sha }}"
           fi
 
-          if [ -z "${base}" ] || [ "${base}" = "0000000000000000000000000000000000000000" ]; then
-            git ls-files > "${output}"
+          if [ -z "$base" ] || [ "$base" = "$zero_sha" ]; then
+            git ls-files > "$output"
+            git diff --unified=0 "$empty_tree" "$head" > "$diff_output"
           else
-            git diff --name-only "${base}" "${head}" > "${output}"
+            git diff --name-only "$base" "$head" > "$output"
+            git diff --unified=0 "$base" "$head" > "$diff_output"
           fi
 
-          echo "file_list=${output}" >> "$GITHUB_OUTPUT"
+          echo "file_list=$output" >> "$GITHUB_OUTPUT"
+          echo "diff_file=$diff_output" >> "$GITHUB_OUTPUT"
 
-      - name: Run local finish gate in CI mode
+      - name: Run gate:ci
         env:
-          QUALITY_GATE_MODE: ci
-          QUALITY_GATE_FILE_LIST: ${{ steps.changed-files.outputs.file_list }}
-        run: npm run quality:gate
+          HARNESS_CHANGED_FILES: ${{ steps.changed-files.outputs.file_list }}
+          RUN_RECORD_PATH: ${{ runner.temp }}/outstakev2-gate-ci.json
+          CHANGE_CLASSIFIER_DIFF_FILE: ${{ steps.changed-files.outputs.diff_file }}
+        run: npm run gate:ci

@@ -4,6 +4,4 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
-echo "Running local quality gate for staged changes..."
-# Forward reference: `quality:gate` is introduced by later process tasks; this hook only defines the entrypoint now.
-npm run quality:gate
+npm run gate:fast

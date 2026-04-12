@@ -1,28 +1,29 @@
 # OutStakeV2
 
-This repository is maintained as a Foundry-only workspace.
+Foundry-only workspace.
 
-Use `forge build` to compile and `forge test -vvv` to run the Solidity suite.
+Project commands:
 
-Repository layout follows the domain-oriented tree below:
+- `npm run lint`
+- `npm run build`
+- `npm run test`
+- `npm run gas:report`
+
+Harness commands:
+
+- `npm run gate:fast`
+- `npm run gate`
+- `npm run gate:ci`
+
+Harness machine truth is `.harness/policy.json`. Enforcement runs through `script/harness/gate.sh`. Local hooks in `.githooks/` call the same gate entrypoints when enabled.
+
+Repository layout:
 
 - `src/assets/{base,interfaces,omnichain}`
 - `src/position/{interfaces}` plus root-level `OutrunStakingPosition.sol`
 - `src/yield/{interfaces,adapters/*}` plus root-level `SYBase.sol`
 - `src/router/{interfaces}` plus root-level `OutrunRouter.sol`
 - `src/integrations/{aave,etherfi,lido,lista,sky,oracles,deployment}`
-- `src/libraries` including shared helpers and `IWETH.sol`
+- `src/libraries`
 - `test/{assets,position,router,yield,support}`
-- `script/{deploy,lib,ops,process}`
-
-The legacy `src/common/` directory has been removed.
-
-The process layer is also wired locally:
-
-- `npm run docs:check` validates the documented control-plane and execution-plane surfaces
-- `npm run process:selftest` runs process-layer selftests for policy, review-note, and gate wiring
-- `npm run quality:quick` runs scoped local checks for the changed surfaces
-- `npm run quality:gate` remains the finish gate, but in-progress unrelated product changes must still be reported separately rather than masked as success
-- `npm run codex:review` runs the manual / high-risk Codex review step; local `quality:gate` / `pre-commit` auto-runs it for `prod-semantic` / `high-risk` production Solidity changes, while `pre-push` / CI only validate the evidence chain
-
-Run `npm install && npm run hooks:install` once to configure the local `.githooks/pre-commit` and `.githooks/pre-push` entrypoints.
+- `script/{deploy,lib,ops}`

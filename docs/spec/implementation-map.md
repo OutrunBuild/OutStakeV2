@@ -30,4 +30,4 @@
 
 当前测试证据主要集中在 `test/assets`、`test/position`、`test/router`、`test/yield`。从本地文件看，`OutrunUniversalAssets`、`OutrunStakingPosition`、`OutrunRouter`、`SYBase`、Aave 适配器、部分 Lido/EtherFi/L2 wrappable 路径已有直接测试；Sky、Ethena 适配器当前更多停留在源码实现面，未在本仓库内看到同等粒度的专门测试文件。
 
-当前 process 证据来自 `README.md` 与 `script/process/**`。仓库已接通 `forge build`、`forge test -vvv`、`npm run docs:check`、`npm run process:selftest`、`npm run quality:quick`、`npm run quality:gate`、`npm run codex:review`。按 [`script/process/check-docs.sh`](../../script/process/check-docs.sh) 的当前实现，`docs:check` 重点验证 process/control-plane 必需文件与目录，不把 `docs/spec/**` 列为该脚本的 required inputs；因此 `docs/spec/**` 的真实性当前主要依赖源码与测试可回溯性，而不是该脚本单独赋予的通过状态。
+当前 Harness 证据来自 `README.md`、`.harness/policy.json` 与 `script/harness/gate.sh`。仓库当前统一入口为 `npm run gate:fast`、`npm run gate`、`npm run gate:ci`；它们按 policy 选择 changed files、writer/reviewer 角色、verification profile 与 run-record 输出，不再依赖任何已删除的旧 Harness 工件或额外流程胶水。`docs/spec/**` 的真实性仍主要依赖源码与测试可回溯性，而不是单独文档脚本赋予的通过状态。
