@@ -8,11 +8,11 @@
     "version",
     "repo",
     "retained_harness_files",
-    "deleted_legacy_roots",
     "surfaces",
     "write_roles",
     "risk_rules",
     "review_matrix",
+    "review_triggers",
     "verification_profiles",
     "hard_blocks",
     "soft_blocks",
@@ -30,14 +30,6 @@
       "minLength": 1
     },
     "retained_harness_files": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      },
-      "uniqueItems": true
-    },
-    "deleted_legacy_roots": {
       "type": "array",
       "items": {
         "type": "string",
@@ -109,6 +101,13 @@
         }
       },
       "additionalProperties": false
+    },
+    "review_triggers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/reviewTrigger"
+      },
+      "uniqueItems": true
     },
     "verification_profiles": {
       "type": "object",
@@ -296,6 +295,30 @@
         "$ref": "#/$defs/reviewRoleName"
       },
       "uniqueItems": true
+    },
+    "reviewTrigger": {
+      "type": "object",
+      "required": [
+        "id",
+        "reviewer_role",
+        "paths"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewer_role": {
+          "$ref": "#/$defs/reviewRoleName"
+        },
+        "paths": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "surfaces": {
+          "$ref": "#/$defs/surfaceNameArray"
+        }
+      },
+      "additionalProperties": false
     },
     "commandId": {
       "type": "string",

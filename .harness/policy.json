@@ -14,17 +14,6 @@
     "README.md",
     ".claude/settings.json"
   ],
-  "deleted_legacy_roots": [
-    "docs/process",
-    "docs/task-briefs",
-    "docs/agent-reports",
-    "docs/reviews",
-    ".github/pull_request_template.md",
-    ".claude/agents",
-    ".claude/rules",
-    ".codex",
-    "script/process"
-  ],
   "surfaces": {
     "solidity_prod": [
       "^src/.*\\.sol$",
@@ -43,22 +32,15 @@
       "^\\.github/pull_request_template\\.md$",
       "^\\.githooks/.*$",
       "^script/harness/.*$",
-      "^script/process/.*$",
       "^\\.harness/.*$",
       "^\\.claude/settings\\.json$",
-      "^\\.claude/agents/.*$",
-      "^\\.claude/rules/.*$",
-      "^\\.codex/.*$",
       "^docs/ARCHITECTURE\\.md$",
       "^docs/TRACEABILITY\\.md$",
       "^docs/VERIFICATION\\.md$",
       "^docs/GLOSSARY\\.md$",
       "^docs/SECURITY_AND_APPROVALS\\.md$",
-      "^docs/spec/implementation-map\\.md$",
-      "^docs/process/.*$",
-      "^docs/task-briefs/.*$",
-      "^docs/agent-reports/.*$",
-      "^docs/reviews/.*$"
+      "(^|.*/)(spec|specs)/.*\\.(md|mdx)$",
+      "^docs/spec/implementation-map\\.md$"
     ]
   },
   "write_roles": {
@@ -101,6 +83,18 @@
       "gas-reviewer"
     ]
   },
+  "review_triggers": [
+    {
+      "id": "spec-doc-review",
+      "reviewer_role": "spec-reviewer",
+      "paths": [
+        "(^|.*/)(spec|specs)/.*\\.(md|mdx)$"
+      ],
+      "surfaces": [
+        "harness_control"
+      ]
+    }
+  ],
   "verification_profiles": {
     "fast": {
       "required_commands": [
@@ -153,35 +147,6 @@
           "harness_control",
           "solidity_test"
         ]
-      ]
-    },
-    {
-      "id": "legacy-harness-roots-present",
-      "message": "legacy harness roots or terminology are still present",
-      "legacy_roots": true
-    },
-    {
-      "id": "legacy-harness-terminology",
-      "message": "legacy harness terminology must not appear in retained harness files",
-      "paths": [
-        "^AGENTS\\.md$",
-        "^README\\.md$",
-        "^CLAUDE\\.md$",
-        "^package\\.json$",
-        "^\\.github/workflows/.*$",
-        "^\\.githooks/.*$",
-        "^script/harness/.*$",
-        "^\\.claude/settings\\.json$"
-      ],
-      "tokens": [
-        "quality:gate",
-        "quality:quick",
-        "script/process/",
-        "docs/process",
-        "QUALITY_GATE_",
-        "task-brief",
-        "agent-report",
-        "review note"
       ]
     }
   ],
