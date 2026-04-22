@@ -31,6 +31,9 @@
       "^docs/VERIFICATION\\.md$",
       "^docs/GLOSSARY\\.md$",
       "^docs/SECURITY_AND_APPROVALS\\.md$",
+      "^docs/deployment\\.md$",
+      "^docs/implementation-map\\.md$",
+      "^docs/testing-and-evidence\\.md$",
       "(^|.*/)(spec|specs)/.*\\.(md|mdx)$",
       "^solhint.*\\.config\\.js$",
       "^foundry\\.toml$",
@@ -94,6 +97,68 @@
   "security_test_writer_trigger": {
     "risk_tiers": ["high-risk"],
     "reviewer_finding_severity_to_activate": "critical"
+  },
+  "spec_readiness_gate": {
+    "trigger_risk_tiers": ["prod-semantic", "high-risk"],
+    "doc_exclusions": ["^docs/superpowers/"],
+    "gate_action": "block",
+    "required_reviewer": "spec-reviewer",
+    "cross_cutting_trigger_threshold": 2,
+    "cross_cutting_docs": [
+      "docs/ARCHITECTURE.md",
+      "docs/spec/access-control.md",
+      "docs/spec/common-foundations.md",
+      "docs/spec/protocol.md",
+      "docs/GLOSSARY.md"
+    ],
+    "doc_mapping": {
+      "assets": {
+        "rules": [
+          {
+            "id": "assets-core",
+            "check_docs": [
+              "docs/spec/common-foundations.md",
+              "docs/spec/protocol.md"
+            ]
+          }
+        ]
+      },
+      "position": {
+        "rules": [
+          {
+            "id": "position-core",
+            "check_docs": [
+              "docs/spec/position/state-machines.md",
+              "docs/spec/position/accounting.md",
+              "docs/spec/router/router-and-user-flows.md"
+            ]
+          }
+        ]
+      },
+      "router": {
+        "rules": [
+          {
+            "id": "router-core",
+            "check_docs": [
+              "docs/spec/router/router-and-user-flows.md",
+              "docs/spec/position/state-machines.md"
+            ]
+          }
+        ]
+      },
+      "yield": {
+        "rules": [
+          {
+            "id": "yield-core",
+            "check_docs": [
+              "docs/spec/yield/yield-adapters.md",
+              "docs/spec/yield/oracles-and-integrations.md",
+              "docs/spec/router/router-and-user-flows.md"
+            ]
+          }
+        ]
+      }
+    }
   },
   "remediation_policy": {
     "max_cycles": 5,
