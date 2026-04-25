@@ -10,7 +10,7 @@
 
 | 目录 | 当前用途 | 代表文件 |
 | --- | --- | --- |
-| `test/assets/` | 资产层测试，主要覆盖 `uAsset` 的 mint cap、repay 与部分 OFT 安全边界 | `test/assets/OutrunUniversalAssets.t.sol` |
+| `test/assets/` | 资产层测试，主要覆盖 `uAsset` 的 mint cap、repay 与部分 OFT 安全边界 | `test/assets/OutrunUniversalAssets.t.sol`、`test/assets/OutrunOFTRateLimit.t.sol` |
 | `test/position/` | 仓位层测试，覆盖 stake、draw、redeem、keep redeem、wrap 池、harvest、权限与大数账务 | `test/position/OutrunStakingPosition.t.sol` |
 | `test/router/` | 路由层测试，覆盖 caller-funded pull 模式、native/erc20 输入、wrap redeem、genesis mock 路径与最小铸造约束 | `test/router/OutrunRouter.t.sol` |
 | `test/yield/` | 收益层测试，覆盖 `SYBase` 通用约束与若干 adapter 的 deposit / redeem / exchangeRate 行为 | `test/yield/SYBaseDeposit.t.sol`、`test/yield/OutrunAaveV3SY.t.sol`、`test/yield/OutrunWeETHSY.t.sol`、`test/yield/OutrunWstETHSY.t.sol`、`test/yield/OutrunL2WrappableWstETHSY.t.sol` |
@@ -20,7 +20,7 @@
 
 以下行为目前有明确的本地测试证据：
 
-- `OutrunUniversalAssets` 的 minter cap、生效中的剩余额度、`revokeMinter`、`repay(account, amount)` 债务回收，以及 OFT 发送报价/数量换算的安全边界。
+- `OutrunUniversalAssets` 的 minter cap、生效中的剩余额度、`revokeMinter`、`repay(account, amount)` 债务回收，以及 OFT 发送报价/数量换算、shared-decimal envelope 与 rate-limit quote 上限的安全边界。
 - `OutrunStakingPosition` 的 position 创建、owner/receiver 分离、`drawUAsset` 只铸造升值部分、按比例赎回 debt、keeper redeem 分账、wrap 池按 principal 记账、wrap yield harvest、权限控制与大数路径。
 - `OutrunRouter` 的 caller-funded pull 模式、native 输入约束、直接 mint/redeem `SY`、wrap stake / wrap redeem、以及 `genesisBySY` 走锁仓仓位而非 wrap 池。
 - `SYBase` 的 native 与 ERC20 输入约束、redeem 外层成功且回调重入被阻断的行为。
@@ -46,7 +46,7 @@
 
 - `src/**` 是实现真源。任何状态变量、权限边界、资金流和外部调用关系，最终都以源码为准。
 - `test/**` 是行为证据层。它说明哪些实现被直接验证、哪些只验证了局部安全边界。
-- `docs/spec/*.md` 是面向阅读者的正式说明层，原则上只总结 `src/**` 与 `test/**` 已经成立的内容；若某条目被显式标注为“已批准但尚未补齐的修正要求”，它只能作为偏差/补救说明出现，不能被写成当前已实现事实。
+- `docs/spec/*.md` 是面向阅读者的正式说明层，原则上只总结 `src/**` 与 `test/**` 已经成立的内容。
 - `docs/superpowers/specs/**` 与 `docs/superpowers/plans/**` 是本地设计与计划工件，不是当前实现规格真源。正式 spec 可以参考其中的话题边界，但不能把其中未落地内容升级为“当前规则”。
 
 换句话说，若 `docs/spec/*.md` 与 `src/**` 冲突，应以 `src/**` 为准；若文档声称某行为已成立但 `test/**` 没有直接证据，则该表述必须退回为“代码存在”或“本地依赖边界”。

@@ -19,7 +19,7 @@
 - `test/support/MockOracleWarnings.t.sol`
 - `test/assets/OutrunUniversalAssets.t.sol`
 
-本文档只描述当前代码已经实现并能从这些本地真源直接观察到的行为；若文中个别条目显式标注为“本次已批准但尚未补齐的修正要求”，其作用仅限于指出当前实现与既有批准范围之间的文档化偏差，不把该修正表述成已经落地的事实。本文档不包含 roadmap、推测中的协议规则，也不把外部系统行为升级为仓库已证事实。
+本文档只描述当前代码已经实现并能从这些本地真源直接观察到的行为，不包含 roadmap、推测中的协议规则，也不把外部系统行为升级为仓库已证事实。
 
 ## Native / ERC20 统一资金语义
 
@@ -126,9 +126,9 @@
 - `_credit()` 在目标侧 mint `_amountLD`；若接收方为零地址，则改记到 `address(0xdead)`。
 - `_toSD()` 会把本地精度数量除以 `decimalConversionRate` 后压到 `uint64` 共享精度；如果超出范围，不截断，直接回退 `AmountSDOverflowed(...)`。
 
-`test/assets/OutrunUniversalAssets.t.sol` 证明了这层资产能力在当前派生实现里的几个结果：
+`test/assets/OutrunUniversalAssets.t.sol` 与 `test/assets/OutrunOFTRateLimit.t.sol` 证明了这层资产能力在当前派生实现里的几个结果：
 
-- 跨链报价路径如果共享精度数量溢出，会按 `AmountSDOverflowed(...)` 回退。
+- `quoteOFT()` / `quoteSend()` 会先检查当前可报价上限；请求金额超过 shared-decimal envelope 或当前 outbound capacity 时按 `CapacityExceeded(...)` 回退，不继续进入 `_toSD()`。
 
 因此，资产层不是单纯”一个 ERC20 包装壳”。在当前实现里，它同时决定了供应如何铸烧、何时可暂停，以及本地数量何时还能被编码进 omnichain 消息。
 
@@ -138,7 +138,7 @@ OutrunOFT 直接继承 LayerZero 官方 `RateLimiter` 抽象合约（`@layerzero
 
 - **实现方式**：outbound 直接继承 LayerZero 官方 `RateLimiter`（使用 `rateLimits` mapping 和 `_amountCanBeSent` 衰减计算）；inbound 在 `OutrunOFT` 内新增独立的 `inboundRateLimits` mapping，复用 LayerZero 的同一套衰减数学。
 - **作用范围**：按方向（inbound / outbound）和按对端端点（peerEid）独立限制。每个 peerEid 的 inbound 与 outbound 各自拥有独立额度，互不影响。
-- **报价语义**：就本次已批准但尚未由当前代码补齐的修正而言，`quoteOFT()` 的标准报价结果必须反映当前 outbound capacity；当某个 peerEid 已配置 outbound rate limit 时，可发送上限不应继续无条件继承默认 `type(uint64).max`，而应返回当前窗口衰减后的真实可用额度。当前代码尚未 override `quoteOFT()`，因此这条在本文中应视为待补齐的修正要求，而不是已落地事实。
+- **报价语义**：`quoteOFT()` 已 override LayerZero 默认实现，`oftLimit.maxAmountLD` 返回当前 shared-decimal envelope 与 outbound capacity 的较小值；当某个 peerEid 已配置 outbound rate limit 时，该上限会反映当前窗口衰减后的真实可用额度。`quoteSend()` 复用同一套上限检查。
 - **滑动窗口模型（LayerZero 官方）**：使用 `amountInFlight` + `lastUpdated` 的单快照线性衰减模型。每个 (direction, peerEid) 组合存储四个 `uint256` 状态变量：`amountInFlight`、`lastUpdated`、`limit`、`window`。可用额度计算如下：
   - `timeSinceLastDeposit = block.timestamp - lastUpdated`
   - 若 `timeSinceLastDeposit >= window`，则 `currentAmountInFlight = 0`，`amountCanBeSent = limit`（窗口已完全过期，额度全额恢复）
@@ -147,7 +147,7 @@ OutrunOFT 直接继承 LayerZero 官方 `RateLimiter` 抽象合约（`@layerzero
   - 若 admin 降低 limit 导致 `currentAmountInFlight > limit`，`amountCanBeSent` 归零（不 brick 通道）
 - **单快照模型的数学特性**：该模型仅维护一个 (amountInFlight, lastUpdated) 快照，而非逐笔记录每笔传输的时间和金额。这意味着当窗口内发生多次传输时，所有历史流量被聚合为一个值统一衰减，窗口内部的中间态消耗量可能与”逐笔精确追踪”存在偏差。这是 LayerZero 官方的设计选择（gas 效率 vs 数学精确度），且在窗口完全过期后偏差归零。
 - **未配置对端的默认行为**：如果某个 peerEid 未被显式配置速率限制参数（`window == 0`），`OutrunOFT` 的 `_checkOutbound` / `_checkInbound` 直接跳过检查，默认不限制（所有转账均可通过），以避免配置遗漏导致跨链通道意外阻断。这与 LayerZero 原生的”未配置 = 阻塞”行为不同。
-- **失败模式**：当请求金额超过当前可用额度时，整笔交易 revert，不执行部分填充。自定义错误为 `CapacityExceeded(isInbound, eid, requested, available)`。
+- **失败模式**：当请求金额超过当前可用额度时，整笔交易 revert，不执行部分填充。自定义错误为 `CapacityExceeded(isInbound, eid, requested, available)`。对 quote 路径而言，超出当前可报价上限会先触发 `CapacityExceeded(false, dstEid, requested, available)`；只有未被该上限检查拦截、且实际进入 OFT shared-decimal 编码时，`_toSD()` 溢出才会触发 `AmountSDOverflowed(...)`。
 - **Admin 配置**：owner 可为每个 peerEid 独立配置 inbound 限额、outbound 限额、以及窗口时长。outbound 的 `setOutboundRateLimit` 委托给 LayerZero 的 `_setRateLimits`，内部会先 checkpoint 现有状态再更新 limit/window。inbound 的 `setInboundRateLimit` 同样先 checkpoint 再更新。两者均保留 `amountInFlight` 和 `lastUpdated` 状态。`remove*` 函数清除全部状态。
 - **实现位置**：速率限制逻辑实现在 `OutrunOFT.sol`（继承 LayerZero `RateLimiter`）；`OutrunUniversalAssets.sol` 不在本地重复实现这套逻辑，但会通过继承直接暴露并执行该行为。
 - **与 pause 的交互**：速率限制检查在 `_burn` / `_mint`（经过 `_update` → `whenNotPaused`）之前执行。当合约处于 paused 状态时，如果请求金额同时超过速率限制额度，`CapacityExceeded` 会先于 pause 错误被触发；如果速率限制额度充足，则 `_update` 中的 `whenNotPaused` 仍然会 revert。换言之，pause 并不阻止速率限制检查的执行，只是速率限制通过后的 mint/burn 操作会被 pause 拦截。
@@ -166,12 +166,12 @@ OutrunOFT 直接继承 LayerZero 官方 `RateLimiter` 抽象合约（`@layerzero
 
 - 本地 token 余额如何在 `_debit` 时 burn、在 `_credit` 时 mint。
 - 零地址接收方会被改写成 `address(0xdead)`。
-- 本地精度到共享精度的转换规则，以及溢出时直接回退。
+- 本地精度到共享精度的转换规则，以及 `_toSD()` 溢出时直接回退。
 - inbound / outbound 速率限制按 `peerEid` 与方向独立维护，并复用 LayerZero `RateLimiter` 的滑动窗口衰减数学。
 - `window == 0` 的未配置对端默认跳过 `_checkOutbound` / `_checkInbound`，表现为 unlimited，而不是阻塞通道。
 - `setOutboundRateLimit`、`setInboundRateLimit` 会先 checkpoint 再更新状态，`remove*` 会清除对应方向的全部速率限制状态。
 - 速率限制检查发生在 `_burn` / `_mint` 之前；因此 paused 时仍会先执行速率限制检查，额度不足优先回退 `CapacityExceeded(...)`，额度充足时再由 `whenNotPaused` 拦截铸烧。
-- 就本次已批准但尚未由当前代码补齐的修正而言，标准 `quoteOFT()` 报价必须反映当前 outbound capacity；在该修正落地前，继承默认无限上限只能视为当前实现偏差，不是本文认可的已满足行为。
+- `quoteOFT()` 的 `maxAmountLD` 会反映当前 outbound capacity 与 shared-decimal envelope 的较小值；`quoteOFT()` / `quoteSend()` 请求超出该上限时先回退 `CapacityExceeded(...)`。
 
 但它没有在这些允许源码里自行证明以下事项：
 

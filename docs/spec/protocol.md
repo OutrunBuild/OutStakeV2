@@ -4,7 +4,7 @@
 
 本文档用于说明 `OutStakeV2` 仓库当前已经落地的协议目标、模块边界、用户可见流程与实现提醒，供阅读源码前建立统一认知。
 
-本文档只依据本仓库的本地真源编写，包括 `README.md`、`foundry.toml`、`src/**`、`test/**`、`script/deploy/**`。未被本地实现或测试直接证明的外部协议行为，不在本文档中作为既成事实陈述，只作为本地依赖或实现假设说明。若文中个别条目显式标注为“本次已批准但尚未补齐的修正要求”，其作用仅限于指出当前实现与既有批准范围之间的文档化偏差，不把该修正表述成已经落地的事实。
+本文档只依据本仓库的本地真源编写，包括 `README.md`、`foundry.toml`、`src/**`、`test/**`、`script/deploy/**`。未被本地实现或测试直接证明的外部协议行为，不在本文档中作为既成事实陈述，只作为本地依赖或实现假设说明。
 
 本文档不包含 roadmap、未来设计、迁移历史，也不将 `docs/superpowers/**` 中的设计稿升级为当前规则。
 
@@ -75,7 +75,7 @@ router 当前覆盖 `mintSYFromToken`、`redeemSyToToken`、`stakeFromToken`、`
 
 测试范围分布在 `test/assets`、`test/position`、`test/router`、`test/yield`、`test/support`。现有测试直接证明了以下现状：
 
-- `uAsset` 的 mint cap、repay 与 OFT 溢出保护。
+- `uAsset` 的 mint cap、repay、OFT shared-decimal envelope 与 rate-limit quote 上限保护。
 - staking position 的建仓、补提债务、到期赎回、keeper 代偿赎回、wrap stake、wrap redeem、收益 harvest。
 - router 的 pull 模式、native/erc20 输入约束、wrap 路径、mock `genesisBySY` 路径和最小 `uAsset` 输出保护。
 - `SYBase` 的 native/erc20 输入守卫与 redeem 重入保护。
