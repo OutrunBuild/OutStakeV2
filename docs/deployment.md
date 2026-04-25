@@ -64,7 +64,7 @@
 1. `_chainsInit()`
 2. `_deployOutrunRouter(7)`
 
-### 当前 `run()` 读取的环境变量
+### 当前 `run()` 默认执行路径会读取的环境变量
 
 - `UETH`
 - `UUSD`
@@ -75,6 +75,7 @@
 - `OUTRUN_DEPLOYER`
 - `OUTRUN_ROUTER`
 - `MEMEVERSE_LAUNCHER`
+- `_chainsInit()` 还会额外读取各链的 endpoint / eid 环境变量；下文会单独展开
 
 ### `_chainsInit()`
 
@@ -128,7 +129,7 @@ Router 本身不在部署时绑定任何 `SY`、`OutrunStakingPosition` 或 `uAs
 其中：
 
 - `_deployUETH/_deployUUSD/_deployUBNB` 会部署 `OutrunUniversalAssets`
-- `OutrunUniversalAssets` 构造参数固定为 `name`、`symbol`、`18`、当前链 endpoint、`owner`、`address(0)`
+- `OutrunUniversalAssets` 当前构造参数固定为 `name`、`symbol`、`18`、当前链 endpoint、`owner`
 - 脚本随后会对远端 `endpointId` 调用 `IOAppCore(...).setPeer(endpointId, peer)`
 - `peer` 取值是当前刚部署出的本链地址转成 `bytes32`
 
@@ -339,10 +340,7 @@ mock 支持相关 env：
 2. `OutrunDeployer` 是确定性部署工厂，Factory 自己由 `_deployOutrunDeployer()` 用 `CREATE2` 部署，其余合约可由它再用 `CREATE3` 部署。
 3. `OutrunUniversalAssets` 是 uAsset 层，position 本身不会在构造函数里自动获得铸造权限，必须由 owner 显式调用 `setMintingCap(position, cap)`。
 4. `OutrunStakingPosition` 是 position / debt / keeper / revenuePool 逻辑层，当前脚本里所有 position 的 `minStake` 都被部署为 `0`。
-5. `SY` 适配器是收益入口层，当前脚本已落地的生产适配器包括：
-   - `OutrunAaveV3SY`
-   - `OutrunWstETHSY`
-   - `OutrunStakedUSDeSY`
+5. `SY` 适配器是收益入口层。按 `YieldDeployScript.run()` 的当前默认行为，只启用 `OutrunAaveV3SY`（`_supportAUSDC()`）；`OutrunWstETHSY` 与 `OutrunStakedUSDeSY` 的支持路径也已写在脚本里，但当前仍处于注释掉、未默认启用的 helper 状态。
 6. `OutrunRouter` 是独立的用户入口层，部署时只依赖 `owner` 与 `memeverseLauncher`，并不在脚本层直接绑定某个具体 `SY` 或 `position`。
 
 按脚本里已经写好的组合关系，当前资产映射是：
@@ -358,5 +356,5 @@ mock 支持相关 env：
 3. `YieldDeployScript` 的多个支持函数在链不匹配时会直接 `return`，不会主动报错；因此脚本在错误网络上可能表现为“成功广播但没有部署任何目标合约”。
 4. `OutrunDeployer.deploy()` 的地址命名空间绑定 `msg.sender`，所以即使原始 salt 不变，只要广播地址变了，预测地址和实际地址也会变化。
 5. `_deployUETH/_deployUUSD/_deployUBNB` 虽然在 `_chainsInit()` 中初始化了 14 条链的 endpoint / eid，但实际写死在 `omnichainIds` 里的 peer 配置目前只覆盖 9 条链，其余链位仍保留为注释状态。
-6. `_deployUETH/_deployUUSD/_deployUBNB` 给 `OutrunUniversalAssets` 传入的 `flashFeeReceiver` 固定是 `address(0)`。
+6. `_deployUETH/_deployUUSD/_deployUBNB` 当前只按最新构造参数部署 `OutrunUniversalAssets`。
 7. `OutstakeScript` 把生产部署辅助和测试辅助部署放在同一个文件中；阅读或执行时需要区分哪些函数只是测试支撑，哪些函数才是生产表面。

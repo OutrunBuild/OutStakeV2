@@ -4,7 +4,7 @@
 
 本文档用于说明 `OutStakeV2` 仓库当前已经落地的协议目标、模块边界、用户可见流程与实现提醒，供阅读源码前建立统一认知。
 
-本文档只依据本仓库的本地真源编写，包括 `README.md`、`foundry.toml`、`src/**`、`test/**`、`script/deploy/**`。未被本地实现或测试直接证明的外部协议行为，不在本文档中作为既成事实陈述，只作为本地依赖或实现假设说明。
+本文档只依据本仓库的本地真源编写，包括 `README.md`、`foundry.toml`、`src/**`、`test/**`、`script/deploy/**`。未被本地实现或测试直接证明的外部协议行为，不在本文档中作为既成事实陈述，只作为本地依赖或实现假设说明。若文中个别条目显式标注为“本次已批准但尚未补齐的修正要求”，其作用仅限于指出当前实现与既有批准范围之间的文档化偏差，不把该修正表述成已经落地的事实。
 
 本文档不包含 roadmap、未来设计、迁移历史，也不将 `docs/superpowers/**` 中的设计稿升级为当前规则。
 
@@ -22,9 +22,9 @@
 
 ### assets
 
-当前资产层以 [`src/assets/base/OutrunUniversalAssets.sol`](../../src/assets/base/OutrunUniversalAssets.sol) 为中心。该合约维护按 minter 维度记录的 `mintingCap` 与 `amountInMinted`，只允许在剩余额度内铸造 `uAsset`，并要求通过 `repay(account, amount)` 由 minter 自身回收对应债务。测试还证明该资产保留 flash mint / flash loan 能力，并允许 owner 设置 flash fee 接收方。
+当前资产层以 [`src/assets/base/OutrunUniversalAssets.sol`](../../src/assets/base/OutrunUniversalAssets.sol) 为中心。该合约维护按 minter 维度记录的 `mintingCap` 与 `amountInMinted`，只允许在剩余额度内铸造 `uAsset`，并要求通过 `repay(account, amount)` 由 minter 自身回收对应债务。
 
-资产层还包含 [`src/assets/omnichain/OutrunOFT.sol`](../../src/assets/omnichain/OutrunOFT.sol) 的 OFT 扩展表面，因此本地实现具备跨链消息接口与本地铸烧逻辑。但跨链消息是否成功送达、对端 peer 配置是否正确、LayerZero 端点如何结算，属于外部系统依赖，不在本文档中作为本地已证事实。
+资产层还包含 [`src/assets/omnichain/OutrunOFT.sol`](../../src/assets/omnichain/OutrunOFT.sol) 的 OFT 扩展表面，因此本地实现具备跨链消息接口、本地铸烧逻辑与按 peerEid/方向生效的速率限制语义。标准 `quoteOFT()` 报价当前会反映 outbound capacity，并同时受 shared-decimal envelope 约束。跨链消息是否成功送达、对端 peer 配置是否正确、LayerZero 端点如何结算，属于外部系统依赖，不在本文档中作为本地已证事实。
 
 ### position
 
@@ -75,9 +75,9 @@ router 当前覆盖 `mintSYFromToken`、`redeemSyToToken`、`stakeFromToken`、`
 
 测试范围分布在 `test/assets`、`test/position`、`test/router`、`test/yield`、`test/support`。现有测试直接证明了以下现状：
 
-- `uAsset` 的 mint cap、repay、flash fee 接收方与 OFT 溢出保护。
+- `uAsset` 的 mint cap、repay 与 OFT 溢出保护。
 - staking position 的建仓、补提债务、到期赎回、keeper 代偿赎回、wrap stake、wrap redeem、收益 harvest。
-- router 的 pull 模式、native/erc20 输入约束、wrap 路径、genesis 路径和最小 `uAsset` 输出保护。
+- router 的 pull 模式、native/erc20 输入约束、wrap 路径、mock `genesisBySY` 路径和最小 `uAsset` 输出保护。
 - `SYBase` 的 native/erc20 输入守卫与 redeem 重入保护。
 - 部分适配器的关键兑换路径与 preview 对齐关系。
 

@@ -19,12 +19,18 @@
 
 - `setMintingCap(address minter, uint256 mintingCap)`
 - `revokeMinter(address minter)`
+- `setOutboundRateLimit(uint32 dstEid, uint256 limit, uint256 window)`
+- `setInboundRateLimit(uint32 srcEid, uint256 limit, uint256 window)`
+- `removeOutboundRateLimit(uint32 dstEid)`
+- `removeInboundRateLimit(uint32 srcEid)`
 
 测试已覆盖：
 
 - 非 owner 调用 owner 入口会因 `OwnableUnauthorizedAccount` 回退
 - owner 调整 cap 后，minter 的可 mint 额度会随之变化
 - owner 撤销 minter 后，该地址不能继续 mint
+- 非 owner 不能设置或移除 OFT inbound / outbound 速率限制
+- owner 移除某个 peerEid 的单向速率限制后，该方向不再按本地 limiter 限速
 
 公共入口方面：
 
@@ -33,6 +39,8 @@
 - `repay(account, amount)`：任何地址都可以发起调用，冲减 `msg.sender` 自己名下的 `amountInMinted`；同时消耗 `account → msg.sender` 的 allowance（amount 数量的 uAsset 从 account 转给 msg.sender 用于 burn）。调用者必须持有足够的 uAsset 来 burn。
 
 这意味着当前 `uAsset` 没有单独的 `minter role` 合约模块，真正的 mint 权限边界是“是否被 owner 配置了 cap”。`test/assets/OutrunUniversalAssets.t.sol` 还证明了旧的单参数 `burn(uint256)` 入口不存在；公共调用者不能绕过 `repay` 路径直接销毁债务。
+
+OFT 速率限制入口来自 `OutrunOFT` 继承面，并通过 `OutrunUniversalAssets` 暴露。它们不改变 `mintingStatusTable` 的生命周期债务记账，只约束指定 peerEid 与方向上的跨链流速。`window == 0` 不能通过 set 入口配置；要清除某方向限速必须使用对应 `remove*RateLimit` 入口。
 
 ## `OutrunStakingPosition` 权限边界
 

@@ -11,13 +11,15 @@
 - `src/assets/base/OutrunERC20Pausable.sol`
 - `src/assets/omnichain/OutrunOFT.sol`
 - `src/libraries/oracle/OutrunExchangeOracleAdapter.sol`
+- `test/assets/OutrunOFT.t.sol`
+- `test/assets/OutrunOFTRateLimit.t.sol`
 - `test/yield/SYBaseDeposit.t.sol`
 - `test/yield/OutrunWeETHSY.t.sol`
 - `test/yield/OutrunL2WrappableWstETHSY.t.sol`
 - `test/support/MockOracleWarnings.t.sol`
 - `test/assets/OutrunUniversalAssets.t.sol`
 
-本文档只描述当前代码已经实现并能从这些本地真源直接观察到的行为，不包含 roadmap、推测中的协议规则，也不把外部系统行为升级为仓库已证事实。
+本文档只描述当前代码已经实现并能从这些本地真源直接观察到的行为；若文中个别条目显式标注为“本次已批准但尚未补齐的修正要求”，其作用仅限于指出当前实现与既有批准范围之间的文档化偏差，不把该修正表述成已经落地的事实。本文档不包含 roadmap、推测中的协议规则，也不把外部系统行为升级为仓库已证事实。
 
 ## Native / ERC20 统一资金语义
 
@@ -105,7 +107,7 @@
 
 所以，上层产品里任何“价值”“份额”“可铸造数量”“可赎回数量”的判断，最终都依赖两层基础事实：先把外部答案规范成目标精度，再按 `SYUtils` 的整数舍入规则完成换算。
 
-## 资产层与 pause/flash 能力
+## 资产层与 pause / omnichain 能力
 
 `OutrunERC20` 把 transfer、mint、burn 全部收敛进 `_update(from, to, value)`，并在同一个入口前后暴露 `_beforeTokenTransfer` / `_afterTokenTransfer` hook。当前实现里：
 
@@ -116,35 +118,60 @@
 
 `OutrunERC20Pausable` 正是利用这个收敛点，把 `_update` 包上 `whenNotPaused`。这带来一个很强的当前语义：一旦 pause，不只是“普通转账暂停”，而是所有走 `_update` 的 transfer、mint、burn 都会一起受阻；而 `pause()` / `unpause()` 仅允许 owner 调用。
 
-`OutrunOFT` 则把当前资产层进一步扩展成带 omnichain 和 flash surface 的资产基类：
+`OutrunOFT` 则把当前资产层进一步扩展成带 omnichain surface 的资产基类：
 
 - `token()` 返回 `address(this)`，表明当前 OFT 与其 ERC20 实现是同一合约。
 - `approvalRequired()` 返回 `false`，表明当前 OFT 发送自身代币不要求额外先对独立 token 合约做 approval。
-- `flashFeeReceiver` 可在构造时设置，也可由 owner 后续修改。
-- `_flashFeeReceiver()` 直接返回这个地址，因此 flash 费用去向在当前实现里是一个显式可配置状态。
 - `_debit()` 在源链侧 burn `amountSentLD`。
 - `_credit()` 在目标侧 mint `_amountLD`；若接收方为零地址，则改记到 `address(0xdead)`。
 - `_toSD()` 会把本地精度数量除以 `decimalConversionRate` 后压到 `uint64` 共享精度；如果超出范围，不截断，直接回退 `AmountSDOverflowed(...)`。
 
 `test/assets/OutrunUniversalAssets.t.sol` 证明了这层资产能力在当前派生实现里的几个结果：
 
-- flash loan 的还款路径需要 borrower 预先提供足够 allowance，否则调用回退。
-- 当 `flashFeeReceiver == address(0)` 时，flash fee 会被烧掉；测试结束后 `totalSupply()` 回到 `0`。
-- 配置 `flashFeeReceiver` 后，flash fee 会累计到该地址。
-- 构造参数和 owner setter 都能决定当前 fee receiver。
 - 跨链报价路径如果共享精度数量溢出，会按 `AmountSDOverflowed(...)` 回退。
 
-因此，资产层不是单纯“一个 ERC20 包装壳”。在当前实现里，它同时决定了供应如何铸烧、何时可暂停、flash fee 归属给谁，以及本地数量何时还能被编码进 omnichain 消息。
+因此，资产层不是单纯”一个 ERC20 包装壳”。在当前实现里，它同时决定了供应如何铸烧、何时可暂停，以及本地数量何时还能被编码进 omnichain 消息。
+
+### 跨链速率限制器 / OutrunOFT 滑动窗口
+
+OutrunOFT 直接继承 LayerZero 官方 `RateLimiter` 抽象合约（`@layerzerolabs/oapp-evm/contracts/oapp/utils/RateLimiter.sol`），并在此基础上扩展 inbound 方向，作为 omnichain 路径的额外边界条件：
+
+- **实现方式**：outbound 直接继承 LayerZero 官方 `RateLimiter`（使用 `rateLimits` mapping 和 `_amountCanBeSent` 衰减计算）；inbound 在 `OutrunOFT` 内新增独立的 `inboundRateLimits` mapping，复用 LayerZero 的同一套衰减数学。
+- **作用范围**：按方向（inbound / outbound）和按对端端点（peerEid）独立限制。每个 peerEid 的 inbound 与 outbound 各自拥有独立额度，互不影响。
+- **报价语义**：就本次已批准但尚未由当前代码补齐的修正而言，`quoteOFT()` 的标准报价结果必须反映当前 outbound capacity；当某个 peerEid 已配置 outbound rate limit 时，可发送上限不应继续无条件继承默认 `type(uint64).max`，而应返回当前窗口衰减后的真实可用额度。当前代码尚未 override `quoteOFT()`，因此这条在本文中应视为待补齐的修正要求，而不是已落地事实。
+- **滑动窗口模型（LayerZero 官方）**：使用 `amountInFlight` + `lastUpdated` 的单快照线性衰减模型。每个 (direction, peerEid) 组合存储四个 `uint256` 状态变量：`amountInFlight`、`lastUpdated`、`limit`、`window`。可用额度计算如下：
+  - `timeSinceLastDeposit = block.timestamp - lastUpdated`
+  - 若 `timeSinceLastDeposit >= window`，则 `currentAmountInFlight = 0`，`amountCanBeSent = limit`（窗口已完全过期，额度全额恢复）
+  - 否则 `decay = limit * timeSinceLastDeposit / window`，`currentAmountInFlight = amountInFlight <= decay ? 0 : amountInFlight - decay`，`amountCanBeSent = limit <= currentAmountInFlight ? 0 : limit - currentAmountInFlight`
+  - 当 `amount > amountCanBeSent` 时 revert，`CapacityExceeded(isInbound, eid, requested, available)`
+  - 若 admin 降低 limit 导致 `currentAmountInFlight > limit`，`amountCanBeSent` 归零（不 brick 通道）
+- **单快照模型的数学特性**：该模型仅维护一个 (amountInFlight, lastUpdated) 快照，而非逐笔记录每笔传输的时间和金额。这意味着当窗口内发生多次传输时，所有历史流量被聚合为一个值统一衰减，窗口内部的中间态消耗量可能与”逐笔精确追踪”存在偏差。这是 LayerZero 官方的设计选择（gas 效率 vs 数学精确度），且在窗口完全过期后偏差归零。
+- **未配置对端的默认行为**：如果某个 peerEid 未被显式配置速率限制参数（`window == 0`），`OutrunOFT` 的 `_checkOutbound` / `_checkInbound` 直接跳过检查，默认不限制（所有转账均可通过），以避免配置遗漏导致跨链通道意外阻断。这与 LayerZero 原生的”未配置 = 阻塞”行为不同。
+- **失败模式**：当请求金额超过当前可用额度时，整笔交易 revert，不执行部分填充。自定义错误为 `CapacityExceeded(isInbound, eid, requested, available)`。
+- **Admin 配置**：owner 可为每个 peerEid 独立配置 inbound 限额、outbound 限额、以及窗口时长。outbound 的 `setOutboundRateLimit` 委托给 LayerZero 的 `_setRateLimits`，内部会先 checkpoint 现有状态再更新 limit/window。inbound 的 `setInboundRateLimit` 同样先 checkpoint 再更新。两者均保留 `amountInFlight` 和 `lastUpdated` 状态。`remove*` 函数清除全部状态。
+- **实现位置**：速率限制逻辑实现在 `OutrunOFT.sol`（继承 LayerZero `RateLimiter`）；`OutrunUniversalAssets.sol` 不在本地重复实现这套逻辑，但会通过继承直接暴露并执行该行为。
+- **与 pause 的交互**：速率限制检查在 `_burn` / `_mint`（经过 `_update` → `whenNotPaused`）之前执行。当合约处于 paused 状态时，如果请求金额同时超过速率限制额度，`CapacityExceeded` 会先于 pause 错误被触发；如果速率限制额度充足，则 `_update` 中的 `whenNotPaused` 仍然会 revert。换言之，pause 并不阻止速率限制检查的执行，只是速率限制通过后的 mint/burn 操作会被 pause 拦截。
+- **与 mintingStatusTable 的正交性**：
+  - `mintingStatusTable`（OutrunUniversalAssets 层）追踪每个 minter 的**生命周期累计债务**，决定”谁能在本地铸造”和”总共能铸造多少”。它是 per-minter 的总量上限。
+  - 速率限制器（OutrunOFT 层）约束跨链 token **流动速度**，决定”每个对端链在每个时间窗口内能流入/流出多少”。它是 per-peerEid per-direction 的流速上限。
+  - 两者覆盖不同的风险面：前者防止单一 minter 超发，后者防止跨链短时冲击。
+  - **累计总量不对称**：速率限制器仅约束流速（velocity），不约束累计总量。跨链 `_credit()` 的累计铸造量不受速率限制器的硬性上限约束。如果需要对累计跨链铸造量设置硬性上限，应作为独立机制另行实现。
+- **_credit() 铸造与 mintingStatusTable**：跨链 `_credit()` 在目标链铸造 token 属于资产跨链移动，不记入 `mintingStatusTable`。这是因为跨链 credit 是已有供给的链间转移，而非新增本地债务。
 
 ## Omnichain / oracle 基础边界
 
 这两层的共同点是：它们会强烈影响上层行为，但本仓库当前只覆盖了其中一部分本地语义。
 
-对 `OutrunOFT` 而言，本地代码当前只直接承诺以下内容：
+对 `OutrunOFT` 而言，本文在本地源码与相关测试里直接约束以下内容：
 
 - 本地 token 余额如何在 `_debit` 时 burn、在 `_credit` 时 mint。
 - 零地址接收方会被改写成 `address(0xdead)`。
 - 本地精度到共享精度的转换规则，以及溢出时直接回退。
+- inbound / outbound 速率限制按 `peerEid` 与方向独立维护，并复用 LayerZero `RateLimiter` 的滑动窗口衰减数学。
+- `window == 0` 的未配置对端默认跳过 `_checkOutbound` / `_checkInbound`，表现为 unlimited，而不是阻塞通道。
+- `setOutboundRateLimit`、`setInboundRateLimit` 会先 checkpoint 再更新状态，`remove*` 会清除对应方向的全部速率限制状态。
+- 速率限制检查发生在 `_burn` / `_mint` 之前；因此 paused 时仍会先执行速率限制检查，额度不足优先回退 `CapacityExceeded(...)`，额度充足时再由 `whenNotPaused` 拦截铸烧。
+- 就本次已批准但尚未由当前代码补齐的修正而言，标准 `quoteOFT()` 报价必须反映当前 outbound capacity；在该修正落地前，继承默认无限上限只能视为当前实现偏差，不是本文认可的已满足行为。
 
 但它没有在这些允许源码里自行证明以下事项：
 
@@ -174,7 +201,8 @@
 2. allowance 先被 `OutrunERC20` 和 `TokenHelper` 定义成“有限额度可递减、无限额度可常驻、部分路径会自动补无限授权”，决定了上层集成是一次性授权还是长生命周期授权。
 3. 外部回调安全性先被 `ReentrancyGuard` 定义，决定了哪些 callback 场景只是拦住内层再入，哪些内部封装会把主路径一起锁死。
 4. 价值换算先被 `SYUtils` 的 18 位比例和舍入规则固定，再叠加 oracle 归一化逻辑，直接影响份额、资产、债务和赎回数量。
-5. 资产供给先被 `OutrunERC20` / `OutrunERC20Pausable` / `OutrunOFT` 的铸烧、暂停、flash fee、共享精度边界所限制，决定了上层什么时候还能转、还能 mint、还能跨链编码、还能从 flash 路径回收费用。
-6. oracle 与 omnichain 都是“消费外部系统”的基础适配层；一旦上层把它们的输出当作产品判断依据，上层产品语义就天然继承了这些边界条件和未覆盖项。
+5. 资产供给先被 `OutrunERC20` / `OutrunERC20Pausable` / `OutrunOFT` 的铸烧、暂停与共享精度边界所限制，决定了上层什么时候还能转、还能 mint、还能跨链编码。
+6. 跨链流速将受 OutrunOFT（继承 LayerZero 官方 RateLimiter）的 per-peerEid per-direction 滑动窗口速率限制器约束，决定每个对端链在每个时间窗口内的 inbound/outbound 上限，且与 mintingStatusTable 的 per-minter 总量上限正交。
+7. oracle 与 omnichain 都是”消费外部系统”的基础适配层；一旦上层把它们的输出当作产品判断依据，上层产品语义就天然继承了这些边界条件和未覆盖项。
 
-换句话说，上层产品语义不是单独存在的说明书，而是这些基础层语义叠加后的结果。只要底层的资金、授权、重入、汇率、暂停、flash、跨链或 oracle 边界发生变化，上层可见行为就会一起变化。
+换句话说，上层产品语义不是单独存在的说明书，而是这些基础层语义叠加后的结果。只要底层的资金、授权、重入、汇率、暂停、跨链速率限制或 oracle 边界发生变化，上层可见行为就会一起变化。

@@ -9,7 +9,7 @@
 - `src/assets/base/OutrunUniversalAssets.sol`
 - `src/assets/omnichain/OutrunOFT.sol`
 - `src/assets/interfaces/IUniversalAssets.sol`
-- uAsset 统一债务与流通资产层，维护按 minter 维度的 mint cap / 已铸造债务 / mint / repay 路径，并继承 ERC20 / pause / flash mint/loan / OFT 跨链铸烧能力。
+- uAsset 统一债务与流通资产层，维护按 minter 维度的 mint cap / 已铸造债务 / mint / repay 路径，并继承 ERC20 / pause / OFT 跨链铸烧能力。
 
 ### 1.2 仓位层
 
@@ -108,10 +108,9 @@ owner 调用 harvestWrapYield -> 计算 wrap 池盈余 (syWrapStaking > assetToS
 OutrunUniversalAssets (concrete)
   ⟶ OutrunOFT (abstract)
     ⟶ OFTCore                          ← @layerzerolabs/oft-evm
+    ⟶ RateLimiter                      ← @layerzerolabs/oapp-evm
     ⟶ OutrunERC20Pausable
       ⟶ OutrunERC20
-    ⟶ OutrunERC20FlashMint
-      ⟶ OutrunERC20 (diamond via _update)
 ```
 
 #### Position 继承链
@@ -288,16 +287,16 @@ Harvest:
    - `.claude/settings.json`
 2. Product Truth 层（当前规则真源）
    - `docs/spec/protocol.md`（系统目标与模块边界）
-   - `docs/spec/router-and-user-flows.md`（完整路由路径分析）
-   - `docs/spec/state-machines.md`（状态机）
-   - `docs/spec/accounting.md`（账务规则）
+   - `docs/spec/router/router-and-user-flows.md`（完整路由路径分析）
+   - `docs/spec/position/state-machines.md`（状态机）
+   - `docs/spec/position/accounting.md`（账务规则）
    - `docs/spec/access-control.md`（权限边界）
-   - `docs/spec/yield-adapters.md`（adapter 行为与缺口）
-   - `docs/spec/oracles-and-integrations.md`（外部集成边界）
+   - `docs/spec/yield/yield-adapters.md`（adapter 行为与缺口）
+   - `docs/spec/yield/oracles-and-integrations.md`（外部集成边界）
    - `docs/spec/common-foundations.md`（library 基础语义）
-   - `docs/spec/deployment.md`（部署入口与环境变量）
-   - `docs/spec/implementation-map.md`（surface 表格索引）
-   - `docs/spec/testing-and-evidence.md`（测试分层与证据强度）
+   - `docs/deployment.md`（部署入口与环境变量）
+   - `docs/implementation-map.md`（surface 表格索引）
+   - `docs/testing-and-evidence.md`（测试分层与证据强度）
    - `docs/ARCHITECTURE.md`（本文件：系统级模块地图）
    - `docs/GLOSSARY.md`（术语表）
    - `docs/TRACEABILITY.md`（规则到证据追溯）
@@ -322,11 +321,11 @@ Harvest:
 2. `docs/ARCHITECTURE.md`（本文件，先建立层次与边界，5 分钟）
 3. `docs/GLOSSARY.md`（术语定义基线，3 分钟）
 4. `docs/spec/protocol.md`（系统目标与 8 条用户可见流程，8 分钟）
-5. `docs/spec/state-machines.md`（7 个状态机，8 分钟）
-6. `docs/spec/accounting.md`（4 层账务规则，8 分钟）
+5. `docs/spec/position/state-machines.md`（7 个状态机，8 分钟）
+6. `docs/spec/position/accounting.md`（4 层账务规则，8 分钟）
 7. `docs/spec/access-control.md`（权限边界清单，5 分钟）
-8. `docs/spec/router-and-user-flows.md`（完整路由路径与边界，10 分钟）
-9. `docs/spec/yield-adapters.md`（8 组 adapter 实现与缺口，10 分钟）
+8. `docs/spec/router/router-and-user-flows.md`（完整路由路径与边界，10 分钟）
+9. `docs/spec/yield/yield-adapters.md`（8 组 adapter 实现与缺口，10 分钟）
 10. `docs/TRACEABILITY.md` + `docs/VERIFICATION.md`（证据追溯与验证路径）
 
 ## 6. 当前已知边界提醒
