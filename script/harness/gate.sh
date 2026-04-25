@@ -81,6 +81,14 @@ array_contains() {
     return 1
 }
 
+list_worktree_changed_files() {
+    {
+        git diff --cached --name-only --diff-filter=ACMRD
+        git diff --name-only --diff-filter=ACMRD
+        git ls-files --others --exclude-standard
+    } | awk '{ sub(/\r$/, ""); if ($0 != "") print $0 }' | awk '!seen[$0]++'
+}
+
 append_finding() {
     local target_name="$1"
     local source_role="$2"
@@ -266,6 +274,149 @@ run_looped_command() {
     verification_failed=1
     record_command_result "$id" "failed" "$exit_code" "at least one scoped command failed" "verifier"
     append_finding blocking_findings_json "verifier" "verification command failed: $id" "$id" "error"
+}
+
+normalize_slither_key() {
+    jq -r '
+        def norm_summary:
+            (.description // "")
+            | split("\n")[0]
+            | sub(" \\([^)]*#L?[0-9]+(-L?[0-9]+)?\\)"; "")
+            | sub(" \\([^)]*#[0-9]+(-[0-9]+)?\\)"; "");
+        {
+            id: (.id // ""),
+            check: (.check // ""),
+            impact: (.impact // ""),
+            confidence: (.confidence // ""),
+            location: (.first_markdown_element // ""),
+            summary: norm_summary,
+            key: (
+                (.check // "") + "|" +
+                ((.first_markdown_element // "") | split("#")[0]) + "|" +
+                norm_summary
+            )
+        }
+    '
+}
+
+slither_baseline_path() {
+    printf '%s/script/harness/slither-baseline.json' "$repo_root"
+}
+
+run_slither_with_baseline() {
+    local id="$1"
+    local reason="$2"
+    local scope_json="$3"
+    local slither_filter_paths="$4"
+    local slither_exclude_detectors="$5"
+    local baseline_file
+    local command_string
+    local raw_output_file
+    local new_findings_file
+    local exit_code
+    local baseline_count
+    local current_count
+    local new_count
+    local summary
+
+    baseline_file="$(slither_baseline_path)"
+    command_string="slither src --filter-paths $(shell_join "$slither_filter_paths") --exclude-dependencies --exclude $(shell_join "$slither_exclude_detectors") --json - --json-types detectors --fail-none --disable-color"
+    record_command_run "$id" "$command_string | compare against $(shell_join "$baseline_file")" "$reason" "$scope_json"
+
+    if [ ! -f "$baseline_file" ]; then
+        verification_failed=1
+        record_command_result "$id" "failed" "1" "slither baseline file is missing" "verifier"
+        append_finding blocking_findings_json "verifier" "verification command failed: $id" "$id" "error"
+        echo "[gate] ERROR: slither baseline file is missing: $baseline_file" >&2
+        return
+    fi
+
+    if ! jq -e '.version == 1 and (.findings | type == "array")' "$baseline_file" >/dev/null 2>&1; then
+        verification_failed=1
+        record_command_result "$id" "failed" "1" "slither baseline file is invalid" "verifier"
+        append_finding blocking_findings_json "verifier" "verification command failed: $id" "$id" "error"
+        echo "[gate] ERROR: slither baseline file is invalid: $baseline_file" >&2
+        return
+    fi
+
+    raw_output_file="$(mktemp "$repo_root/.harness/tmp/slither.XXXXXX.json")"
+    new_findings_file="$(mktemp "$repo_root/.harness/tmp/slither-new.XXXXXX.json")"
+    register_cleanup "$raw_output_file"
+    register_cleanup "$new_findings_file"
+
+    set +e
+    slither src \
+        --filter-paths "$slither_filter_paths" \
+        --exclude-dependencies \
+        --exclude "$slither_exclude_detectors" \
+        --json - \
+        --json-types detectors \
+        --fail-none \
+        --disable-color > "$raw_output_file" 2>&1
+    exit_code=$?
+    set -e
+
+    if [ "$exit_code" -ne 0 ]; then
+        filter_command_output "$raw_output_file" "$exit_code"
+        verification_failed=1
+        record_command_result "$id" "failed" "$exit_code" "slither command failed" "verifier"
+        append_finding blocking_findings_json "verifier" "verification command failed: $id" "$id" "error"
+        return
+    fi
+
+    if ! jq -e '.success == true and (.results.detectors | type == "array")' "$raw_output_file" >/dev/null 2>&1; then
+        head -n 40 "$raw_output_file"
+        verification_failed=1
+        record_command_result "$id" "failed" "1" "slither did not emit valid detector JSON" "verifier"
+        append_finding blocking_findings_json "verifier" "verification command failed: $id" "$id" "error"
+        return
+    fi
+
+    jq --slurpfile baseline "$baseline_file" '
+        def norm_summary:
+            (.description // "")
+            | split("\n")[0]
+            | sub(" \\([^)]*#L?[0-9]+(-L?[0-9]+)?\\)"; "")
+            | sub(" \\([^)]*#[0-9]+(-[0-9]+)?\\)"; "");
+        def normalize:
+            {
+                id: (.id // ""),
+                check: (.check // ""),
+                impact: (.impact // ""),
+                confidence: (.confidence // ""),
+                location: (.first_markdown_element // ""),
+                summary: norm_summary,
+                key: (
+                    (.check // "") + "|" +
+                    ((.first_markdown_element // "") | split("#")[0]) + "|" +
+                    norm_summary
+                )
+            };
+        ($baseline[0].findings | map(.key // .id) | unique) as $baseline_keys
+        | [
+            .results.detectors[]
+            | normalize
+            | select((.key // .id) as $key | $key == "" or ($baseline_keys | index($key) | not))
+        ]
+    ' "$raw_output_file" > "$new_findings_file"
+
+    baseline_count="$(jq '.findings | length' "$baseline_file")"
+    current_count="$(jq '.results.detectors | length' "$raw_output_file")"
+    new_count="$(jq 'length' "$new_findings_file")"
+
+    if [ "$new_count" -eq 0 ]; then
+        summary="all $current_count slither findings matched baseline ($baseline_count entries)"
+        echo "[gate] slither baseline: $summary"
+        record_command_result "$id" "passed" "0" "$summary" "verifier"
+        return
+    fi
+
+    echo "[gate] slither baseline: detected $new_count new finding(s) beyond baseline"
+    jq -r '.[] | "- [\(.impact)/\(.confidence)] \(.check) \(.location) :: \(.summary)"' "$new_findings_file"
+    verification_failed=1
+    summary="$new_count new slither finding(s) beyond baseline"
+    record_command_result "$id" "failed" "1" "$summary" "verifier"
+    append_finding blocking_findings_json "verifier" "$summary" "$id" "error"
 }
 
 match_path_against_patterns() {
@@ -551,7 +702,7 @@ else
     elif [ "$profile" = "ci" ]; then
         die "--changed-files is required when --profile ci is used"
     else
-        mapfile -t changed_files < <(git diff --cached --name-only --diff-filter=ACMRD | awk '{ sub(/\r$/, ""); if ($0 != "") print $0 }' | awk '!seen[$0]++')
+        mapfile -t changed_files < <(list_worktree_changed_files)
     fi
 
 for changed_file in "${changed_files[@]}"; do
@@ -1174,7 +1325,7 @@ if [ "${#changed_files[@]}" -gt 0 ]; then
                 if [ "$hard_blocked" -eq 1 ]; then
                     record_blocked_command "$command_id" "slither src --filter-paths \"$slither_filter_paths\" --exclude-dependencies --exclude \"$slither_exclude_detectors\"" "run slither for changed src Solidity production scope" "$src_scope_json" "command blocked before execution by policy hard-block"
                 elif [ "${#existing_src_solidity_files[@]}" -gt 0 ] && { [ "$risk_tier" = "prod-semantic" ] || [ "$risk_tier" = "high-risk" ]; }; then
-                    run_single_command "$command_id" "run slither for changed src Solidity production scope" "$src_scope_json" slither src --filter-paths "$slither_filter_paths" --exclude-dependencies --exclude "$slither_exclude_detectors"
+                    run_slither_with_baseline "$command_id" "run slither for changed src Solidity production scope" "$src_scope_json" "$slither_filter_paths" "$slither_exclude_detectors"
                 else
                     record_not_applicable_command "$command_id" "slither src --filter-paths \"$slither_filter_paths\" --exclude-dependencies --exclude \"$slither_exclude_detectors\"" "run slither for changed src Solidity production scope" "$src_scope_json" "no changed src Solidity files require slither"
                 fi

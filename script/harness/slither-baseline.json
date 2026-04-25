@@ -1,0 +1,413 @@
+{
+  "version": 1,
+  "tool": "slither",
+  "target": "src",
+  "generated_at": "2026-04-24",
+  "findings": [
+    {
+      "id": "19db58274592eb58b9111b25be5a2d0d9b8826b44a15604f00ee86eaef3dc3c6",
+      "check": "arbitrary-send-eth",
+      "impact": "High",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/aster/OutrunAsBNBSY.sol#L44-L61",
+      "summary": "OutrunAsBNBSY._deposit(address,uint256) sends eth to arbitrary user",
+      "key": "arbitrary-send-eth|src/yield/adapters/aster/OutrunAsBNBSY.sol|OutrunAsBNBSY._deposit(address,uint256) sends eth to arbitrary user"
+    },
+    {
+      "id": "9ce9df238d4723cf1941336df0d929e7d7f58aca7c5645153a5dc04bd7c783c8",
+      "check": "arbitrary-send-eth",
+      "impact": "High",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/lido/OutrunWstETHSY.sol#L18-L30",
+      "summary": "OutrunWstETHSY._deposit(address,uint256) sends eth to arbitrary user",
+      "key": "arbitrary-send-eth|src/yield/adapters/lido/OutrunWstETHSY.sol|OutrunWstETHSY._deposit(address,uint256) sends eth to arbitrary user"
+    },
+    {
+      "id": "b47b395122a76e013e90602b8f5426f15fdaec20da8b3c56ec88c47b99510504",
+      "check": "arbitrary-send-eth",
+      "impact": "High",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/etherfi/OutrunWeETHSY.sol#L23-L32",
+      "summary": "OutrunWeETHSY._deposit(address,uint256) sends eth to arbitrary user",
+      "key": "arbitrary-send-eth|src/yield/adapters/etherfi/OutrunWeETHSY.sol|OutrunWeETHSY._deposit(address,uint256) sends eth to arbitrary user"
+    },
+    {
+      "id": "5466c545614d34d318fa535410d42510cbf3fe9a58f21e3b1f7bdb45f551d04d",
+      "check": "reentrancy-balance",
+      "impact": "High",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/lista/OutrunSlisBNBSY.sol#L23-L36",
+      "summary": "Reentrancy in OutrunSlisBNBSY._deposit(address,uint256):",
+      "key": "reentrancy-balance|src/yield/adapters/lista/OutrunSlisBNBSY.sol|Reentrancy in OutrunSlisBNBSY._deposit(address,uint256):"
+    },
+    {
+      "id": "f463736e23dedf7803ec1a432ed5c863892be959243ee6e3756fbadfe540d89e",
+      "check": "incorrect-equality",
+      "impact": "Medium",
+      "confidence": "High",
+      "location": "src/yield/adapters/lista/OutrunSlisBNBSY.sol#L23-L36",
+      "summary": "OutrunSlisBNBSY._deposit(address,uint256) uses a dangerous strict equality:",
+      "key": "incorrect-equality|src/yield/adapters/lista/OutrunSlisBNBSY.sol|OutrunSlisBNBSY._deposit(address,uint256) uses a dangerous strict equality:"
+    },
+    {
+      "id": "76587647c50b774462b55be8b30f264ef6115d1ad2d8d9c92952df04914b0bd9",
+      "check": "reentrancy-no-eth",
+      "impact": "Medium",
+      "confidence": "Medium",
+      "location": "src/position/OutrunStakingPosition.sol#L338-L373",
+      "summary": "Reentrancy in OutrunStakingPosition.keepRedeem(uint256,uint256,address):",
+      "key": "reentrancy-no-eth|src/position/OutrunStakingPosition.sol|Reentrancy in OutrunStakingPosition.keepRedeem(uint256,uint256,address):"
+    },
+    {
+      "id": "8f693b8804c7e80127aae3a74151d3c59c9d80a079ccb5a06924c6b63304c060",
+      "check": "reentrancy-no-eth",
+      "impact": "Medium",
+      "confidence": "Medium",
+      "location": "src/position/OutrunStakingPosition.sol#L298-L326",
+      "summary": "Reentrancy in OutrunStakingPosition.wrapRedeem(uint256,address,address):",
+      "key": "reentrancy-no-eth|src/position/OutrunStakingPosition.sol|Reentrancy in OutrunStakingPosition.wrapRedeem(uint256,address,address):"
+    },
+    {
+      "id": "ff7358b3d884fff42240609eb0c4fb6dfb27826f5035dbe1a18c953c63788fe2",
+      "check": "reentrancy-no-eth",
+      "impact": "Medium",
+      "confidence": "Medium",
+      "location": "src/position/OutrunStakingPosition.sol#L257-L288",
+      "summary": "Reentrancy in OutrunStakingPosition.redeem(uint256,uint256,address,address):",
+      "key": "reentrancy-no-eth|src/position/OutrunStakingPosition.sol|Reentrancy in OutrunStakingPosition.redeem(uint256,uint256,address,address):"
+    },
+    {
+      "id": "6bd8b9ebe8f883d5cdba07982be0871d060df462ca4250fc36bbaa21a56f4273",
+      "check": "unused-return",
+      "impact": "Medium",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/aave/OutrunAaveV3SY.sol#L29-L40",
+      "summary": "OutrunAaveV3SY._redeem(address,address,uint256) ignores return value by IAaveV3Pool(aavePool).withdraw(underlying,amountTokenOut,receiver)",
+      "key": "unused-return|src/yield/adapters/aave/OutrunAaveV3SY.sol|OutrunAaveV3SY._redeem(address,address,uint256) ignores return value by IAaveV3Pool(aavePool).withdraw(underlying,amountTokenOut,receiver)"
+    },
+    {
+      "id": "56c1a596de37618d98c3f2ac547d2ea912edbe436738585d6cdf8f862a0e49ad",
+      "check": "shadowing-local",
+      "impact": "Low",
+      "confidence": "High",
+      "location": "src/position/interfaces/IOutrunStakeManager.sol#L238",
+      "summary": "IOutrunStakeManager.setKeeper(address).keeper shadows:",
+      "key": "shadowing-local|src/position/interfaces/IOutrunStakeManager.sol|IOutrunStakeManager.setKeeper(address).keeper shadows:"
+    },
+    {
+      "id": "573b161ca2834e27cf1b9ac0fac25c268a5cb11f5d000adaab6148db8f984084",
+      "check": "shadowing-local",
+      "impact": "Low",
+      "confidence": "High",
+      "location": "src/position/interfaces/IOutrunStakeManager.sol#L224",
+      "summary": "IOutrunStakeManager.setUAsset(address).uAsset shadows:",
+      "key": "shadowing-local|src/position/interfaces/IOutrunStakeManager.sol|IOutrunStakeManager.setUAsset(address).uAsset shadows:"
+    },
+    {
+      "id": "01583ca9a9d8ad36236e60b363fccad2748d9f5a55e6abefae8db69f7a25146e",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/position/OutrunStakingPosition.sol#L34",
+      "summary": "OutrunStakingPosition.constructor(address,uint256,address,address,address).sy_ lacks a zero-check on :",
+      "key": "missing-zero-check|src/position/OutrunStakingPosition.sol|OutrunStakingPosition.constructor(address,uint256,address,address,address).sy_ lacks a zero-check on :"
+    },
+    {
+      "id": "080fd9731b3be5f9b43797ef4b8435f7a274a72d1219f0a231cb86faad1710b3",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/lido/OutrunL2WstETHSY.sol#L16",
+      "summary": "OutrunL2WstETHSY.constructor(address,address,address,address,uint8)._oracle lacks a zero-check on :",
+      "key": "missing-zero-check|src/yield/adapters/lido/OutrunL2WstETHSY.sol|OutrunL2WstETHSY.constructor(address,address,address,address,uint8)._oracle lacks a zero-check on :"
+    },
+    {
+      "id": "0f303655dcba724d0cf6719344b5b3757aaf63583dcbfdc3b7057a50621bc738",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/sky/OutrunL2StakedUsdsSY.sol#L13",
+      "summary": "OutrunL2StakedUsdsSY.constructor(address,address,address,address,address)._USDC lacks a zero-check on :",
+      "key": "missing-zero-check|src/yield/adapters/sky/OutrunL2StakedUsdsSY.sol|OutrunL2StakedUsdsSY.constructor(address,address,address,address,address)._USDC lacks a zero-check on :"
+    },
+    {
+      "id": "1ede075c286d1a62caea6ea4771b1d78fe092a63d9d914ae9f54ae54a00c2cea",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/lido/OutrunWstETHSY.sol#L12",
+      "summary": "OutrunWstETHSY.constructor(address,address,address)._stETH lacks a zero-check on :",
+      "key": "missing-zero-check|src/yield/adapters/lido/OutrunWstETHSY.sol|OutrunWstETHSY.constructor(address,address,address)._stETH lacks a zero-check on :"
+    },
+    {
+      "id": "29805d8553986a3b8d7d7ffa64e33b16abc758d81fd04a82385a1d44c0c77f24",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/aave/OutrunAaveV3SY.sol#L14",
+      "summary": "OutrunAaveV3SY.constructor(string,string,address,address,address)._aavePool lacks a zero-check on :",
+      "key": "missing-zero-check|src/yield/adapters/aave/OutrunAaveV3SY.sol|OutrunAaveV3SY.constructor(string,string,address,address,address)._aavePool lacks a zero-check on :"
+    },
+    {
+      "id": "34553c739cb20a2416f7fbd59c34fb03d560210385c06cfe61e21d49c69426cd",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/aave/OutrunAaveV3SY.sol#L14",
+      "summary": "OutrunAaveV3SY.constructor(string,string,address,address,address)._aToken lacks a zero-check on :",
+      "key": "missing-zero-check|src/yield/adapters/aave/OutrunAaveV3SY.sol|OutrunAaveV3SY.constructor(string,string,address,address,address)._aToken lacks a zero-check on :"
+    },
+    {
+      "id": "450621bee8f8cd83bef1cdc72d594853d2b55fd9dcd24cc0f326a49fa76c7443",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/lido/OutrunL2WstETHSY.sol#L17",
+      "summary": "OutrunL2WstETHSY.constructor(address,address,address,address,uint8)._underlyingAssetOnEthAddr lacks a zero-check on :",
+      "key": "missing-zero-check|src/yield/adapters/lido/OutrunL2WstETHSY.sol|OutrunL2WstETHSY.constructor(address,address,address,address,uint8)._underlyingAssetOnEthAddr lacks a zero-check on :"
+    },
+    {
+      "id": "45bb0b87268b6ae5250af170f48f18f875b4d0501ea82b233940b51dcc15f0ea",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/yield/OutrunL2StakedTokenSY.sol#L19",
+      "summary": "OutrunL2StakedTokenSY.constructor(string,string,address,address,address,address,uint8)._underlyingAssetOnEthAddr lacks a zero-check on :",
+      "key": "missing-zero-check|src/yield/OutrunL2StakedTokenSY.sol|OutrunL2StakedTokenSY.constructor(string,string,address,address,address,address,uint8)._underlyingAssetOnEthAddr lacks a zero-check on :"
+    },
+    {
+      "id": "503d4d6c58ffe36492fb83101308f50692723b4817cd62f8b85038ed2c1d6d31",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/sky/OutrunL2StakedUsdsSY.sol#L13",
+      "summary": "OutrunL2StakedUsdsSY.constructor(address,address,address,address,address)._PSM3 lacks a zero-check on :",
+      "key": "missing-zero-check|src/yield/adapters/sky/OutrunL2StakedUsdsSY.sol|OutrunL2StakedUsdsSY.constructor(address,address,address,address,address)._PSM3 lacks a zero-check on :"
+    },
+    {
+      "id": "649bf11bc96b5e38b51f9ff32da3942f9031421181006923f48b0ca416673015",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/yield/OutrunL2StakedTokenSY.sol#L18",
+      "summary": "OutrunL2StakedTokenSY.constructor(string,string,address,address,address,address,uint8)._exchangeRateOracle lacks a zero-check on :",
+      "key": "missing-zero-check|src/yield/OutrunL2StakedTokenSY.sol|OutrunL2StakedTokenSY.constructor(string,string,address,address,address,address,uint8)._exchangeRateOracle lacks a zero-check on :"
+    },
+    {
+      "id": "6ab44d9b649601895b0e6a32505127078533d36f4de85adf7c4fd37fc809e584",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/router/OutrunRouter.sol#L339",
+      "summary": "OutrunRouter.setMemeverseLauncher(address)._memeverseLauncher lacks a zero-check on :",
+      "key": "missing-zero-check|src/router/OutrunRouter.sol|OutrunRouter.setMemeverseLauncher(address)._memeverseLauncher lacks a zero-check on :"
+    },
+    {
+      "id": "7f85f80962a85996ccef66594716c5f16b88662248dafa729ac359983e4a1b97",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/lido/OutrunL2WrappableWstETHSY.sol#L22",
+      "summary": "OutrunL2WrappableWstETHSY.constructor(address,address,address,address,address,uint8)._stETH lacks a zero-check on :",
+      "key": "missing-zero-check|src/yield/adapters/lido/OutrunL2WrappableWstETHSY.sol|OutrunL2WrappableWstETHSY.constructor(address,address,address,address,address,uint8)._stETH lacks a zero-check on :"
+    },
+    {
+      "id": "8bb84f42e79342bb0bda65ef72858a97eb569ba288f8a8d298608869becb50a2",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/position/OutrunStakingPosition.sol#L34",
+      "summary": "OutrunStakingPosition.constructor(address,uint256,address,address,address).revenuePool_ lacks a zero-check on :",
+      "key": "missing-zero-check|src/position/OutrunStakingPosition.sol|OutrunStakingPosition.constructor(address,uint256,address,address,address).revenuePool_ lacks a zero-check on :"
+    },
+    {
+      "id": "9b75b1939828b689a7164241e02418c632b1ca864ddced8c47be8622f7980593",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/ethena/OutrunStakedUSDeSY.sol#L12",
+      "summary": "OutrunStakedUSDeSY.constructor(address,address,address)._USDe lacks a zero-check on :",
+      "key": "missing-zero-check|src/yield/adapters/ethena/OutrunStakedUSDeSY.sol|OutrunStakedUSDeSY.constructor(address,address,address)._USDe lacks a zero-check on :"
+    },
+    {
+      "id": "a7dea3cc6aafab83d03cb4acb210625619e40bee0290ec76e15740b1b95960f7",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/aster/OutrunAsBNBSY.sol#L23",
+      "summary": "OutrunAsBNBSY.constructor(address,address,address,address)._asBnbMinter lacks a zero-check on :",
+      "key": "missing-zero-check|src/yield/adapters/aster/OutrunAsBNBSY.sol|OutrunAsBNBSY.constructor(address,address,address,address)._asBnbMinter lacks a zero-check on :"
+    },
+    {
+      "id": "ad3a9b3b993829f064bbceff8cae6803a24c3b89f3e1b034d98e9d96abcb8a47",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/etherfi/OutrunWeETHSY.sol#L15",
+      "summary": "OutrunWeETHSY.constructor(address,address,address,address,address)._depositAdapter lacks a zero-check on :",
+      "key": "missing-zero-check|src/yield/adapters/etherfi/OutrunWeETHSY.sol|OutrunWeETHSY.constructor(address,address,address,address,address)._depositAdapter lacks a zero-check on :"
+    },
+    {
+      "id": "c0617f326eeeec99cbbd24e2d157663102d0386995d886ef6789ef24764a27f1",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/sky/OutrunStakedUsdsSY.sol#L12",
+      "summary": "OutrunStakedUsdsSY.constructor(address,address,address)._USDS lacks a zero-check on :",
+      "key": "missing-zero-check|src/yield/adapters/sky/OutrunStakedUsdsSY.sol|OutrunStakedUsdsSY.constructor(address,address,address)._USDS lacks a zero-check on :"
+    },
+    {
+      "id": "c3e7bdeeb5a9130ea10baa48556c051751a6cc87681ef5f7385e42c7bf57e08c",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/router/OutrunRouter.sol#L17",
+      "summary": "OutrunRouter.constructor(address,address)._memeverseLauncher lacks a zero-check on :",
+      "key": "missing-zero-check|src/router/OutrunRouter.sol|OutrunRouter.constructor(address,address)._memeverseLauncher lacks a zero-check on :"
+    },
+    {
+      "id": "cf5399d14b68ca7a6f5b783fb8f02d70a23bc3d562cbc407f75c3b881115345b",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/position/OutrunStakingPosition.sol#L34",
+      "summary": "OutrunStakingPosition.constructor(address,uint256,address,address,address).uAsset_ lacks a zero-check on :",
+      "key": "missing-zero-check|src/position/OutrunStakingPosition.sol|OutrunStakingPosition.constructor(address,uint256,address,address,address).uAsset_ lacks a zero-check on :"
+    },
+    {
+      "id": "d16b74361e440e21f7ef2e14be1818ef0521ed11a8c6680bbe05028b1579d58b",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/lido/OutrunL2WrappableWstETHSY.sol#L25",
+      "summary": "OutrunL2WrappableWstETHSY.constructor(address,address,address,address,address,uint8)._underlyingAssetOnEthAddr lacks a zero-check on :",
+      "key": "missing-zero-check|src/yield/adapters/lido/OutrunL2WrappableWstETHSY.sol|OutrunL2WrappableWstETHSY.constructor(address,address,address,address,address,uint8)._underlyingAssetOnEthAddr lacks a zero-check on :"
+    },
+    {
+      "id": "db460ae12b584be7159e8f869d1269160f7301890222ad754d306671215641ac",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/sky/OutrunL2StakedUsdsSY.sol#L13",
+      "summary": "OutrunL2StakedUsdsSY.constructor(address,address,address,address,address)._USDS lacks a zero-check on :",
+      "key": "missing-zero-check|src/yield/adapters/sky/OutrunL2StakedUsdsSY.sol|OutrunL2StakedUsdsSY.constructor(address,address,address,address,address)._USDS lacks a zero-check on :"
+    },
+    {
+      "id": "e464fce2d7f3fd29e19d31cd574236a1a4a957ffbbba843bbd6b08fe0b6c946b",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/etherfi/OutrunWeETHSY.sol#L15",
+      "summary": "OutrunWeETHSY.constructor(address,address,address,address,address)._liquidityPool lacks a zero-check on :",
+      "key": "missing-zero-check|src/yield/adapters/etherfi/OutrunWeETHSY.sol|OutrunWeETHSY.constructor(address,address,address,address,address)._liquidityPool lacks a zero-check on :"
+    },
+    {
+      "id": "f5c6076e3939a7def8fa362f1708619f401cfa0944817fedbc1e741125141a29",
+      "check": "missing-zero-check",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/etherfi/OutrunWeETHSY.sol#L15",
+      "summary": "OutrunWeETHSY.constructor(address,address,address,address,address)._eETH lacks a zero-check on :",
+      "key": "missing-zero-check|src/yield/adapters/etherfi/OutrunWeETHSY.sol|OutrunWeETHSY.constructor(address,address,address,address,address)._eETH lacks a zero-check on :"
+    },
+    {
+      "id": "72793c010df7e0c6c3d9e13f865ddc481675adaf3741c426a6356fc0688c68e8",
+      "check": "reentrancy-benign",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/position/OutrunStakingPosition.sol#L298-L326",
+      "summary": "Reentrancy in OutrunStakingPosition.wrapRedeem(uint256,address,address):",
+      "key": "reentrancy-benign|src/position/OutrunStakingPosition.sol|Reentrancy in OutrunStakingPosition.wrapRedeem(uint256,address,address):"
+    },
+    {
+      "id": "933d343f7812e919893570e9aa67b3e5c3306c51c4d1e306fbf65ce0710d911d",
+      "check": "reentrancy-benign",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/position/OutrunStakingPosition.sol#L257-L288",
+      "summary": "Reentrancy in OutrunStakingPosition.redeem(uint256,uint256,address,address):",
+      "key": "reentrancy-benign|src/position/OutrunStakingPosition.sol|Reentrancy in OutrunStakingPosition.redeem(uint256,uint256,address,address):"
+    },
+    {
+      "id": "afc4af0b4eabd36beb3b044968f6a37d9c4d990b3c783a942de0ea8cf92a1138",
+      "check": "reentrancy-benign",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/position/OutrunStakingPosition.sol#L338-L373",
+      "summary": "Reentrancy in OutrunStakingPosition.keepRedeem(uint256,uint256,address):",
+      "key": "reentrancy-benign|src/position/OutrunStakingPosition.sol|Reentrancy in OutrunStakingPosition.keepRedeem(uint256,uint256,address):"
+    },
+    {
+      "id": "293956611fe6660dec9416a23fe055e880515e7f4f8aaffe6565b57b77d13b55",
+      "check": "timestamp",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/position/OutrunStakingPosition.sol#L257-L288",
+      "summary": "OutrunStakingPosition.redeem(uint256,uint256,address,address) uses timestamp for comparisons",
+      "key": "timestamp|src/position/OutrunStakingPosition.sol|OutrunStakingPosition.redeem(uint256,uint256,address,address) uses timestamp for comparisons"
+    },
+    {
+      "id": "2e710a3d25179a5013ddca1fa54dfefb37f521abc25a06e4c5ba3938e47dde91",
+      "check": "timestamp",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/position/OutrunStakingPosition.sol#L338-L373",
+      "summary": "OutrunStakingPosition.keepRedeem(uint256,uint256,address) uses timestamp for comparisons",
+      "key": "timestamp|src/position/OutrunStakingPosition.sol|OutrunStakingPosition.keepRedeem(uint256,uint256,address) uses timestamp for comparisons"
+    },
+    {
+      "id": "76c2c18d300cffcec4676d729c78179f364158a82250a59c3610712abbe0b09a",
+      "check": "timestamp",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/assets/omnichain/OutrunOFT.sol#L167-L173",
+      "summary": "OutrunOFT._checkAndUpdate(RateLimiter.RateLimit,bool,uint32,uint256) uses timestamp for comparisons",
+      "key": "timestamp|src/assets/omnichain/OutrunOFT.sol|OutrunOFT._checkAndUpdate(RateLimiter.RateLimit,bool,uint32,uint256) uses timestamp for comparisons"
+    },
+    {
+      "id": "98477d3a236b6c2e999e7d587acaad95b2d11df6bc61e721841a967e9a469fe5",
+      "check": "timestamp",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/assets/omnichain/OutrunOFT.sol#L192-L209",
+      "summary": "OutrunOFT.quoteOFT(SendParam) uses timestamp for comparisons",
+      "key": "timestamp|src/assets/omnichain/OutrunOFT.sol|OutrunOFT.quoteOFT(SendParam) uses timestamp for comparisons"
+    },
+    {
+      "id": "a6652805fa5a43e8a117b8016c8322c3c8bf61112d911ec1f85238279d8a16b8",
+      "check": "timestamp",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/assets/omnichain/OutrunOFT.sol#L215-L221",
+      "summary": "OutrunOFT._toSD(uint256) uses timestamp for comparisons",
+      "key": "timestamp|src/assets/omnichain/OutrunOFT.sol|OutrunOFT._toSD(uint256) uses timestamp for comparisons"
+    },
+    {
+      "id": "b0c568608accf76602e4dc632617fcacdbd1ea6a3439fdf0312c36fa40702cce",
+      "check": "timestamp",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/assets/omnichain/OutrunOFT.sol#L274-L281",
+      "summary": "OutrunOFT._maxQuoteAmountLD(uint32) uses timestamp for comparisons",
+      "key": "timestamp|src/assets/omnichain/OutrunOFT.sol|OutrunOFT._maxQuoteAmountLD(uint32) uses timestamp for comparisons"
+    },
+    {
+      "id": "451a41fa0eb4691b4d22832580b3d42fba8db80e640a2b81bcb89999763d33d0",
+      "check": "solc-version",
+      "impact": "Informational",
+      "confidence": "High",
+      "location": "src/integrations/lido/interfaces/IL2StETH.sol#L3",
+      "summary": "Version constraint ^0.8.10 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)",
+      "key": "solc-version|src/integrations/lido/interfaces/IL2StETH.sol|Version constraint ^0.8.10 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)"
+    },
+    {
+      "id": "6369375e670d3e5b5a223ff6141a303cf950d0b066cc576d87d47c135db72977",
+      "check": "solc-version",
+      "impact": "Informational",
+      "confidence": "High",
+      "location": "src/integrations/sky/interfaces/IPSM3.sol#L2",
+      "summary": "Version constraint ^0.8.13 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)",
+      "key": "solc-version|src/integrations/sky/interfaces/IPSM3.sol|Version constraint ^0.8.13 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)"
+    }
+  ]
+}
