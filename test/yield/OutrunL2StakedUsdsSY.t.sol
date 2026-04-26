@@ -48,7 +48,7 @@ contract MockPSM3 {
         MockERC20(assetOut).mint(receiver, amountOut);
     }
 
-    function previewSwapExactIn(address, address, uint256 amountIn) external view returns (uint256) {
+    function previewSwapExactIn(address, address, uint256 amountIn) external pure returns (uint256) {
         // 1:1 preview for all pairs in mock
         return amountIn;
     }
