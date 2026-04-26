@@ -24,7 +24,7 @@
 
 当前资产层以 [`src/assets/base/OutrunUniversalAssets.sol`](../../src/assets/base/OutrunUniversalAssets.sol) 为中心。该合约维护按 minter 维度记录的 `mintingCap` 与 `amountInMinted`，只允许在剩余额度内铸造 `uAsset`，并要求通过 `repay(account, amount)` 由 minter 自身回收对应债务。
 
-资产层还包含 [`src/assets/omnichain/OutrunOFT.sol`](../../src/assets/omnichain/OutrunOFT.sol) 的 OFT 扩展表面，因此本地实现具备跨链消息接口、本地铸烧逻辑与按 peerEid/方向生效的速率限制语义。标准 `quoteOFT()` 报价当前会反映 outbound capacity，并同时受 shared-decimal envelope 约束。跨链消息是否成功送达、对端 peer 配置是否正确、LayerZero 端点如何结算，属于外部系统依赖，不在本文档中作为本地已证事实。
+资产层还包含 [`src/assets/omnichain/OutrunOFT.sol`](../../src/assets/omnichain/OutrunOFT.sol) 的 OFT 扩展表面，因此本地实现具备跨链消息接口、本地铸烧逻辑与按 peerEid 生效的 outbound 速率限制语义（直接继承 LayerZero 官方 `RateLimiter`）。标准 `quoteOFT()` 报价当前会反映 outbound capacity，并同时受 shared-decimal envelope 约束。跨链消息是否成功送达、对端 peer 配置是否正确、LayerZero 端点如何结算，属于外部系统依赖，不在本文档中作为本地已证事实。
 
 ### position
 
