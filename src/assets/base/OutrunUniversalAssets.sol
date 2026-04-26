@@ -12,14 +12,10 @@ import {IUniversalAssets} from "../interfaces/IUniversalAssets.sol";
 contract OutrunUniversalAssets is IUniversalAssets, OutrunOFT {
     mapping(address minter => MintingStatus) public mintingStatusTable;
 
-    constructor(
-        string memory _name,
-        string memory _symbol,
-        uint8 _decimals,
-        address _lzEndpoint,
-        address _owner,
-        address _flashFeeReceiver
-    ) OutrunOFT(_name, _symbol, _decimals, _lzEndpoint, _owner, _flashFeeReceiver) Ownable(_owner) {}
+    constructor(string memory _name, string memory _symbol, uint8 _decimals, address _lzEndpoint, address _owner)
+        OutrunOFT(_name, _symbol, _decimals, _lzEndpoint, _owner)
+        Ownable(_owner)
+    {}
 
     /**
      * @notice Returns the remaining minting allowance for a minter.
