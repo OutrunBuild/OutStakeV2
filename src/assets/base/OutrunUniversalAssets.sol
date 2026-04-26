@@ -89,7 +89,7 @@ contract OutrunUniversalAssets is IUniversalAssets, OutrunOFT {
         uint256 amountInMinted = mintingStatusTable[msg.sender].amountInMinted;
         require(amountInMinted >= amount, ReachBurnCap());
 
-        _spendAllowance(account, msg.sender, amount);
+        if (account != msg.sender) _spendAllowance(account, msg.sender, amount);
         _burn(account, amount);
 
         mintingStatusTable[msg.sender].amountInMinted = amountInMinted - amount;
