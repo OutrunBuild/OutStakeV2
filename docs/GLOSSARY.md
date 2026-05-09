@@ -36,4 +36,14 @@
 - **_debit**：OFT 源链侧 burn 本地 token 的函数。
 - **_credit**：OFT 目标链侧 mint 本地 token 的函数。
 - **L2 Oracle-backed Adapter**：通过外部 oracle 读取 exchangeRate 的 L2 SY adapter，deposit/redeem 严格 1:1，不进行 wrap/unwrap/swap。
+- **Upgradeable Variant**：与当前非 upgradeable 合约并列存在、使用 `Upgradeable` 后缀的新 implementation；旧合约不重命名、不删除，作为 legacy implementation 保留。
+- **ERC1967Proxy**：planned upgradeable implementation 使用的 proxy 部署壳，部署时携带 initializer calldata 并把 proxy address 作为产品地址。
+- **UUPS**：planned upgradeable implementation 使用的 upgrade pattern；upgrade authority 位于 implementation 的 `_authorizeUpgrade(address)`，由 owner 控制。
+- **SYBaseUpgradeable**：planned upgradeable implementation 中所有 SY adapters 的共享 upgradeable base，统一持有 UUPS authority。
+- **Multisig Owner**：planned upgradeable implementation 的单一 protocol owner；无 timelock、无新增 governance module。
+- **Initializer**：upgradeable variant 替代 constructor 的初始化入口；通过 proxy deployment 调用一次，写入 owner 与原构造依赖。
+- **exchangeRateOracle**：oracle-backed SY upgradeable variants 中存储 oracle adapter 地址的 mutable storage 字段，通过 owner-only `setExchangeRateOracle(address)` 更新。
+- **OutrunExchangeOracleAdapter**：非 upgradeable、可重部署的薄 oracle adapter；负责读取 `latestAnswer()` 并标准化精度，不提供 freshness、bounds、fallback 或多源聚合保证。
+- **OutrunOFTUpgradeable**：planned custom OFT base，使用 LayerZero 官方 `OFTCoreUpgradeable` / `OAppUpgradeable` 路径并保留自定义 ERC20 metadata/decimals；需要自定义 metadata/decimals 时不继承默认 `OFTUpgradeable`。
+- **ReentrancyGuardTransientUpgradeable**：planned upgradeable helper 使用的 OpenZeppelin transient reentrancy guard；部署链需要支持 EIP-1153 transient storage。
 - **DAY (测试时间单位)**：部分部署脚本中的时间常量单位可能以秒计，不等同于自然日 86400 秒。

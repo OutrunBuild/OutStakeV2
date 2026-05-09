@@ -2,7 +2,18 @@
 
 ## 1. 文档目的
 
-本文档说明 `OutStakeV2` 当前实现中的核心账务规则，包括 `uAsset` minter-cap、position debt、wrap 池、汇率换算、赎回按比例销债、keeper redeem 分账与 wrap yield harvest。本文只记录当前本地代码已实现的账务逻辑。
+本文档说明 `OutStakeV2` 当前实现中的核心账务规则，包括 `uAsset` minter-cap、position debt、wrap 池、汇率换算、赎回按比例销债、keeper redeem 分账与 wrap yield harvest。本文只记录当前本地代码已实现的账务逻辑，并记录 planned upgradeable implementation 需要保持的账务边界。
+
+## 1.1 Upgradeable accounting readiness
+
+planned upgradeable implementation 使用 proxy-backed uAsset、SY adapter 与 staking position，但不改变本文账务语义：
+
+- `OutrunUniversalAssetsUpgradeable` 的 `mintingStatusTable` 继续按 minter 维度记录 `mintingCap` 与 `amountInMinted`。
+- `OutrunStakingPositionUpgradeable` 继续按 position 记录 `syStaked` 与 `UAssetMinted`，并按公共 wrap 池记录 `syTotalStaking`、`syWrapStaking`、`wrapUAssetDebt`。
+- `SY` 依赖在 initializer 中写入后保持固定，不新增 `setSY()`，避免 position / wrap debt 对应的 share token 与 exchangeRate source 被替换。
+- oracle-backed SY upgradeable variants 可通过 owner-only `setExchangeRateOracle(address)` 更换 `exchangeRateOracle`，但 setter 不改变 balances、shares、position accounting 或 yield-bearing token 配置。
+- `OutrunExchangeOracleAdapter` 仍是非 upgradeable thin adapter；本次变更不新增 oracle freshness、bounds、fallback 或多源聚合保证。
+- 旧 non-upgradeable contracts 已退出当前产品真源；新 upgradeable variants 的 V1 storage layout 是后续升级的 canonical layout。
 
 ## 2. `uAsset` 的 minter-cap 账务
 

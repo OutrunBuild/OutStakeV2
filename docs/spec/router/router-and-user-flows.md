@@ -2,7 +2,17 @@
 
 ## 1. 文档目的
 
-本文档整理 `OutrunRouter`、`OutrunStakingPosition` 与 `SYBase` 当前已经实现的用户流程，覆盖 token / native、`SY`、locked stake、wrap stake、wrap redeem、genesis 与 preview 语义。本文只记录本地代码和现有测试能直接证明的行为，不讨论 roadmap。
+本文档整理 `OutrunRouter`、`OutrunStakingPosition` 与 `SYBase` 当前已经实现的用户流程，覆盖 token / native、`SY`、locked stake、wrap stake、wrap redeem、genesis 与 preview 语义。本文只记录本地代码和现有测试能直接证明的行为，并记录 planned upgradeable implementation 下 router 与 proxy-backed products 的边界。
+
+## 1.1 Upgradeable readiness
+
+planned upgradeable implementation 不把 `OutrunRouter` 部署为 proxy：
+
+- router 仍是非 upgradeable、可重部署 helper。
+- router 业务入口仍通过用户传入的 `SY` / `SP` 地址或配置调用下游。
+- 下游 product address 可以是 `ERC1967Proxy` 地址：uAsset proxy、SY proxy、staking position proxy。
+- router 本身不持有 core accounting state；切换 router 需要用户/集成侧重新授权或改用新入口，但不迁移 position、uAsset debt 或 SY share state。
+- router 不获得 upgrade admin、timelock、pause、allowlist 或 oracle 管理能力。
 
 ## 2. token / native -> SY
 

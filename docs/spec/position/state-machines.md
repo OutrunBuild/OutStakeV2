@@ -2,7 +2,17 @@
 
 ## 1. 文档目的
 
-本文档把 `OutStakeV2` 当前用户可见主流程整理成状态机表达，帮助读者理解各个入口如何改变 position、wrap 池、`uAsset` debt 与 pause 状态。本文只描述当前本地代码里已经存在的流程。
+本文档把 `OutStakeV2` 当前用户可见主流程整理成状态机表达，帮助读者理解各个入口如何改变 position、wrap 池、`uAsset` debt 与 pause 状态。本文只描述当前本地代码里已经存在的流程，并记录 planned upgradeable implementation 不应改变这些状态机的边界。
+
+## 1.1 Upgradeable readiness
+
+planned upgradeable implementation 会把 staking position 部署为 `OutrunStakingPositionUpgradeable` + `ERC1967Proxy`：
+
+- initializer 写入 `SY`、`uAsset`、`minStake`、`revenuePool`、`keeper` 与 multisig owner。
+- `OutrunStakingPositionUpgradeable` 直接继承 `UUPSUpgradeable`，upgrade authorization 由 `onlyOwner` 控制。
+- `SY` 初始化后保持固定；不新增 `setSY()` 状态转移。
+- old `OutrunStakingPosition` 保留为 legacy implementation，新 upgradeable variant 并列存在。
+- 下列 stake / draw / redeem / wrap / keeper / harvest 状态机的产品语义不因 proxy deployment 改变。
 
 ## 2. 直接 stake 生命周期
 

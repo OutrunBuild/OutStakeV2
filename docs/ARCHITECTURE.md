@@ -10,27 +10,34 @@
 - `src/assets/omnichain/OutrunOFT.sol`
 - `src/assets/interfaces/IUniversalAssets.sol`
 - uAsset 统一债务与流通资产层，维护按 minter 维度的 mint cap / 已铸造债务 / mint / repay 路径，并继承 ERC20 / pause / OFT 跨链铸烧能力。
+- planned upgradeable implementation 会新增 `Upgradeable` 后缀变体并通过 `ERC1967Proxy` + UUPS 部署 state-bearing uAsset；旧非 upgradeable 合约不重命名、不删除，作为 legacy implementation 并列保留。
+- `OutrunUniversalAssetsUpgradeable` 直接继承 `UUPSUpgradeable`；其自定义 `OutrunOFTUpgradeable` 基于 LayerZero 官方 `OFTCoreUpgradeable` / `OAppUpgradeable` 路径，保留自定义 ERC20 metadata/decimals，不在需要自定义 metadata/decimals 时继承默认 `OFTUpgradeable`。
 
 ### 1.2 仓位层
 
 - `src/position/OutrunStakingPosition.sol`
 - `src/position/interfaces/IOutrunStakeManager.sol`
 - 管理锁仓仓位、可追加 uAsset 债务、到期赎回、keeper 代偿赎回、公共 wrap 池与 wrap 收益 harvest。
+- planned upgradeable implementation 会新增 `OutrunStakingPositionUpgradeable`，作为 UUPS implementation 部署在 `ERC1967Proxy` 后；`SY`、`uAsset`、keeper、revenuePool 等原构造依赖改为 initializer 写入 storage。
 
 ### 1.3 收益层
 
-- `src/yield/SYBase.sol`
-- `src/yield/adapters/aave/OutrunAaveV3SY.sol`
-- `src/yield/adapters/ethena/OutrunStakedUSDeSY.sol`
-- `src/yield/adapters/etherfi/OutrunWeETHSY.sol`
-- `src/yield/adapters/lido/OutrunWstETHSY.sol`
-- `src/yield/adapters/lido/OutrunL2WstETHSY.sol`
-- `src/yield/adapters/lido/OutrunL2WrappableWstETHSY.sol`
-- `src/yield/adapters/sky/OutrunStakedUsdsSY.sol`
-- `src/yield/adapters/sky/OutrunL2StakedUsdsSY.sol`
-- `src/yield/OutrunL2StakedTokenSY.sol`
+- `src/yield/SYBaseUpgradeable.sol`
+- `src/yield/adapters/aave/OutrunAaveV3SYUpgradeable.sol`
+- `src/yield/adapters/aster/OutrunAsBNBSYUpgradeable.sol`
+- `src/yield/adapters/ethena/OutrunStakedUSDeSYUpgradeable.sol`
+- `src/yield/adapters/etherfi/OutrunWeETHSYUpgradeable.sol`
+- `src/yield/adapters/lista/OutrunSlisBNBSYUpgradeable.sol`
+- `src/yield/adapters/lido/OutrunWstETHSYUpgradeable.sol`
+- `src/yield/adapters/lido/OutrunL2WstETHSYUpgradeable.sol`
+- `src/yield/adapters/lido/OutrunL2WrappableWstETHSYUpgradeable.sol`
+- `src/yield/adapters/sky/OutrunStakedUsdsSYUpgradeable.sol`
+- `src/yield/adapters/sky/OutrunL2StakedUsdsSYUpgradeable.sol`
+- `src/yield/OutrunL2StakedTokenSYUpgradeable.sol`
 - `src/yield/interfaces/IStandardizedYield.sol`
 - SY 份额层抽象，把外部收益资产包装为统一的 deposit / redeem / preview / exchangeRate 接口。
+- 所有当前 SY adapter product surface 都通过 `ERC1967Proxy` + UUPS 部署，包括 Lido 相关 adapter。`SYBaseUpgradeable` 统一继承 `UUPSUpgradeable`，具体 SY adapter 通过该 base 取得 upgrade authority，不重复继承 UUPS。
+- oracle-backed SY upgradeable variants 使用 mutable `exchangeRateOracle` storage 与 `setExchangeRateOracle(address)` onlyOwner 入口；`OutrunExchangeOracleAdapter` 自身仍是非 upgradeable、可重部署 helper。
 
 ### 1.4 路由层
 
@@ -38,12 +45,14 @@
 - `src/router/interfaces/IOutrunRouter.sol`
 - `src/router/interfaces/IMemeverseLauncher.sol`
 - 把 token <-> SY <-> staking position/uAsset 组合为单次入口，并承载 memeverseLauncher genesis 集成。
+- `OutrunRouter` 不进入本次 upgradeable product surface；planned implementation 中仍保持非 upgradeable、可重部署 helper，并通过参数或配置调用 proxy-backed uAsset / SY / position。
 
 ### 1.5 集成与 Oracle 层
 
-- `src/integrations/{aave,etherfi,lido,sky}/interfaces/*.sol`
+- `src/integrations/{aave,aster,etherfi,lido,lista,sky}/interfaces/*.sol`
 - `src/libraries/oracle/OutrunExchangeOracleAdapter.sol`
 - 外部协议最小 interface 与 adapter 调用封装；oracle adapter 作为薄层标准化精度归一化。
+- `OutrunExchangeOracleAdapter` 不部署在 proxy 后；需要更换 oracle normalization 规则时部署新 adapter，再由 oracle-backed SY proxy 的 owner 更新 `exchangeRateOracle`。
 
 ### 1.6 底层库
 
@@ -57,6 +66,19 @@
 - `src/libraries/IWETH.sol`
 - `src/libraries/WadRayMath.sol`
 - 跨业务域共享的 token 传输、汇率换算、重入保护、数组操作、ID 生成、错误定义等基础工具。
+- planned upgradeable implementation 使用 initializer-compatible helper。`TokenHelperUpgradeable` 采用 OpenZeppelin `ReentrancyGuardTransientUpgradeable`；部署目标链必须支持 EIP-1153 transient storage。
+
+### 1.7 Upgradeable deployment model
+
+planned upgradeable implementation 的 state-bearing product 使用 UUPS + `ERC1967Proxy`：
+
+- proxy-backed：`OutrunUniversalAssetsUpgradeable`、`OutrunStakingPositionUpgradeable`、全部 SY adapter upgradeable variants。
+- non-upgradeable / redeployable：`OutrunRouter`、`OutrunExchangeOracleAdapter`、interfaces、pure libraries、外部协议 interface。
+- deployment flow：部署 implementation，编码 initializer calldata，部署 `ERC1967Proxy(implementation, initData)`，把 proxy address 作为产品地址写入后续 wiring。
+- owner：单一 protocol owner 为 multisig；无 timelock、无新增 governance module。
+- upgrade authority：每个 UUPS product 的 `_authorizeUpgrade(address)` 由 `onlyOwner` 保护，只暴露 UUPS base 的 `upgradeToAndCall`。
+- initializer boundary：构造参数迁移到 `initialize(...)` / `__..._init(...)`，implementation constructor 禁用 initializers。LayerZero endpoint 与 local decimals 是 `OutrunOFTUpgradeable` 继承官方 upgradeable OFT/OApp 路径所需的 implementation-level constructor 参数，每个 endpoint / local-decimal 配置部署一个 implementation。
+- legacy boundary：旧非 upgradeable SY 合约、测试与部署 helper 已退出当前产品真源；当前清理任务会删除对应源码与测试表面。
 
 ## 2. 关键资金流
 
@@ -143,14 +165,14 @@ OutrunRouter (concrete)
 #### SY Adapter 统一结构
 
 ```
-Concrete Adapter (e.g. OutrunAaveV3SY)
+Concrete Adapter (e.g. OutrunAaveV3SYUpgradeable)
   ⟶ SYBase (abstract)
     ⟶ OutrunERC20Pausable
       ⟶ OutrunERC20
     ⟶ IStandardizedYield (interface)
     → TokenHelper, ReentrancyGuard, CommonErrors
 
-Concrete Adapter (e.g. OutrunL2WstETHSY)
+Concrete Adapter (e.g. OutrunL2WstETHSYUpgradeable)
   依赖:
     → IExchangeRateOracle              getExchangeRate()
 
