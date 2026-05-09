@@ -274,7 +274,7 @@
       "tests": [
         "test/router/OutrunRouter.t.sol",
         "test/router/OutrunRouterFuzz.t.sol",
-        "test/integration/RouterPositionSy.t.sol"
+        "test/upgradeable/RouterProxyIntegration.t.sol"
       ],
       "rules": [
         {
@@ -285,25 +285,22 @@
           "change_tests": [
             "test/router/OutrunRouter.t.sol",
             "test/router/OutrunRouterFuzz.t.sol",
-            "test/integration/RouterPositionSy.t.sol"
+            "test/upgradeable/RouterProxyIntegration.t.sol"
           ],
           "evidence_tests": [
             "test/router/OutrunRouter.t.sol",
             "test/router/OutrunRouterFuzz.t.sol",
-            "test/integration/RouterPositionSy.t.sol"
+            "test/upgradeable/RouterProxyIntegration.t.sol"
           ]
         }
       ]
     },
     "yield": {
       "tests": [
-        "test/yield/OutrunAaveV3SY.t.sol",
-        "test/yield/OutrunAsBNBSY.t.sol",
-        "test/yield/OutrunL2StakedTokenSY.t.sol",
-        "test/yield/OutrunStakedUSDeSY.t.sol",
-        "test/yield/SYAdapterFuzz.t.sol",
-        "test/yield/SYBaseDeposit.t.sol",
-        "test/yield/SYBaseFuzz.t.sol"
+        "test/upgradeable/SYUpgradeable.t.sol",
+        "test/upgradeable/SYAdaptersUpgradeable.t.sol",
+        "test/upgradeable/SYAdaptersFork.t.sol",
+        "test/upgradeable/OracleSetterUpgradeable.t.sol"
       ],
       "rules": [
         {
@@ -313,22 +310,16 @@
             "^src/integrations/.*\\.sol$"
           ],
           "change_tests": [
-            "test/yield/OutrunAaveV3SY.t.sol",
-            "test/yield/OutrunAsBNBSY.t.sol",
-            "test/yield/OutrunL2StakedTokenSY.t.sol",
-            "test/yield/OutrunStakedUSDeSY.t.sol",
-            "test/yield/SYAdapterFuzz.t.sol",
-            "test/yield/SYBaseDeposit.t.sol",
-            "test/yield/SYBaseFuzz.t.sol"
+            "test/upgradeable/SYUpgradeable.t.sol",
+            "test/upgradeable/SYAdaptersUpgradeable.t.sol",
+            "test/upgradeable/SYAdaptersFork.t.sol",
+            "test/upgradeable/OracleSetterUpgradeable.t.sol"
           ],
           "evidence_tests": [
-            "test/yield/OutrunAaveV3SY.t.sol",
-            "test/yield/OutrunAsBNBSY.t.sol",
-            "test/yield/OutrunL2StakedTokenSY.t.sol",
-            "test/yield/OutrunStakedUSDeSY.t.sol",
-            "test/yield/SYAdapterFuzz.t.sol",
-            "test/yield/SYBaseDeposit.t.sol",
-            "test/yield/SYBaseFuzz.t.sol"
+            "test/upgradeable/SYUpgradeable.t.sol",
+            "test/upgradeable/SYAdaptersUpgradeable.t.sol",
+            "test/upgradeable/SYAdaptersFork.t.sol",
+            "test/upgradeable/OracleSetterUpgradeable.t.sol"
           ]
         }
       ]
