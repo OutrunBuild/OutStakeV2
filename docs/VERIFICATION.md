@@ -1,10 +1,22 @@
 # OutStakeV2 Verification
 
 - Verification entrypoint: script/harness/gate.sh
-- Quick local profile: npm run gate:fast
-- Full local profile: npm run gate
+- Default local profile: npm run gate (fast)
+- Fast local profile: npm run gate:fast
+- Full local profile: npm run gate:full
 - CI profile: npm run gate:ci
-- gate:fast is for fast blocking checks on the current change set.
-- gate is the local release gate and uses the full profile.
-- gate:ci is the CI-facing path and may receive changed files from CI.
+- gate (fast) is the default local verdict for current work — targeted tests on the change set.
+- gate:full is the local release gate and runs the repository-wide verification profile.
+- gate:ci is the CI-facing path and requires changed-files input from CI.
+- For current local task completion/readiness, default to `fast` regardless of risk tier.
+- Do not infer `full` from high-risk or prod-semantic risk tier alone.
+- Use `full` only for explicit human requests for full/release/merge verification or CI/release-equivalent contexts.
+- Local current-work gate invocations must use the exact changed-file input.
+- changed-files mode for Solidity paths requires diff evidence via `CHANGE_CLASSIFIER_DIFF_FILE` or `GATE_DIFF_BASE`; without it, semantic classification is blocked.
+- Diff evidence must not be created as persistent repository files. Prefer `GATE_DIFF_BASE=<git-ref>`; when `CHANGE_CLASSIFIER_DIFF_FILE` is needed, point it at a `mktemp` file outside the repository and remove that file after `gate.sh` exits.
+- Do not create, commit, or leave behind repository files named after `CHANGE_CLASSIFIER_DIFF_FILE`, `GATE_DIFF_BASE`, or related diff-evidence artifacts.
+- `fast` is the default local verdict for current work and should be run against the exact changed file set.
+- `full` is the merge or release gate and runs the repository-wide verification profile.
+- harness-only and docs-only changes still require a fresh gate verdict from the matching profile before claiming completion.
+- mock-heavy unit tests do not replace semantic or integration coverage when the claim depends on upstream protocol behavior.
 - Completion or pass claims require fresh output from the exact gate profile used for the verdict.
