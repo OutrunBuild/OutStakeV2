@@ -225,8 +225,8 @@
   "test_mapping": {
     "assets": {
       "tests": [
-        "test/assets/OutrunOFT.t.sol",
-        "test/assets/OutrunUniversalAssets.t.sol"
+        "test/upgradeable/OutrunOFTUpgradeable.t.sol",
+        "test/upgradeable/OutrunUniversalAssetsUpgradeable.t.sol"
       ],
       "rules": [
         {
@@ -235,21 +235,21 @@
             "^src/assets/.*\\.sol$"
           ],
           "change_tests": [
-            "test/assets/OutrunOFT.t.sol",
-            "test/assets/OutrunUniversalAssets.t.sol"
+            "test/upgradeable/OutrunOFTUpgradeable.t.sol",
+            "test/upgradeable/OutrunUniversalAssetsUpgradeable.t.sol"
           ],
           "evidence_tests": [
-            "test/assets/OutrunOFT.t.sol",
-            "test/assets/OutrunUniversalAssets.t.sol"
+            "test/upgradeable/OutrunOFTUpgradeable.t.sol",
+            "test/upgradeable/OutrunUniversalAssetsUpgradeable.t.sol"
           ]
         }
       ]
     },
     "position": {
       "tests": [
-        "test/position/OutrunStakingPosition.t.sol",
-        "test/position/OutrunStakingPositionFuzz.t.sol",
-        "test/position/OutrunStakingPositionInvariant.t.sol"
+        "test/upgradeable/OutrunStakingPositionUpgradeable.t.sol",
+        "test/upgradeable/OutrunStakingPositionFuzzUpgradeable.t.sol",
+        "test/upgradeable/OutrunStakingPositionInvariantUpgradeable.t.sol"
       ],
       "rules": [
         {
@@ -258,22 +258,22 @@
             "^src/position/.*\\.sol$"
           ],
           "change_tests": [
-            "test/position/OutrunStakingPosition.t.sol",
-            "test/position/OutrunStakingPositionFuzz.t.sol",
-            "test/position/OutrunStakingPositionInvariant.t.sol"
+            "test/upgradeable/OutrunStakingPositionUpgradeable.t.sol",
+            "test/upgradeable/OutrunStakingPositionFuzzUpgradeable.t.sol",
+            "test/upgradeable/OutrunStakingPositionInvariantUpgradeable.t.sol"
           ],
           "evidence_tests": [
-            "test/position/OutrunStakingPosition.t.sol",
-            "test/position/OutrunStakingPositionFuzz.t.sol",
-            "test/position/OutrunStakingPositionInvariant.t.sol"
+            "test/upgradeable/OutrunStakingPositionUpgradeable.t.sol",
+            "test/upgradeable/OutrunStakingPositionFuzzUpgradeable.t.sol",
+            "test/upgradeable/OutrunStakingPositionInvariantUpgradeable.t.sol"
           ]
         }
       ]
     },
     "router": {
       "tests": [
-        "test/router/OutrunRouter.t.sol",
-        "test/router/OutrunRouterFuzz.t.sol",
+        "test/upgradeable/OutrunRouterUpgradeable.t.sol",
+        "test/upgradeable/OutrunRouterFuzzUpgradeable.t.sol",
         "test/upgradeable/RouterProxyIntegration.t.sol"
       ],
       "rules": [
@@ -283,13 +283,13 @@
             "^src/router/.*\\.sol$"
           ],
           "change_tests": [
-            "test/router/OutrunRouter.t.sol",
-            "test/router/OutrunRouterFuzz.t.sol",
+            "test/upgradeable/OutrunRouterUpgradeable.t.sol",
+            "test/upgradeable/OutrunRouterFuzzUpgradeable.t.sol",
             "test/upgradeable/RouterProxyIntegration.t.sol"
           ],
           "evidence_tests": [
-            "test/router/OutrunRouter.t.sol",
-            "test/router/OutrunRouterFuzz.t.sol",
+            "test/upgradeable/OutrunRouterUpgradeable.t.sol",
+            "test/upgradeable/OutrunRouterFuzzUpgradeable.t.sol",
             "test/upgradeable/RouterProxyIntegration.t.sol"
           ]
         }
@@ -326,7 +326,7 @@
     },
     "security": {
       "tests": [
-        "test/security/AdversarialTests.t.sol"
+        "test/upgradeable/AdversarialTestsUpgradeable.t.sol"
       ],
       "rules": [
         {
@@ -341,10 +341,10 @@
             "^script/.*\\.sol$"
           ],
           "change_tests": [
-            "test/security/AdversarialTests.t.sol"
+            "test/upgradeable/AdversarialTestsUpgradeable.t.sol"
           ],
           "evidence_tests": [
-            "test/security/AdversarialTests.t.sol"
+            "test/upgradeable/AdversarialTestsUpgradeable.t.sol"
           ]
         }
       ]
