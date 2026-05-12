@@ -2,11 +2,11 @@
 
 ## 1. 文档目的
 
-本文档整理 `OutrunRouter`、`OutrunStakingPosition` 与 `SYBase` 当前已经实现的用户流程，覆盖 token / native、`SY`、locked stake、wrap stake、wrap redeem、genesis 与 preview 语义。本文只记录本地代码和现有测试能直接证明的行为，并记录 planned upgradeable implementation 下 router 与 proxy-backed products 的边界。
+本文档整理 `OutrunRouter`、`OutrunStakingPosition` 与 `SYBase` 当前已经实现的用户流程，覆盖 token / native、`SY`、locked stake、wrap stake、wrap redeem、genesis 与 preview 语义。本文只记录本地代码和现有测试能直接证明的行为，并记录当前 router 与 proxy-backed products 的边界。
 
 ## 1.1 Upgradeable readiness
 
-planned upgradeable implementation 不把 `OutrunRouter` 部署为 proxy：
+当前 upgradeable product surface 不把 `OutrunRouter` 部署为 proxy：
 
 - router 仍是非 upgradeable、可重部署 helper。
 - router 业务入口仍通过用户传入的 `SY` / `SP` 地址或配置调用下游。
@@ -47,12 +47,13 @@ planned upgradeable implementation 不把 `OutrunRouter` 部署为 proxy：
 
 `StakeParam` 结构体包含以下字段：
 - `lockupDays`：锁仓天数
-- `minUAssetMinted`：最小 uAsset 输出（滑点保护）
+- `minSyOut`：token -> SY 最小输出（滑点保护）
+- `minUAssetMinted`：SY -> uAsset 最小输出（滑点保护）
 - `owner`：position owner，拥有仓位控制权
 - `receiver`：uAsset 接收地址；当 `receiver == address(0)` 时回退到 `owner`
 
 当前路由行为：
-- router 先调用 `_mintSY(..., address(this), tokenAmount, 0)`，把新 mint 的 `SY` 留在 router。
+- router 先调用 `_mintSY(..., address(this), tokenAmount, stakeParam.minSyOut)`，把新 mint 的 `SY` 留在 router。
 - router 解析 uAsset 接收地址：`uAssetReceiver = stakeParam.receiver == address(0) ? stakeParam.owner : stakeParam.receiver`。
 - 然后 router 调用 `SP.stake(amountInSY, stakeParam.lockupDays, stakeParam.owner, uAssetReceiver)`。
 - `OutrunStakingPosition.stake(...)` 的行为是：
@@ -84,18 +85,20 @@ planned upgradeable implementation 不把 `OutrunRouter` 部署为 proxy：
 
 ### 6.1 token -> wrap stake
 
-`wrapStakeFromToken(SP, tokenIn, tokenAmount, uAssetRecipient)` 的流程是：
+`wrapStakeFromToken(SP, tokenIn, tokenAmount, minSyOut, uAssetRecipient, minUAssetMinted)` 的流程是：
 
 - router 先从 `SP.SY()` 读取 stake manager 绑定的 `SY`。
-- router 调用 `_mintSY(SY, tokenIn, address(this), tokenAmount, 0)`，先把 token / native 转成 `SY`。
+- router 调用 `_mintSY(SY, tokenIn, address(this), tokenAmount, minSyOut)`，先把 token / native 转成 `SY`，并由 `SY.deposit(...)` 校验 token -> SY 最小输出。
 - router 再调用 `SP.wrapStake(amountInSY, uAssetRecipient)`。
+- router 在 wrap stake 完成后校验 `UAssetMinted >= minUAssetMinted`；不足时整笔交易回退并报 `InsufficientUAssetMinted(...)`。
 
 ### 6.2 SY -> wrap stake
 
-`wrapStakeFromSY(SY, SP, amountInSY, uAssetRecipient)` 的流程是：
+`wrapStakeFromSY(SY, SP, amountInSY, uAssetRecipient, minUAssetMinted)` 的流程是：
 
 - router 先把 `SY` 从调用者拉到自己地址。
 - router 再调用 `SP.wrapStake(amountInSY, uAssetRecipient)`。
+- router 在 wrap stake 完成后校验 `UAssetMinted >= minUAssetMinted`；不足时整笔交易回退并报 `InsufficientUAssetMinted(...)`。
 
 ### 6.3 wrap stake 落到 position 合约后的语义
 
@@ -118,10 +121,10 @@ planned upgradeable implementation 不把 `OutrunRouter` 部署为 proxy：
 
 ## 7. wrap redeem
 
-`wrapRedeem(SP, amountInUAsset, receiver, tokenOut)` 是 router 的 wrap 池赎回入口。
+`wrapRedeem(SP, amountInUAsset, receiver, tokenOut, minTokenOut)` 是 router 的 wrap 池赎回入口。
 
 - router 会先读取 `SP.uAsset()`，把 `amountInUAsset` 从调用者拉到 router。
-- router 给 `SP` 授权后，调用 `SP.wrapRedeem(amountInUAsset, receiver, tokenOut)`。
+- router 给 `SP` 授权后，调用 `SP.wrapRedeem(amountInUAsset, receiver, tokenOut, minTokenOut)`。
 - `OutrunStakingPosition.wrapRedeem(...)` 当前行为是：
   - `receiver` 不能为零地址，`amountInUAsset` 不能为 0。
   - `amountInUAsset` 不能大于 `wrapUAssetDebt`。
@@ -132,7 +135,7 @@ planned upgradeable implementation 不把 `OutrunRouter` 部署为 proxy：
     - `syTotalStaking`
     - `syWrapStaking`
     - `wrapUAssetDebt`
-  - 若 `tokenOut == SY`，直接转出 `SY`；否则调用 `SY.redeem(receiver, amountInSY, tokenOut, 0, false)`。
+  - 若 `tokenOut == SY`，直接校验 `amountInSY >= minTokenOut` 并转出 `SY`；否则把 `minTokenOut` 传给 `SY.redeem(...)`。
 
 测试证明：
 
@@ -146,17 +149,19 @@ planned upgradeable implementation 不把 `OutrunRouter` 部署为 proxy：
 
 ### 8.1 genesisByToken
 
-- router 先读取 `SP.SY()`，把 `tokenIn` 转成 `SY`。
+- `genesisByToken(SP, tokenIn, tokenAmount, minSyOut, minUAssetMinted, lockupDays, verseId, genesisUser)` 会先读取 `SP.SY()`，把 `tokenIn` 转成 `SY`，并把 `minSyOut` 传给 token -> SY deposit。
 - 然后调用 `SP.stake(amountInSY, lockupDays, genesisUser, address(this))`。
 - 这里走的是 locked stake，不是 wrap stake。
 - stake 产出的 `uAsset` 先 mint 给 router 自己。
+- router 在 stake 后校验 `amountInUAsset >= minUAssetMinted`；不足时整笔交易回退并报 `InsufficientUAssetMinted(...)`。
 - router 校验 `amountInUAsset <= type(uint128).max`。
 - 之后 router 授权 `memeverseLauncher`，再调用 `memeverseLauncher.genesis(verseId, uint128(amountInUAsset), genesisUser)`。
 
 ### 8.2 genesisBySY
 
-- router 先从调用者拉取 `SY`。
+- `genesisBySY(SY, SP, amountInSY, lockupDays, verseId, genesisUser, minUAssetMinted)` 会先从调用者拉取 `SY`。
 - 后续和 `genesisByToken(...)` 一样，仍然调用 `SP.stake(...)` 创建 locked position。
+- router 在 stake 后校验 `amountInUAsset >= minUAssetMinted`；不足时整笔交易回退并报 `InsufficientUAssetMinted(...)`。
 - 最终也是由 launcher 拉走本次 stake 产出的 `uAsset`。
 
 ### 8.3 当前实现可确认的 genesis 语义
@@ -164,7 +169,7 @@ planned upgradeable implementation 不把 `OutrunRouter` 部署为 proxy：
 - genesis 当前一定会生成 locked position，并写入 `deadline`。
 - genesis 当前不会走 wrap 池，所以不会增加 `syWrapStaking`。
 - 测试明确证明：`genesisBySY(...)` 后 `syWrapStaking == 0`，`syTotalStaking` 增加，`uAsset` 最终留在 launcher，不留在用户或 router。
-- 两个 genesis 入口都没有 `minSyOut`、`minUAssetMinted` 或 preview 参数。
+- genesis 入口没有 preview 参数；`genesisByToken(...)` 有 `minSyOut` 和 `minUAssetMinted`，`genesisBySY(...)` 有 `minUAssetMinted`。
 
 ## 9. preview 语义与 slippage 边界
 
@@ -189,19 +194,15 @@ planned upgradeable implementation 不把 `OutrunRouter` 部署为 proxy：
 当前 preview 不是完整成交保护，主要有这些边界：
 
 - `previewStakeFromToken(...)` 和 `previewStakeFromSY(...)` 接收 `stakeParam` 参数，但只使用 `stakeParam.lockupDays` 来消除未使用变量告警；preview 结果不反映：
+  - `minSyOut`
   - `minUAssetMinted`
   - `owner`
   - `receiver`
   - 不同 `lockupDays` 的差异对 exchangeRate 的影响（如果有的话）
-- `stakeFromToken(...)` / `stakeFromSY(...)` 的真实滑点保护只体现在 `minUAssetMinted`，并且是在 stake 完成后检查。
-- `wrapStakeFromToken(...)` / `wrapStakeFromSY(...)` 当前没有任何最小 `uAsset` 输出参数。
-- `mintSYFromToken(...)` 有 `minSyOut`，`redeemSyToToken(...)` 有 `minTokenOut`，但 router 内部复合路径：
-  - `stakeFromToken(...)`
-  - `wrapStakeFromToken(...)`
-  - `genesisByToken(...)`
-  都把 `_mintSY(..., minSyOut = 0)` 写死，没有 router 级 `SY` 最小输出保护。
-- `wrapRedeem(...)` 当前也没有 router 级 `minTokenOut`；进入 position 后，对非 `SY` 输出调用的 `SY.redeem(...)` 也是 `minTokenOut = 0`。
-- `previewWrapRedeem(...)` 与实际 `wrapRedeem(...)` 一样都依赖当前 `exchangeRate()`；测试证明两者在给定汇率下可对齐，但这不等于执行时一定锁定该结果。
+- preview 只 quote，不锁定执行结果；执行时实际成交保护由入口参数负责：
+  - `stakeFromToken(...)`、`wrapStakeFromToken(...)`、`genesisByToken(...)` 的 token -> SY 阶段使用 `minSyOut`。
+  - locked stake、wrap stake 与 genesis 的 SY -> uAsset 阶段使用 `minUAssetMinted`。
+  - `redeemSyToToken(...)` 和 `wrapRedeem(...)` 的赎回阶段使用 `minTokenOut`。
 
 ## 10. 当前实现提醒
 

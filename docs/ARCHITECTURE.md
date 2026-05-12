@@ -4,21 +4,21 @@
 
 ### 1.1 资产层
 
-- `src/assets/base/OutrunERC20.sol`
-- `src/assets/base/OutrunERC20Pausable.sol`
-- `src/assets/base/OutrunUniversalAssets.sol`
-- `src/assets/omnichain/OutrunOFT.sol`
+- `src/assets/base/OutrunERC20Upgradeable.sol`
+- `src/assets/base/OutrunERC20PausableUpgradeable.sol`
+- `src/assets/base/OutrunUniversalAssetsUpgradeable.sol`
+- `src/assets/omnichain/OutrunOFTUpgradeable.sol`
 - `src/assets/interfaces/IUniversalAssets.sol`
 - uAsset 统一债务与流通资产层，维护按 minter 维度的 mint cap / 已铸造债务 / mint / repay 路径，并继承 ERC20 / pause / OFT 跨链铸烧能力。
-- planned upgradeable implementation 会新增 `Upgradeable` 后缀变体并通过 `ERC1967Proxy` + UUPS 部署 state-bearing uAsset；旧非 upgradeable 合约不重命名、不删除，作为 legacy implementation 并列保留。
+- 当前 state-bearing uAsset 使用 `Upgradeable` 后缀变体并通过 `ERC1967Proxy` + UUPS 部署；旧非 upgradeable 合约已退出当前产品真源。
 - `OutrunUniversalAssetsUpgradeable` 直接继承 `UUPSUpgradeable`；其自定义 `OutrunOFTUpgradeable` 基于 LayerZero 官方 `OFTCoreUpgradeable` / `OAppUpgradeable` 路径，保留自定义 ERC20 metadata/decimals，不在需要自定义 metadata/decimals 时继承默认 `OFTUpgradeable`。
 
 ### 1.2 仓位层
 
-- `src/position/OutrunStakingPosition.sol`
+- `src/position/OutrunStakingPositionUpgradeable.sol`
 - `src/position/interfaces/IOutrunStakeManager.sol`
 - 管理锁仓仓位、可追加 uAsset 债务、到期赎回、keeper 代偿赎回、公共 wrap 池与 wrap 收益 harvest。
-- planned upgradeable implementation 会新增 `OutrunStakingPositionUpgradeable`，作为 UUPS implementation 部署在 `ERC1967Proxy` 后；`SY`、`uAsset`、keeper、revenuePool 等原构造依赖改为 initializer 写入 storage。
+- `OutrunStakingPositionUpgradeable` 作为 UUPS implementation 部署在 `ERC1967Proxy` 后；`SY`、`uAsset`、keeper、revenuePool 等依赖由 initializer 写入 storage。
 
 ### 1.3 收益层
 
@@ -45,7 +45,7 @@
 - `src/router/interfaces/IOutrunRouter.sol`
 - `src/router/interfaces/IMemeverseLauncher.sol`
 - 把 token <-> SY <-> staking position/uAsset 组合为单次入口，并承载 memeverseLauncher genesis 集成。
-- `OutrunRouter` 不进入本次 upgradeable product surface；planned implementation 中仍保持非 upgradeable、可重部署 helper，并通过参数或配置调用 proxy-backed uAsset / SY / position。
+- `OutrunRouter` 不进入 upgradeable product surface；仍保持非 upgradeable、可重部署 helper，并通过参数或配置调用 proxy-backed uAsset / SY / position。
 
 ### 1.5 集成与 Oracle 层
 
@@ -66,11 +66,11 @@
 - `src/libraries/IWETH.sol`
 - `src/libraries/WadRayMath.sol`
 - 跨业务域共享的 token 传输、汇率换算、重入保护、数组操作、ID 生成、错误定义等基础工具。
-- planned upgradeable implementation 使用 initializer-compatible helper。`TokenHelperUpgradeable` 采用 OpenZeppelin `ReentrancyGuardTransientUpgradeable`；部署目标链必须支持 EIP-1153 transient storage。
+- 当前 helper 中 `TokenHelper` 继承项目内 `ReentrancyGuard`，该 guard 使用 transient storage；部署目标链必须支持 EIP-1153 transient storage。
 
 ### 1.7 Upgradeable deployment model
 
-planned upgradeable implementation 的 state-bearing product 使用 UUPS + `ERC1967Proxy`：
+当前 state-bearing product 使用 UUPS + `ERC1967Proxy`：
 
 - proxy-backed：`OutrunUniversalAssetsUpgradeable`、`OutrunStakingPositionUpgradeable`、全部 SY adapter upgradeable variants。
 - non-upgradeable / redeployable：`OutrunRouter`、`OutrunExchangeOracleAdapter`、interfaces、pure libraries、外部协议 interface。
@@ -127,26 +127,33 @@ owner 调用 harvestWrapYield -> 计算 wrap 池盈余 (syWrapStaking > assetToS
 #### uAsset 继承链
 
 ```
-OutrunUniversalAssets (concrete)
-  ⟶ OutrunOFT (abstract)
-    ⟶ OFTCore                          ← @layerzerolabs/oft-evm
-    ⟶ RateLimiter                      ← @layerzerolabs/oapp-evm
-    ⟶ OutrunERC20Pausable
-      ⟶ OutrunERC20
+OutrunUniversalAssetsUpgradeable (concrete)
+  ⟶ Initializable                       ← openzeppelin-upgradeable
+  ⟶ IUniversalAssets (interface)
+  ⟶ OutrunOFTUpgradeable (abstract)
+    ⟶ OFTCoreUpgradeable                ← @layerzerolabs/oft-evm-upgradeable
+    ⟶ OutrunRateLimiterUpgradeable
+    ⟶ OutrunERC20PausableUpgradeable
+      ⟶ OutrunERC20Upgradeable
+      ⟶ PausableUpgradeable             ← openzeppelin-upgradeable
+      ⟶ OwnableUpgradeable              ← openzeppelin-upgradeable
+  ⟶ UUPSUpgradeable                     ← openzeppelin-upgradeable
 ```
 
 #### Position 继承链
 
 ```
-OutrunStakingPosition (concrete)
-  ⟶ Ownable                            ← openzeppelin
-  ⟶ Pausable                           ← openzeppelin
+OutrunStakingPositionUpgradeable (concrete)
   ⟶ IOutrunStakeManager (interface)
+  ⟶ AutoIncrementIdUpgradeable
+  ⟶ TokenHelper
+  ⟶ PausableUpgradeable                ← openzeppelin-upgradeable
+  ⟶ OwnableUpgradeable                 ← openzeppelin-upgradeable
+  ⟶ UUPSUpgradeable                    ← openzeppelin-upgradeable
   依赖:
-    → OutrunUniversalAssets (uAsset)     mint / repay
+    → IUniversalAssets (uAsset)          mint / repay
     → IStandardizedYield (SY)            exchangeRate / redeem
-    → TokenHelper, SYUtils, ArrayLib,
-      AutoIncrementId, CommonErrors
+    → SYUtils, CommonErrors
 ```
 
 #### Router 依赖扇出
@@ -166,11 +173,15 @@ OutrunRouter (concrete)
 
 ```
 Concrete Adapter (e.g. OutrunAaveV3SYUpgradeable)
-  ⟶ SYBase (abstract)
-    ⟶ OutrunERC20Pausable
-      ⟶ OutrunERC20
+  ⟶ SYBaseUpgradeable (abstract)
     ⟶ IStandardizedYield (interface)
-    → TokenHelper, ReentrancyGuard, CommonErrors
+    ⟶ OutrunERC20PausableUpgradeable
+      ⟶ OutrunERC20Upgradeable
+      ⟶ PausableUpgradeable             ← openzeppelin-upgradeable
+      ⟶ OwnableUpgradeable              ← openzeppelin-upgradeable
+    ⟶ TokenHelper
+    ⟶ UUPSUpgradeable                   ← openzeppelin-upgradeable
+    → CommonErrors
 
 Concrete Adapter (e.g. OutrunL2WstETHSYUpgradeable)
   依赖:
@@ -230,6 +241,8 @@ OutrunExchangeOracleAdapter
 | Position | uAsset | `stake`/`wrapStake` → `mint`；`redeem`/`keepRedeem` → `repay` |
 | Adapter | External Protocol | deposit → `supply`/`wrap`/`deposit`；redeem → `withdraw`/`unwrap`/`release` |
 | OutrunOFT | LayerZero | `_toSD` 编码消息；`_debit` burn 本链；`_credit` mint 远端 |
+
+Router 复合路径会透传或校验用户传入的 slippage floors：`minSyOut` 约束 token -> SY，`minUAssetMinted` 约束 stake / wrap stake 输出，`minTokenOut` 约束 redeem 输出。
 
 ### 3.3 资金流方向
 

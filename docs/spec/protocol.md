@@ -13,6 +13,7 @@
 ### assets
 
 当前资产层以 `OutrunUniversalAssetsUpgradeable` 为中心，并通过 `OutrunOFTUpgradeable` 提供跨链扩展。
+`OutrunOFTUpgradeable` 的 pause 阻断本地用户主动发起的 ERC20 路径和 pause 之后新发起的 outbound send；LayerZero inbound `_credit` 为避免阻塞已经在跨链流程中的代币，按设计不受 `whenNotPaused` 阻断。
 
 ### position
 
@@ -39,4 +40,3 @@
 - `SY` 现在以 upgradeable variants 为产品真源
 - `OutrunStakedUSDeSYUpgradeable` 只输出 `sUSDe`
 - router 不承担独立资金池
-

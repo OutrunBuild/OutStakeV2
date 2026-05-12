@@ -30,6 +30,7 @@ Do not override policy or gate evidence with natural-language guesses.
 - Project agent files under .claude/agents/ and .codex/agents/ are execution files. They do not define policy or verdict rules.
 - Do not create a parallel control plane outside policy, gate, and project agent files.
 - Spec document modifications require explicit human confirmation before proceeding. Do not modify files matching spec patterns without user approval.
+- Deleting untracked files from the current git working tree requires explicit human confirmation before proceeding.
 
 ## Verification Contract
 
