@@ -9,7 +9,7 @@
 当前 upgradeable product surface 不把 `OutrunRouter` 部署为 proxy：
 
 - router 仍是非 upgradeable、可重部署 helper。
-- router 业务入口仍通过用户传入的 `SY` / `SP` 地址或配置调用下游。
+- router 业务入口仍通过用户传入的独立 `SY` 地址、`SP` 地址或从 `SP.SY()` 派生的 canonical `SY` 调用下游。
 - 下游 product address 可以是 `ERC1967Proxy` 地址：uAsset proxy、SY proxy、staking position proxy。
 - router 本身不持有 core accounting state；切换 router 需要用户/集成侧重新授权或改用新入口，但不迁移 position、uAsset debt 或 SY share state。
 - router 不获得 upgrade admin、timelock、pause、allowlist 或 oracle 管理能力。
@@ -43,7 +43,7 @@
 
 ## 4. token -> locked stake
 
-`stakeFromToken(SY, SP, tokenIn, tokenAmount, stakeParam)` 当前实现是”先 mint `SY`，再创建 locked position”。
+`stakeFromToken(SP, tokenIn, tokenAmount, stakeParam)` 当前实现是”从 `SP.SY()` 派生 canonical `SY`，先 mint `SY`，再创建 locked position”。
 
 `StakeParam` 结构体包含以下字段：
 - `lockupDays`：锁仓天数
@@ -53,6 +53,7 @@
 - `receiver`：uAsset 接收地址；当 `receiver == address(0)` 时回退到 `owner`
 
 当前路由行为：
+- router 先从 `SP.SY()` 读取 stake manager 绑定的 canonical `SY`，不接收调用者单独传入的 `SY`。
 - router 先调用 `_mintSY(..., address(this), tokenAmount, stakeParam.minSyOut)`，把新 mint 的 `SY` 留在 router。
 - router 解析 uAsset 接收地址：`uAssetReceiver = stakeParam.receiver == address(0) ? stakeParam.owner : stakeParam.receiver`。
 - 然后 router 调用 `SP.stake(amountInSY, stakeParam.lockupDays, stakeParam.owner, uAssetReceiver)`。
@@ -68,9 +69,9 @@
 
 ## 5. SY -> locked stake
 
-`stakeFromSY(SY, SP, amountInSY, stakeParam)` 与上一路径的差别，只在于输入资产已经是 `SY`。
+`stakeFromSY(SP, amountInSY, stakeParam)` 与上一路径的差别，只在于输入资产已经是 `SP.SY()` 返回的 canonical `SY`。
 
-- router 先把 `amountInSY` 从调用者拉到自己地址。
+- router 先从 `SP.SY()` 读取 canonical `SY`，再把 `amountInSY` 从调用者拉到自己地址。
 - 之后走和 `token -> locked stake` 一样的 `_stakeFromSYBalance(...)` 路径。
 - router 根据 `stakeParam.receiver` 决定 uAsset 接收地址：若 `receiver == address(0)` 则回退到 `stakeParam.owner`。
 - locked position 创建后的核心语义不变：
@@ -94,9 +95,9 @@
 
 ### 6.2 SY -> wrap stake
 
-`wrapStakeFromSY(SY, SP, amountInSY, uAssetRecipient, minUAssetMinted)` 的流程是：
+`wrapStakeFromSY(SP, amountInSY, uAssetRecipient, minUAssetMinted)` 的流程是：
 
-- router 先把 `SY` 从调用者拉到自己地址。
+- router 先从 `SP.SY()` 读取 canonical `SY`，再把 `SY` 从调用者拉到自己地址。
 - router 再调用 `SP.wrapStake(amountInSY, uAssetRecipient)`。
 - router 在 wrap stake 完成后校验 `UAssetMinted >= minUAssetMinted`；不足时整笔交易回退并报 `InsufficientUAssetMinted(...)`。
 
@@ -159,7 +160,7 @@
 
 ### 8.2 genesisBySY
 
-- `genesisBySY(SY, SP, amountInSY, lockupDays, verseId, genesisUser, minUAssetMinted)` 会先从调用者拉取 `SY`。
+- `genesisBySY(SP, amountInSY, lockupDays, verseId, genesisUser, minUAssetMinted)` 会先从 `SP.SY()` 读取 canonical `SY`，再从调用者拉取 `SY`。
 - 后续和 `genesisByToken(...)` 一样，仍然调用 `SP.stake(...)` 创建 locked position。
 - router 在 stake 后校验 `amountInUAsset >= minUAssetMinted`；不足时整笔交易回退并报 `InsufficientUAssetMinted(...)`。
 - 最终也是由 launcher 拉走本次 stake 产出的 `uAsset`。
@@ -175,18 +176,20 @@
 
 当前 router 暴露的 preview 入口有：
 
-- `previewStakeFromToken(...)`
+- `previewStakeFromToken(SP, tokenIn, tokenAmount, stakeParam)`
 - `previewStakeFromSY(...)`
-- `previewWrapStakeFromToken(...)`
+- `previewWrapStakeFromToken(SP, tokenIn, tokenAmount)`
 - `previewWrapRedeem(...)`
 
 当前实现里，这些 preview 的语义边界很明确：
 
-- `previewStakeFromToken(...)` 只做两步静态组合：
+- `previewStakeFromToken(SP, tokenIn, tokenAmount, stakeParam)` 不接收调用者传入的 `SY`；它先从 `SP.SY()` 派生 canonical `SY`，再做两步静态组合：
+  - 从 `SP.SY()` 读取 canonical `SY`
   - `SY.previewDeposit(tokenIn, tokenAmount)`
   - `SP.previewStake(amountInSY)`
 - `previewStakeFromSY(...)` 只调用 `SP.previewStake(amountInSY)`。
-- `previewWrapStakeFromToken(...)` 只做两步静态组合：
+- `previewWrapStakeFromToken(SP, tokenIn, tokenAmount)` 不接收调用者传入的 `SY`；它先从 `SP.SY()` 派生 canonical `SY`，再做两步静态组合：
+  - 从 `SP.SY()` 读取 canonical `SY`
   - `SY.previewDeposit(tokenIn, tokenAmount)`
   - `SP.previewWrapStake(amountInSY)`
 - `previewWrapRedeem(...)` 只是转发到 `SP.previewWrapRedeem(amountInUAsset, tokenOut)`。

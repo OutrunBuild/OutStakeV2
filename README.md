@@ -20,10 +20,11 @@ Harness machine truth is `.harness/policy.json`. Enforcement runs through `scrip
 Repository layout:
 
 - `src/assets/{base,interfaces,omnichain}`
-- `src/position/{interfaces}` plus root-level `OutrunStakingPosition.sol`
-- `src/yield/{interfaces,adapters/*}` plus root-level `SYBase.sol`
-- `src/router/{interfaces}` plus root-level `OutrunRouter.sol`
-- `src/integrations/{aave,etherfi,lido,lista,sky,oracles,deployment}`
-- `src/libraries`
-- `test/{assets,position,router,yield,support}`
-- `script/{deploy,lib,ops}`
+- `src/position/{interfaces}` plus `OutrunStakingPositionUpgradeable.sol`
+- `src/yield/{interfaces,adapters/{aave,aster,ethena,etherfi,lido,lista,sky}}` plus `SYBaseUpgradeable.sol` and `OutrunL2StakedTokenSYUpgradeable.sol`
+- `src/router/{interfaces}` plus `OutrunRouter.sol`
+- `src/integrations/{aave,aster,etherfi,lido,lista,sky}`
+- `src/libraries` plus `src/libraries/oracle`
+- `test/{deploy,support,upgradeable}` plus legacy-empty buckets `test/{assets,integration,position,router,security,yield}`
+- `script/{deploy,deploy/deployment,harness,lib,ops}`
+- `.harness/{runtime,schemas}` and `docs/`

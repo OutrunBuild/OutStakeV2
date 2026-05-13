@@ -2,32 +2,31 @@
 
 ## 1. 文档目的
 
-本文档把 `OutStakeV2` 当前用户可见主流程整理成状态机表达，帮助读者理解各个入口如何改变 position、wrap 池、`uAsset` debt 与 pause 状态。本文只描述当前本地代码里已经存在的流程，并记录 planned upgradeable implementation 不应改变这些状态机的边界。
+本文档把 `OutStakeV2` 当前用户可见主流程整理成状态机表达，帮助读者理解各个入口如何改变 position、wrap 池、`uAsset` debt 与 pause 状态。本文只描述当前本地代码里已经存在的流程，并记录当前 upgradeable-only implementation 的状态机边界。
 
 ## 1.1 Upgradeable readiness
 
-planned upgradeable implementation 会把 staking position 部署为 `OutrunStakingPositionUpgradeable` + `ERC1967Proxy`：
+当前 staking position 以 `OutrunStakingPositionUpgradeable` + `ERC1967Proxy` 部署：
 
 - initializer 写入 `SY`、`uAsset`、`minStake`、`revenuePool`、`keeper` 与 multisig owner。
 - `OutrunStakingPositionUpgradeable` 直接继承 `UUPSUpgradeable`，upgrade authorization 由 `onlyOwner` 控制。
 - `SY` 初始化后保持固定；不新增 `setSY()` 状态转移。
-- old `OutrunStakingPosition` 保留为 legacy implementation，新 upgradeable variant 并列存在。
 - 下列 stake / draw / redeem / wrap / keeper / harvest 状态机的产品语义不因 proxy deployment 改变。
 
 ## 2. 直接 stake 生命周期
 
-直接 stake 对应 `OutrunStakingPosition.stake(...)`，以及 router 的 `stakeFromToken` / `stakeFromSY` 在进入 position 后的同一路径。
+直接 stake 对应 `OutrunStakingPositionUpgradeable.stake(...)`，以及 router 的 `stakeFromToken` / `stakeFromSY` 在进入 position 后的同一路径。
 
 当前生命周期如下：
 
 1. 调用前状态：用户持有 `SY`，或先经 router 把 token 转成 `SY`。
 2. 入口校验：`positionOwner` 与 `uAssetReceiver` 不能为零地址，`amountInSY` 需满足 `minStake`，合约不能处于 paused。
-3. 资产进入：`SY` 被转入 `OutrunStakingPosition`。
+3. 资产进入：`SY` 被转入 `OutrunStakingPositionUpgradeable`。
 4. principal 定价：用当前 `exchangeRate()` 把 `amountInSY` 折算成 `principalValue`。
 5. debt 上限校验：检查当前 `uAsset` 给该 position 合约地址留下的 mintable cap 是否足够。
 6. 状态写入：增加 `syTotalStaking`，生成新的 `positionId`，写入 position。
 7. 债务铸造：调用 `uAsset.mint(uAssetReceiver, UAssetMinted)`。
-8. 完成状态：position 进入“已创建、未到期、可 draw、不可 redeem”的活跃状态。
+8. 完成状态：position 进入“已创建、可 draw”的活跃状态；若 `lockupDays > 0`，新 position 未到期、不可 redeem；若 `lockupDays == 0`，`deadline == block.timestamp`，新 position 可立即 redeem。
 
 ## 3. Draw 生命周期
 
@@ -44,7 +43,7 @@ planned upgradeable implementation 会把 staking position 部署为 `OutrunStak
 
 ## 4. 普通 redeem 生命周期
 
-`redeem(positionId, syRedeemed, receiver, tokenOut)` 当前只允许已到期的 position owner 发起。
+`redeem(positionId, syRedeemed, receiver, tokenOut, minTokenOut)` 当前只允许已到期的 position owner 发起。
 
 生命周期如下：
 
@@ -58,8 +57,8 @@ planned upgradeable implementation 会把 staking position 部署为 `OutrunStak
    - `position.UAssetMinted` 减少 `UAssetBurned`
    - 若剩余 `SY` 为 0，则删除 position
 6. 资产输出：
-   - `tokenOut == SY` 时直接转出 `SY`
-   - 否则调用 `SY.redeem(...)` 产出目标 token
+   - `tokenOut == SY` 时先检查 `syRedeemed >= minTokenOut`，再直接转出 `SY`
+   - 否则调用 `SY.redeem(receiver, syRedeemed, tokenOut, minTokenOut, false)` 产出目标 token
 7. 完成状态：position 进入“部分赎回后继续存在”或“已清空删除”。
 
 ## 5. Wrap stake / wrap redeem 生命周期
@@ -80,7 +79,7 @@ planned upgradeable implementation 会把 staking position 部署为 `OutrunStak
 
 ### 5.2 Wrap redeem
 
-`wrapRedeem(amountInUAsset, receiver, tokenOut)` 当前状态机如下：
+`wrapRedeem(amountInUAsset, receiver, tokenOut, minTokenOut)` 当前状态机如下：
 
 1. 前置状态：合约未 paused；输入合法；`amountInUAsset <= wrapUAssetDebt`。
 2. 份额换算：把 `amountInUAsset` 换算成 `amountInSY`。
@@ -91,8 +90,8 @@ planned upgradeable implementation 会把 staking position 部署为 `OutrunStak
    - `syWrapStaking -= amountInSY`
    - `wrapUAssetDebt -= amountInUAsset`
 6. 资产输出：
-   - `tokenOut == SY` 时直接输出 `SY`
-   - 否则通过 `SY.redeem(...)` 输出目标 token
+   - `tokenOut == SY` 时先检查 `amountInSY >= minTokenOut`，再直接输出 `SY`
+   - 否则通过 `SY.redeem(receiver, amountInSY, tokenOut, minTokenOut, false)` 输出目标 token
 
 当前 wrap 流程始终作用于共享池，不会生成或消费独立 `positionId`。
 
@@ -116,17 +115,16 @@ planned upgradeable implementation 会把 staking position 部署为 `OutrunStak
 
 ## 7. Harvest wrap yield 生命周期
 
-`harvestWrapYield(tokenOut)` 用于提取 wrap 池中超出债务等价 SY 的超额收益，当前状态机如下：
+`harvestWrapYield(tokenOut, minTokenOut)` 用于提取 wrap 池中超出债务等价 SY 的超额收益，当前状态机如下：
 
 1. 前置状态：
    - 调用者必须是 position 合约的 `owner`
    - 合约未 paused
-   - wrap 池有盈余：`syWrapStaking > assetToSy(wrapUAssetDebt)`
 
 2. 盈余计算：
    - 读取 `wrapPoolSY = syWrapStaking`
    - 计算 `wrapDebtInSY = assetToSy(wrapUAssetDebt)`（用当前 exchangeRate 换算）
-   - 若 `wrapPoolSY <= wrapDebtInSY`，则没有可 harvest 的收益，回退
+   - 若 `wrapPoolSY <= wrapDebtInSY`，则返回 0，状态不变
    - 否则 `harvestAmount = wrapPoolSY - wrapDebtInSY`
 
 3. 状态变化：
@@ -135,8 +133,8 @@ planned upgradeable implementation 会把 staking position 部署为 `OutrunStak
    - `wrapUAssetDebt` 不变（用户债务不受影响）
 
 4. 收益输出：
-   - 若 `tokenOut == SY`，直接将 `harvestAmount` 的 SY 转给 `revenuePool`
-   - 否则调用 `SY.redeem(revenuePool, harvestAmount, tokenOut, 0, false)` 将收益兑换为 tokenOut
+   - 若 `tokenOut == SY`，先检查 `harvestAmount >= minTokenOut`，再直接将 `harvestAmount` 的 SY 转给 `revenuePool`
+   - 否则调用 `SY.redeem(revenuePool, harvestAmount, tokenOut, minTokenOut, false)` 将收益兑换为 tokenOut
 
 5. 后置条件：
    - wrap 池仍有足够的 SY 覆盖 `wrapUAssetDebt`（即 `syWrapStaking >= assetToSy(wrapUAssetDebt)`）
@@ -149,7 +147,7 @@ planned upgradeable implementation 会把 staking position 部署为 `OutrunStak
 
 ### 8.1 Position 级 pause
 
-`OutrunStakingPosition.pause()` / `unpause()` 由 owner 控制，并直接影响带 `whenNotPaused` 的业务入口：
+`OutrunStakingPositionUpgradeable.pause()` / `unpause()` 由 owner 控制，并直接影响带 `whenNotPaused` 的业务入口：
 
 - `stake`
 - `drawUAsset`

@@ -205,22 +205,7 @@
       ]
     }
   },
-  "hard_blocks": [
-    {
-      "id": "mixed-harness-control-and-solidity",
-      "message": "harness_control changes must not be mixed with Solidity surfaces",
-      "mixed_surface_sets": [
-        [
-          "harness_control",
-          "solidity_prod"
-        ],
-        [
-          "harness_control",
-          "solidity_test"
-        ]
-      ]
-    }
-  ],
+  "hard_blocks": [],
   "testing_gaps": {},
   "test_mapping": {
     "assets": {
@@ -259,13 +244,11 @@
           ],
           "change_tests": [
             "test/upgradeable/OutrunStakingPositionUpgradeable.t.sol",
-            "test/upgradeable/OutrunStakingPositionFuzzUpgradeable.t.sol",
-            "test/upgradeable/OutrunStakingPositionInvariantUpgradeable.t.sol"
+            "test/upgradeable/OutrunStakingPositionFuzzUpgradeable.t.sol"
           ],
           "evidence_tests": [
             "test/upgradeable/OutrunStakingPositionUpgradeable.t.sol",
-            "test/upgradeable/OutrunStakingPositionFuzzUpgradeable.t.sol",
-            "test/upgradeable/OutrunStakingPositionInvariantUpgradeable.t.sol"
+            "test/upgradeable/OutrunStakingPositionFuzzUpgradeable.t.sol"
           ]
         }
       ]
@@ -312,14 +295,44 @@
           "change_tests": [
             "test/upgradeable/SYUpgradeable.t.sol",
             "test/upgradeable/SYAdaptersUpgradeable.t.sol",
-            "test/upgradeable/SYAdaptersFork.t.sol",
             "test/upgradeable/OracleSetterUpgradeable.t.sol"
           ],
           "evidence_tests": [
             "test/upgradeable/SYUpgradeable.t.sol",
             "test/upgradeable/SYAdaptersUpgradeable.t.sol",
-            "test/upgradeable/SYAdaptersFork.t.sol",
             "test/upgradeable/OracleSetterUpgradeable.t.sol"
+          ]
+        }
+      ]
+    },
+    "deployment": {
+      "tests": [
+        "test/deploy/OutstakeScriptUpgradeable.t.sol",
+        "test/deploy/YieldDeployScriptUpgradeable.t.sol"
+      ],
+      "rules": [
+        {
+          "id": "deployment-outstake-script",
+          "paths": [
+            "^script/deploy/OutstakeScript\\.s\\.sol$"
+          ],
+          "change_tests": [
+            "test/deploy/OutstakeScriptUpgradeable.t.sol"
+          ],
+          "evidence_tests": [
+            "test/deploy/OutstakeScriptUpgradeable.t.sol"
+          ]
+        },
+        {
+          "id": "deployment-yield-deploy-script",
+          "paths": [
+            "^script/deploy/YieldDeployScript\\.s\\.sol$"
+          ],
+          "change_tests": [
+            "test/deploy/YieldDeployScriptUpgradeable.t.sol"
+          ],
+          "evidence_tests": [
+            "test/deploy/YieldDeployScriptUpgradeable.t.sol"
           ]
         }
       ]

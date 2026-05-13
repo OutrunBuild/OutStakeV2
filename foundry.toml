@@ -13,6 +13,27 @@ evm_version = "prague"
 extra_output = ["storageLayout"]
 gas_reports = ["*"]
 
+[profile.smoke.fuzz]
+runs = 64
+
+[profile.smoke.invariant]
+runs = 32
+depth = 100
+
+[profile.ci.fuzz]
+runs = 256
+
+[profile.ci.invariant]
+runs = 256
+depth = 500
+
+[profile.release.fuzz]
+runs = 1024
+
+[profile.release.invariant]
+runs = 512
+depth = 1000
+
 [rpc_endpoints]
 bsc_testnet = "${BSC_TESTNET_RPC}"
 base_sepolia = "${BASE_SEPOLIA_RPC}"

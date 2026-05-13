@@ -13,6 +13,8 @@
 - Use `full` only for explicit human requests for full/release/merge verification or CI/release-equivalent contexts.
 - Local current-work gate invocations must use the exact changed-file input.
 - changed-files mode for Solidity paths requires diff evidence via `CHANGE_CLASSIFIER_DIFF_FILE` or `GATE_DIFF_BASE`; without it, semantic classification is blocked.
+- Mixed `harness_control` + Solidity changed-file sets are valid. Classification uses the highest risk tier in the set, review roles are the union of matched policy roles, and `gate.sh` may report `writer=mixed` for compatibility instead of blocking on multiple writer roles.
+- For mixed sets whose highest risk tier is `prod-semantic` or `high-risk`, spec readiness remains a pre-implementation gate. Any spec document change still requires explicit human confirmation before implementation proceeds.
 - Diff evidence must not be created as persistent repository files. Prefer `GATE_DIFF_BASE=<git-ref>`; when `CHANGE_CLASSIFIER_DIFF_FILE` is needed, point it at a `mktemp` file outside the repository and remove that file after `gate.sh` exits.
 - Do not create, commit, or leave behind repository files named after `CHANGE_CLASSIFIER_DIFF_FILE`, `GATE_DIFF_BASE`, or related diff-evidence artifacts.
 - `fast` is the default local verdict for current work and should be run against the exact changed file set.
@@ -20,3 +22,22 @@
 - harness-only and docs-only changes still require a fresh gate verdict from the matching profile before claiming completion.
 - mock-heavy unit tests do not replace semantic or integration coverage when the claim depends on upstream protocol behavior.
 - Completion or pass claims require fresh output from the exact gate profile used for the verdict.
+
+## Test Layers
+
+- `npm run test:fast`: harness fast gate, preserving the default current-work verdict path.
+- `npm run test:unit:forge`: deterministic Forge unit layer using an explicit contract include list.
+- `npm run test:unit`: smoke-profile wrapper around `test:unit:forge`.
+- `npm run test:position`: position unit, position fuzz, adversarial, and router proxy integration coverage.
+- `npm run test:router`: router unit, router fuzz, router proxy integration, and router-position scenario coverage.
+- `npm run test:yield`: SY unit, SY adapter, and oracle setter coverage.
+- `npm run test:assets`: universal assets and OFT coverage.
+- `npm run test:fork`: fork-only SY adapter coverage.
+- `npm run test:invariant`: position invariant coverage.
+- `npm run test:release`: unit layer plus invariant and fork layers under the release Foundry profile.
+
+Foundry profile intent:
+
+- `smoke`: lower local fuzz and invariant intensity.
+- `ci`: current/default-strength fuzz and invariant intensity.
+- `release`: stronger fuzz and invariant intensity for explicit release checks.

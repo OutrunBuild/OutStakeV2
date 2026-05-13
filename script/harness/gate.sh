@@ -840,12 +840,7 @@ hard_blocked=0
 verification_failed=0
 
 if [ "${#selected_writer_roles[@]}" -gt 1 ]; then
-    if [ "$all_mode" -eq 1 ]; then
-        append_finding residual_risks_json "verifier" "multiple writer roles present in --all mode: ${selected_writer_roles[*]}" "writer-role-conflict" "info"
-    else
-        hard_blocked=1
-        append_finding blocking_findings_json "main-orchestrator" "changed surfaces resolve to multiple writer roles: ${selected_writer_roles[*]}" "writer-role-conflict" "error"
-    fi
+    append_finding residual_risks_json "verifier" "multiple writer roles present: ${selected_writer_roles[*]}" "writer-role-mixed" "info"
 fi
 
 while IFS= read -r hard_block_rule; do
@@ -1127,6 +1122,8 @@ fi
 writer_role="none"
 if [ "${#selected_writer_roles[@]}" -eq 1 ]; then
     writer_role="${selected_writer_roles[0]}"
+elif [ "${#selected_writer_roles[@]}" -gt 1 ]; then
+    writer_role="mixed"
 fi
 
 if [ "${#changed_files[@]}" -eq 0 ] && [ "$hard_blocked" -eq 0 ]; then

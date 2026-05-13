@@ -2,22 +2,22 @@
 
 ## 1. 文档目的
 
-本文档说明 `OutStakeV2` 当前实现中的核心账务规则，包括 `uAsset` minter-cap、position debt、wrap 池、汇率换算、赎回按比例销债、keeper redeem 分账与 wrap yield harvest。本文只记录当前本地代码已实现的账务逻辑，并记录 planned upgradeable implementation 需要保持的账务边界。
+本文档说明 `OutStakeV2` 当前实现中的核心账务规则，包括 `uAsset` minter-cap、position debt、wrap 池、汇率换算、赎回按比例销债、keeper redeem 分账与 wrap yield harvest。本文只记录当前本地代码已实现的 upgradeable-only 账务逻辑。
 
 ## 1.1 Upgradeable accounting readiness
 
-planned upgradeable implementation 使用 proxy-backed uAsset、SY adapter 与 staking position，但不改变本文账务语义：
+当前 implementation 使用 proxy-backed uAsset、SY adapter 与 staking position，并保持本文账务语义：
 
 - `OutrunUniversalAssetsUpgradeable` 的 `mintingStatusTable` 继续按 minter 维度记录 `mintingCap` 与 `amountInMinted`。
 - `OutrunStakingPositionUpgradeable` 继续按 position 记录 `syStaked` 与 `UAssetMinted`，并按公共 wrap 池记录 `syTotalStaking`、`syWrapStaking`、`wrapUAssetDebt`。
 - `SY` 依赖在 initializer 中写入后保持固定，不新增 `setSY()`，避免 position / wrap debt 对应的 share token 与 exchangeRate source 被替换。
 - oracle-backed SY upgradeable variants 可通过 owner-only `setExchangeRateOracle(address)` 更换 `exchangeRateOracle`，但 setter 不改变 balances、shares、position accounting 或 yield-bearing token 配置。
 - `OutrunExchangeOracleAdapter` 仍是非 upgradeable thin adapter；本次变更不新增 oracle freshness、bounds、fallback 或多源聚合保证。
-- 旧 non-upgradeable contracts 已退出当前产品真源；新 upgradeable variants 的 V1 storage layout 是后续升级的 canonical layout。
+- 旧 non-upgradeable contracts 已退出当前产品真源；当前 upgradeable variants 的 V1 storage layout 是后续升级的 canonical layout。
 
 ## 2. `uAsset` 的 minter-cap 账务
 
-`OutrunUniversalAssets` 当前按 minter 维护一张 `mintingStatusTable`：
+`OutrunUniversalAssetsUpgradeable` 当前按 minter 维护一张 `mintingStatusTable`：
 
 - `mintingCap`
 - `amountInMinted`
@@ -26,14 +26,14 @@ planned upgradeable implementation 使用 proxy-backed uAsset、SY adapter 与 s
 
 - `checkMintableAmount(minter)` 返回 `mintingCap - amountInMinted`，最低到 0。
 - `mint(receiver, amount)` 由调用者自己的 minter 额度承担，成功后增加调用者的 `amountInMinted`。
-- `repay(account, amount)` 减少调用者（`msg.sender`）自己的 `amountInMinted`；同时消耗 `account → msg.sender` 的 allowance（因为 amount 数量的 uAsset 从 account 转给 msg.sender 用于 burn）。调用者必须持有足够的 uAsset 来 burn。
+- `repay(account, amount)` 减少调用者（`msg.sender`，即 minter）自己的 `amountInMinted`；`account` 是被 burn 的地址，必须持有足够的 `uAsset`。若 `account != msg.sender`，则还必须先授权 `msg.sender` 消耗对应 `uAsset`。
 - `revokeMinter(minter)` 只把 cap 设为 0，不会自动清空历史已铸债务。
 
 因此，`uAsset` 当前不是”全局总债务池”，而是”按 minter 独立记账的铸造额度和未偿债务”。
 
 ## 3. Position debt 账务
 
-`OutrunStakingPosition` 中每个 `Position` 当前记录：
+`OutrunStakingPositionUpgradeable` 中每个 `Position` 当前记录：
 
 - `owner`
 - `syStaked`
@@ -83,7 +83,7 @@ wrap 池当前使用三组聚合账务变量：
 - `exchangeRate * syBalance / 1e18` 对应资产值
 - 如果用户贡献的是价值 X 的资产，则铸出的 SY 或 debt 应通过同一换算关系推导
 
-`OutrunStakingPosition` 当前使用两种方向的换算：
+`OutrunStakingPositionUpgradeable` 当前使用两种方向的换算：
 
 - `syToAsset(exchangeRate, syAmount)`：把 `SY` principal 换成资产值，用于 stake、wrap stake、draw 预览
 - `assetToSy(exchangeRate, assetAmount)`：把 `uAsset` debt 换成 `SY`，用于 wrap redeem、keeper redeem、harvest
@@ -140,7 +140,7 @@ wrap 池当前使用三组聚合账务变量：
 
 ## 9. Harvest 账务
 
-`harvestWrapYield(tokenOut)` 当前只处理 wrap 池超过 debt 对应 principal 的那部分 `SY`：
+`harvestWrapYield(tokenOut, minTokenOut)` 当前只处理 wrap 池超过 debt 对应 principal 的那部分 `SY`：
 
 - 先读取 `wrapPoolSY = syWrapStaking`
 - 再计算 `wrapDebtInSY = assetToSy(wrapUAssetDebt)`

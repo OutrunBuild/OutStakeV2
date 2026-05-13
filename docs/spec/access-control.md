@@ -28,6 +28,5 @@ UUPS 边界：
 ## 重要结果
 
 - `uAsset` 的 mint cap 仍由 owner 配置
-- position 的 `setMinStake`、`setUAsset`、`setRevenuePool`、`setKeeper` 仍是 owner 权限
+- position 的 `setMinStake`、`setRevenuePool`、`setKeeper` 仍是 owner 权限
 - router、SY、position 的公开入口都仍受 allowance、余额、pause 与下游校验约束
-

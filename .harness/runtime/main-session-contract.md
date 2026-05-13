@@ -20,7 +20,7 @@
 ## Main-Session Rules
 
 - `main-orchestrator` stays in the primary session and is never a project agent file.
-- Derive `surface`, `risk_tier`, `writer_role`, and `review_roles` from policy before delegating.
+- Derive `surface`, `risk_tier`, `writer_role`, and `review_roles` from policy before delegating. Mixed `harness_control` + Solidity change sets are allowed; use the highest `risk_tier` across matched surfaces and the union of `review_roles`.
 - For current local task completion/readiness, default `verification_profile` is `fast` regardless of `risk_tier`. Use `full`, `ci`, release, or merge-equivalent verification only when explicitly requested by a human or when running in CI/release-equivalent context. Do not infer `full` from `high-risk` or `prod-semantic` alone.
 - Use only project agents under `.claude/agents/` or `.codex/agents/` for delegated work.
 - Completion claims require fresh output from the selected matching `gate.sh` profile.
@@ -28,5 +28,5 @@
   - Prefer `GATE_DIFF_BASE=<git-ref>` when a stable base ref exists.
   - If a patch file is required, create it with `mktemp` outside the repository, pass its path through `CHANGE_CLASSIFIER_DIFF_FILE`, and remove it after `gate.sh` exits.
   - Do not create, commit, or leave behind repository files named after `CHANGE_CLASSIFIER_DIFF_FILE`, `GATE_DIFF_BASE`, or related diff-evidence artifacts.
-- If changed files imply conflicting writer ownership or mixed blocked surfaces, stop as blocked instead of inventing fallback routing.
+- If changed files imply multiple writer roles, route each touched surface to its configured writer; only stop as blocked when policy or gate evidence emits a hard block.
 - If required verification evidence is missing, keep the final verdict blocked or fail instead of projecting pass.

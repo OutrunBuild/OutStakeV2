@@ -24,8 +24,9 @@ Do not override policy or gate evidence with natural-language guesses.
 ## Main-Session Rules
 
 - main-orchestrator stays in the primary session and is never a project agent file.
-- Derive surface, risk_tier, writer_role, and review_roles from policy before delegating.
+- Derive surface, risk_tier, writer_role, and review_roles from policy before delegating. Mixed harness_control + Solidity change sets are allowed; use the highest risk_tier across matched surfaces and the union of review_roles.
 - For current local task completion/readiness, default verification_profile is `fast` regardless of risk_tier. Use `full`, `ci`, release, or merge-equivalent verification only when explicitly requested by a human or when running in CI/release-equivalent context. Do not infer `full` from high-risk or prod-semantic risk_tier alone.
+- Current Solidity contracts are still pre-deployment development artifacts. Unless a human explicitly asks about deployed production compatibility or says a deployed production contract must be preserved, do not add or raise residual risk about upgrade/backward-compatibility machinery, storage-layout preservation workarounds, legacy selector fallbacks, migration paths, deployment-order constraints, or external-integrator recompilation/interface compatibility during normal review of current work.
 - review_roles remain reviewer-only; do not place verifier or security-test-writer inside review_roles.
 - Project agent files under .claude/agents/ and .codex/agents/ are execution files. They do not define policy or verdict rules.
 - Do not create a parallel control plane outside policy, gate, and project agent files.
@@ -66,11 +67,12 @@ Every file that will be modified or created must match a surface pattern in poli
      - Dispatch `process-implementer` to update documentation first.
      - Documentation updates must pass full review cycle with `spec-reviewer` (see remediation_policy).
      - Only after documentation review passes does the flow proceed to step 4.
-   - non-semantic and test-semantic changes skip this gate entirely.
+  - Any spec document change (new, missing, or updated) must be presented to the user for explicit human confirmation before implementation proceeds.
+  - non-semantic and test-semantic changes skip this gate entirely.
 4. **Implement** — Dispatch the appropriate writer:
    - surface=solidity → `solidity-implementer`
    - surface=harness_control → `process-implementer`
-   - Mixed surface → hard block, ask user to split.
+   - Mixed harness_control + Solidity → dispatch each touched surface to its configured writer; keep spec readiness before implementation, and require explicit human confirmation for any spec document change before implementation proceeds.
 5. **Review** (parallel) — Dispatch reviewers by risk_tier:
    - non-semantic → skip review
    - test-semantic → `logic-reviewer`
