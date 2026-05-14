@@ -3,11 +3,12 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 
-import {OutrunStakingPosition} from "../../src/position/OutrunStakingPosition.sol";
+import {OutrunStakingPositionUpgradeable} from "../../src/position/OutrunStakingPositionUpgradeable.sol";
 import {IOutrunStakeManager} from "../../src/position/interfaces/IOutrunStakeManager.sol";
 import {IStandardizedYield} from "../../src/yield/interfaces/IStandardizedYield.sol";
 import {IUniversalAssets} from "../../src/assets/interfaces/IUniversalAssets.sol";
-import {OutrunERC20} from "../../src/assets/base/OutrunERC20.sol";
+import {ProxyTestHelper} from "../upgradeable/helpers/ProxyTestHelper.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 // ============================================================
 //                    MOCK CONTRACTS
@@ -17,14 +18,14 @@ import {OutrunERC20} from "../../src/assets/base/OutrunERC20.sol";
  * @title MockSYWithRateControl
  * @notice Mock SY that allows rate manipulation for adversarial testing
  */
-contract MockSYWithRateControl is OutrunERC20, IStandardizedYield {
+contract MockSYWithRateControl is ERC20, IStandardizedYield {
     address internal immutable underlying;
     uint256 internal rate;
     bool internal shouldReenterOnRedeem;
     address internal reentrancyTarget;
     bytes internal reentrancyCalldata;
 
-    constructor(address underlying_) OutrunERC20("Mock SY", "mSY", 18) {
+    constructor(address underlying_) ERC20("Mock SY", "mSY") {
         underlying = underlying_;
         rate = 1e18;
     }
@@ -126,8 +127,8 @@ contract MockSYWithRateControl is OutrunERC20, IStandardizedYield {
  * @title MockERC20ForAdversarial
  * @notice Simple mock ERC20 for adversarial tests
  */
-contract MockERC20ForAdversarial is OutrunERC20 {
-    constructor(string memory name_, string memory symbol_) OutrunERC20(name_, symbol_, 18) {}
+contract MockERC20ForAdversarial is ERC20 {
+    constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
 
     function mint(address receiver, uint256 amount) external {
         _mint(receiver, amount);
@@ -138,10 +139,10 @@ contract MockERC20ForAdversarial is OutrunERC20 {
  * @title MockUAssetForAdversarial
  * @notice Mock uAsset with mint cap tracking for adversarial tests
  */
-contract MockUAssetForAdversarial is OutrunERC20, IUniversalAssets {
+contract MockUAssetForAdversarial is ERC20, IUniversalAssets {
     mapping(address minter => MintingStatus) public mintingStatusTable;
 
-    constructor() OutrunERC20("Mock UAsset", "mUAsset", 18) {}
+    constructor() ERC20("Mock UAsset", "mUAsset") {}
 
     function checkMintableAmount(address minter) external view returns (uint256 amountInMintable) {
         MintingStatus storage status = mintingStatusTable[minter];
@@ -176,13 +177,13 @@ contract MockUAssetForAdversarial is OutrunERC20, IUniversalAssets {
  * @title MaliciousSY
  * @notice Malicious SY that attempts reentrancy attacks on position
  */
-contract MaliciousSY is OutrunERC20, IStandardizedYield {
+contract MaliciousSY is ERC20, IStandardizedYield {
     address internal immutable underlying;
     uint256 internal rate;
-    OutrunStakingPosition internal targetPosition;
+    OutrunStakingPositionUpgradeable internal targetPosition;
     bytes4 internal attackSelector;
 
-    constructor(address underlying_) OutrunERC20("Malicious SY", "malSY", 18) {
+    constructor(address underlying_) ERC20("Malicious SY", "malSY") {
         underlying = underlying_;
         rate = 1e18;
     }
@@ -191,7 +192,7 @@ contract MaliciousSY is OutrunERC20, IStandardizedYield {
         rate = newRate;
     }
 
-    function setAttackTarget(OutrunStakingPosition position, bytes4 selector) external {
+    function setAttackTarget(OutrunStakingPositionUpgradeable position, bytes4 selector) external {
         targetPosition = position;
         attackSelector = selector;
     }
@@ -317,7 +318,7 @@ contract AdversarialTests is Test {
     MockERC20ForAdversarial internal underlying;
     MockSYWithRateControl internal sy;
     MockUAssetForAdversarial internal uAsset;
-    OutrunStakingPosition internal position;
+    OutrunStakingPositionUpgradeable internal position;
 
     address internal owner = address(0xA11CE);
     address internal keeper = address(0xB0B);
@@ -331,12 +332,17 @@ contract AdversarialTests is Test {
         sy = new MockSYWithRateControl(address(underlying));
         uAsset = new MockUAssetForAdversarial();
 
-        position = new OutrunStakingPosition(owner, 1, revenuePool, address(sy), address(uAsset));
+        position = OutrunStakingPositionUpgradeable(
+            ProxyTestHelper.deploy(
+                address(new OutrunStakingPositionUpgradeable()),
+                abi.encodeCall(
+                    OutrunStakingPositionUpgradeable.initialize,
+                    (owner, 1, revenuePool, address(sy), address(uAsset), keeper)
+                )
+            )
+        );
 
         uAsset.setMintingCap(address(position), type(uint256).max);
-
-        vm.prank(owner);
-        position.setKeeper(keeper);
 
         // Fund test accounts
         sy.mintShares(alice, 10_000e18);
@@ -415,7 +421,7 @@ contract AdversarialTests is Test {
 
         // Alice redeems - still burns 50 uAsset but position accounting changes
         vm.prank(alice);
-        (uint256 actualBurn, uint256 syOut) = position.redeem(positionId, 50e18, alice, address(sy));
+        (uint256 actualBurn, uint256 syOut) = position.redeem(positionId, 50e18, alice, address(sy), 0);
 
         // Verify: Burn amount matches pro-rata of original uAssetMinted
         assertEq(actualBurn, 50e18, "Burn should match pro-rata of minted");
@@ -568,8 +574,15 @@ contract AdversarialTests is Test {
 
         // Deploy position with malicious SY
         MockUAssetForAdversarial malUAsset = new MockUAssetForAdversarial();
-        OutrunStakingPosition malPosition =
-            new OutrunStakingPosition(owner, 1, revenuePool, address(maliciousSY), address(malUAsset));
+        OutrunStakingPositionUpgradeable malPosition = OutrunStakingPositionUpgradeable(
+            ProxyTestHelper.deploy(
+                address(new OutrunStakingPositionUpgradeable()),
+                abi.encodeCall(
+                    OutrunStakingPositionUpgradeable.initialize,
+                    (owner, 1, revenuePool, address(maliciousSY), address(malUAsset), keeper)
+                )
+            )
+        );
         malUAsset.setMintingCap(address(malPosition), type(uint256).max);
 
         vm.prank(alice);
@@ -602,7 +615,7 @@ contract AdversarialTests is Test {
         // So this test verifies the reentrancy guard works but the outer redeem
         // may still succeed or fail depending on where the reentrancy is detected.
         // Let's verify that position state is protected.
-        (uint256 uAssetBurned, uint256 syOut) = malPosition.redeem(positionId, 50e18, alice, address(underlying));
+        (uint256 uAssetBurned, uint256 syOut) = malPosition.redeem(positionId, 50e18, alice, address(underlying), 0);
 
         // Verify the redeem succeeded and state is correct
         assertEq(uAssetBurned, 50e18, "Burn should be 50 uAsset");
@@ -640,7 +653,7 @@ contract AdversarialTests is Test {
 
         // Alice redeems
         vm.prank(alice);
-        (uint256 uAssetBurned, uint256 syOut) = position.redeem(positionId, 50e18, alice, address(sy));
+        (uint256 uAssetBurned, uint256 syOut) = position.redeem(positionId, 50e18, alice, address(sy), 0);
 
         // Verify accounting is correct
         assertEq(uAssetBurned, 50e18, "Burn should be 50 uAsset");
@@ -681,11 +694,11 @@ contract AdversarialTests is Test {
         // This will fail because repay() checks her uAsset balance
         vm.prank(alice);
         vm.expectRevert(); // ERC20InsufficientBalance
-        position.wrapRedeem(200e18, alice, address(sy));
+        position.wrapRedeem(200e18, alice, address(sy), 0);
 
         // Alice can redeem her 100e18
         vm.prank(alice);
-        uint256 syOut = position.wrapRedeem(100e18, alice, address(sy));
+        uint256 syOut = position.wrapRedeem(100e18, alice, address(sy), 0);
         assertEq(syOut, 100e18, "Alice should get 100 SY");
         assertEq(position.wrapUAssetDebt(), 100e18, "Wrap debt should be 100");
     }
@@ -712,7 +725,7 @@ contract AdversarialTests is Test {
         uAsset.approve(address(position), type(uint256).max);
 
         vm.prank(bob);
-        uint256 syOut = position.wrapRedeem(100e18, bob, address(sy));
+        uint256 syOut = position.wrapRedeem(100e18, bob, address(sy), 0);
 
         // Bob got the SY (his balance increased by 100e18)
         assertEq(syOut, 100e18, "Bob should get 100 SY");
@@ -742,7 +755,7 @@ contract AdversarialTests is Test {
         // At rate 0.5, 100 uAsset = 200 SY, but wrap pool only has 100 SY
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(IOutrunStakeManager.ExceedsWrapPoolBalance.selector, 200e18, 100e18));
-        position.wrapRedeem(100e18, alice, address(sy));
+        position.wrapRedeem(100e18, alice, address(sy), 0);
     }
 
     // ============================================================
@@ -763,15 +776,15 @@ contract AdversarialTests is Test {
         // Non-owner tries to harvest
         vm.prank(attacker);
         vm.expectRevert();
-        position.harvestWrapYield(address(sy));
+        position.harvestWrapYield(address(sy), 0);
 
         vm.prank(alice);
         vm.expectRevert();
-        position.harvestWrapYield(address(sy));
+        position.harvestWrapYield(address(sy), 0);
 
         // Only owner can harvest
         vm.prank(owner);
-        uint256 harvested = position.harvestWrapYield(address(sy));
+        uint256 harvested = position.harvestWrapYield(address(sy), 0);
 
         assertGt(harvested, 0, "Owner should harvest yield");
         assertEq(sy.balanceOf(revenuePool), harvested, "Revenue pool should receive yield");
@@ -845,7 +858,7 @@ contract AdversarialTests is Test {
 
         // Alice redeems half
         vm.prank(alice);
-        position.redeem(alicePosId, 50e18, alice, address(sy));
+        position.redeem(alicePosId, 50e18, alice, address(sy), 0);
 
         // Verify Bob's position is unaffected
         (, uint256 bobSyStaked, uint256 bobUAssetMinted,,) = position.positions(bobPosId);
@@ -868,8 +881,15 @@ contract AdversarialTests is Test {
     function test_Adversarial_MintCapPreventsOvershoot() external {
         // Deploy position with limited mint cap
         MockUAssetForAdversarial cappedUAsset = new MockUAssetForAdversarial();
-        OutrunStakingPosition cappedPosition =
-            new OutrunStakingPosition(owner, 1, revenuePool, address(sy), address(cappedUAsset));
+        OutrunStakingPositionUpgradeable cappedPosition = OutrunStakingPositionUpgradeable(
+            ProxyTestHelper.deploy(
+                address(new OutrunStakingPositionUpgradeable()),
+                abi.encodeCall(
+                    OutrunStakingPositionUpgradeable.initialize,
+                    (owner, 1, revenuePool, address(sy), address(cappedUAsset), keeper)
+                )
+            )
+        );
 
         // Set cap to 1000e18
         cappedUAsset.setMintingCap(address(cappedPosition), 1000e18);
@@ -903,8 +923,15 @@ contract AdversarialTests is Test {
      */
     function test_Adversarial_DrawUAssetRespectsMintCap() external {
         MockUAssetForAdversarial cappedUAsset = new MockUAssetForAdversarial();
-        OutrunStakingPosition cappedPosition =
-            new OutrunStakingPosition(owner, 1, revenuePool, address(sy), address(cappedUAsset));
+        OutrunStakingPositionUpgradeable cappedPosition = OutrunStakingPositionUpgradeable(
+            ProxyTestHelper.deploy(
+                address(new OutrunStakingPositionUpgradeable()),
+                abi.encodeCall(
+                    OutrunStakingPositionUpgradeable.initialize,
+                    (owner, 1, revenuePool, address(sy), address(cappedUAsset), keeper)
+                )
+            )
+        );
 
         // Set cap to 200e18
         cappedUAsset.setMintingCap(address(cappedPosition), 200e18);
@@ -938,8 +965,15 @@ contract AdversarialTests is Test {
      */
     function test_Adversarial_WrapStakeRespectsMintCap() external {
         MockUAssetForAdversarial cappedUAsset = new MockUAssetForAdversarial();
-        OutrunStakingPosition cappedPosition =
-            new OutrunStakingPosition(owner, 1, revenuePool, address(sy), address(cappedUAsset));
+        OutrunStakingPositionUpgradeable cappedPosition = OutrunStakingPositionUpgradeable(
+            ProxyTestHelper.deploy(
+                address(new OutrunStakingPositionUpgradeable()),
+                abi.encodeCall(
+                    OutrunStakingPositionUpgradeable.initialize,
+                    (owner, 1, revenuePool, address(sy), address(cappedUAsset), keeper)
+                )
+            )
+        );
 
         cappedUAsset.setMintingCap(address(cappedPosition), 100e18);
 
@@ -992,7 +1026,7 @@ contract AdversarialTests is Test {
         uAsset.approve(address(position), type(uint256).max);
         vm.prank(alice);
         vm.expectRevert(ENFORCED_PAUSE_SELECTOR);
-        position.redeem(positionId, 50e18, alice, address(sy));
+        position.redeem(positionId, 50e18, alice, address(sy), 0);
 
         // WrapStake should revert
         vm.prank(bob);
@@ -1004,7 +1038,7 @@ contract AdversarialTests is Test {
         uAsset.approve(address(position), type(uint256).max);
         vm.prank(bob);
         vm.expectRevert(ENFORCED_PAUSE_SELECTOR);
-        position.wrapRedeem(50e18, bob, address(sy));
+        position.wrapRedeem(50e18, bob, address(sy), 0);
 
         // KeepRedeem should revert
         sy.mintShares(address(position), 100e18);
@@ -1015,7 +1049,7 @@ contract AdversarialTests is Test {
         // HarvestWrapYield should revert
         vm.prank(owner);
         vm.expectRevert(ENFORCED_PAUSE_SELECTOR);
-        position.harvestWrapYield(address(sy));
+        position.harvestWrapYield(address(sy), 0);
 
         // Verify: Non-paused operations still work
         position.previewStake(100e18);
@@ -1071,7 +1105,7 @@ contract AdversarialTests is Test {
 
         vm.prank(alice);
         vm.expectRevert(IOutrunStakeManager.ZeroInput.selector);
-        position.redeem(positionId, 0, alice, address(sy));
+        position.redeem(positionId, 0, alice, address(sy), 0);
     }
 
     /**
@@ -1083,7 +1117,7 @@ contract AdversarialTests is Test {
 
         vm.prank(alice);
         vm.expectRevert(IOutrunStakeManager.ZeroInput.selector);
-        position.wrapRedeem(0, alice, address(sy));
+        position.wrapRedeem(0, alice, address(sy), 0);
     }
 
     /**
@@ -1129,7 +1163,7 @@ contract AdversarialTests is Test {
 
         vm.prank(bob);
         vm.expectRevert(POSITION_ACCESS_DENIED_SELECTOR);
-        position.redeem(positionId, 100e18, bob, address(sy));
+        position.redeem(positionId, 100e18, bob, address(sy), 0);
     }
 
     /**
@@ -1166,14 +1200,14 @@ contract AdversarialTests is Test {
 
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(IOutrunStakeManager.LockTimeNotExpired.selector, deadline));
-        position.redeem(positionId, 50e18, alice, address(sy));
+        position.redeem(positionId, 50e18, alice, address(sy), 0);
 
         // Warp to just before deadline
         vm.warp(block.timestamp + 29 days);
 
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(IOutrunStakeManager.LockTimeNotExpired.selector, deadline));
-        position.redeem(positionId, 50e18, alice, address(sy));
+        position.redeem(positionId, 50e18, alice, address(sy), 0);
 
         // Warp past deadline
         vm.warp(block.timestamp + 2 days);
@@ -1182,7 +1216,7 @@ contract AdversarialTests is Test {
         sy.mintShares(address(position), 100e18);
 
         vm.prank(alice);
-        (uint256 burned, uint256 syOut) = position.redeem(positionId, 50e18, alice, address(sy));
+        (uint256 burned, uint256 syOut) = position.redeem(positionId, 50e18, alice, address(sy), 0);
 
         assertEq(burned, 50e18, "Should burn 50 uAsset");
         assertEq(syOut, 50e18, "Should get 50 SY");
@@ -1192,8 +1226,15 @@ contract AdversarialTests is Test {
      * @notice Min stake is enforced
      */
     function test_Adversarial_MinStakeEnforced() external {
-        OutrunStakingPosition highMinPosition =
-            new OutrunStakingPosition(owner, 1000e18, revenuePool, address(sy), address(uAsset));
+        OutrunStakingPositionUpgradeable highMinPosition = OutrunStakingPositionUpgradeable(
+            ProxyTestHelper.deploy(
+                address(new OutrunStakingPositionUpgradeable()),
+                abi.encodeCall(
+                    OutrunStakingPositionUpgradeable.initialize,
+                    (owner, 1000e18, revenuePool, address(sy), address(uAsset), keeper)
+                )
+            )
+        );
         uAsset.setMintingCap(address(highMinPosition), type(uint256).max);
 
         vm.prank(alice);
@@ -1308,8 +1349,15 @@ contract AdversarialTests is Test {
 
         // Deploy position with malicious SY
         MockUAssetForAdversarial malUAsset = new MockUAssetForAdversarial();
-        OutrunStakingPosition malPosition =
-            new OutrunStakingPosition(owner, 1, revenuePool, address(maliciousSY), address(malUAsset));
+        OutrunStakingPositionUpgradeable malPosition = OutrunStakingPositionUpgradeable(
+            ProxyTestHelper.deploy(
+                address(new OutrunStakingPositionUpgradeable()),
+                abi.encodeCall(
+                    OutrunStakingPositionUpgradeable.initialize,
+                    (owner, 1, revenuePool, address(maliciousSY), address(malUAsset), keeper)
+                )
+            )
+        );
         malUAsset.setMintingCap(address(malPosition), type(uint256).max);
 
         vm.prank(alice);
@@ -1333,7 +1381,7 @@ contract AdversarialTests is Test {
 
         // Execute redeem - the malicious SY tries to re-enter stake during redeem
         vm.prank(alice);
-        (uint256 uAssetBurned, uint256 syOut) = malPosition.redeem(positionId, 50e18, alice, address(underlying));
+        (uint256 uAssetBurned, uint256 syOut) = malPosition.redeem(positionId, 50e18, alice, address(underlying), 0);
 
         assertEq(uAssetBurned, 50e18, "uAsset burned should be exactly 50");
         assertEq(syOut, 50e18, "SY output should be exactly 50");

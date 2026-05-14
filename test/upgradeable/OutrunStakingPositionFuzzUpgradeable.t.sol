@@ -4,9 +4,10 @@ pragma solidity ^0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import {OutrunStakingPosition} from "../../src/position/OutrunStakingPosition.sol";
+import {OutrunStakingPositionUpgradeable} from "../../src/position/OutrunStakingPositionUpgradeable.sol";
 import {SYUtils} from "../../src/libraries/SYUtils.sol";
-import {MockSY, MockERC20, MockUAsset} from "./OutrunStakingPosition.t.sol";
+import {ProxyTestHelper} from "./helpers/ProxyTestHelper.sol";
+import {MockSY, MockERC20, MockUAsset} from "./helpers/PositionTestMocks.sol";
 
 /**
  * @title Fuzz tests for OutrunStakingPosition
@@ -17,7 +18,7 @@ contract OutrunStakingPositionFuzzTest is Test {
     MockERC20 internal underlying;
     MockSY internal sy;
     MockUAsset internal uAsset;
-    OutrunStakingPosition internal position;
+    OutrunStakingPositionUpgradeable internal position;
 
     address internal owner = address(0xA11CE);
     address internal keeper = address(0xB0B);
@@ -36,12 +37,17 @@ contract OutrunStakingPositionFuzzTest is Test {
         sy = new MockSY(address(underlying));
         uAsset = new MockUAsset();
 
-        position = new OutrunStakingPosition(owner, MIN_STAKE, revenuePool, address(sy), address(uAsset));
+        position = OutrunStakingPositionUpgradeable(
+            ProxyTestHelper.deploy(
+                address(new OutrunStakingPositionUpgradeable()),
+                abi.encodeCall(
+                    OutrunStakingPositionUpgradeable.initialize,
+                    (owner, MIN_STAKE, revenuePool, address(sy), address(uAsset), keeper)
+                )
+            )
+        );
 
         uAsset.setMintingCap(address(position), type(uint256).max);
-
-        vm.prank(owner);
-        position.setKeeper(keeper);
 
         // Mint SY to users
         sy.mintShares(owner, 100_000e18);
@@ -152,7 +158,7 @@ contract OutrunStakingPositionFuzzTest is Test {
 
         // Redeem
         vm.prank(owner);
-        (uint256 uAssetBurned, uint256 syOut) = position.redeem(positionId, syRedeemed, owner, address(sy));
+        (uint256 uAssetBurned, uint256 syOut) = position.redeem(positionId, syRedeemed, owner, address(sy), 0);
 
         // Calculate expected pro-rata burn
         uint256 totalUAssetMinted = _syToAsset(amountInSY, newRate);
@@ -188,7 +194,7 @@ contract OutrunStakingPositionFuzzTest is Test {
 
         // Full redeem
         vm.prank(owner);
-        position.redeem(positionId, amountInSY, owner, address(sy));
+        position.redeem(positionId, amountInSY, owner, address(sy), 0);
 
         // Verify position deleted
         (address positionOwner,,,,) = position.positions(positionId);
@@ -284,7 +290,7 @@ contract OutrunStakingPositionFuzzTest is Test {
 
         // WrapRedeem
         vm.prank(owner);
-        uint256 syOut = position.wrapRedeem(redeemUAsset, owner, address(sy));
+        uint256 syOut = position.wrapRedeem(redeemUAsset, owner, address(sy), 0);
 
         uint256 expectedSYOut = _assetToSy(redeemUAsset, newRate);
 
@@ -337,7 +343,7 @@ contract OutrunStakingPositionFuzzTest is Test {
 
         // Actual redeem
         vm.prank(owner);
-        (uint256 actualBurn, uint256 actualOut) = position.redeem(positionId, syRedeemed, owner, address(sy));
+        (uint256 actualBurn, uint256 actualOut) = position.redeem(positionId, syRedeemed, owner, address(sy), 0);
 
         assertEq(actualBurn, previewedBurn, "preview redeem burn should match actual");
         assertEq(actualOut, previewedOut, "preview redeem SY out should match actual");
@@ -371,7 +377,7 @@ contract OutrunStakingPositionFuzzTest is Test {
 
         // Actual
         vm.prank(owner);
-        uint256 actual = position.wrapRedeem(redeemUAsset, owner, address(sy));
+        uint256 actual = position.wrapRedeem(redeemUAsset, owner, address(sy), 0);
 
         assertEq(actual, previewed, "preview wrap redeem should match actual");
     }
@@ -420,7 +426,7 @@ contract OutrunStakingPositionFuzzTest is Test {
 
         // Harvest
         vm.prank(owner);
-        uint256 harvested = position.harvestWrapYield(address(sy));
+        uint256 harvested = position.harvestWrapYield(address(sy), 0);
 
         assertEq(harvested, expectedHarvest, "harvested amount incorrect");
         assertEq(sy.balanceOf(revenuePool), expectedHarvest, "revenue pool should receive harvest");
@@ -444,7 +450,7 @@ contract OutrunStakingPositionFuzzTest is Test {
 
         // Harvest should return 0
         vm.prank(owner);
-        uint256 harvested = position.harvestWrapYield(address(sy));
+        uint256 harvested = position.harvestWrapYield(address(sy), 0);
 
         assertEq(harvested, 0, "harvest should be zero when no yield");
         assertEq(sy.balanceOf(revenuePool), 0, "revenue pool should receive nothing");
@@ -504,7 +510,7 @@ contract OutrunStakingPositionFuzzTest is Test {
         if (partialRedeem > 0) {
             sy.mintShares(address(position), partialRedeem);
             vm.prank(owner);
-            position.redeem(positionIds[0], partialRedeem, owner, address(sy));
+            position.redeem(positionIds[0], partialRedeem, owner, address(sy), 0);
         }
 
         // Verify accounting after partial redemption
@@ -555,7 +561,7 @@ contract OutrunStakingPositionFuzzTest is Test {
 
         if (maxRedeemUAsset > 0) {
             vm.prank(owner);
-            uint256 syOut = position.wrapRedeem(maxRedeemUAsset, owner, address(sy));
+            uint256 syOut = position.wrapRedeem(maxRedeemUAsset, owner, address(sy), 0);
 
             uint256 expectedSYOut = _assetToSy(maxRedeemUAsset, lowRate);
             assertEq(syOut, expectedSYOut, "wrap redeem at low rate incorrect");
@@ -654,7 +660,7 @@ contract OutrunStakingPositionFuzzTest is Test {
         if (partialRedeem > 0) {
             sy.mintShares(address(position), partialRedeem);
             vm.prank(owner);
-            position.redeem(pos1, partialRedeem, owner, address(sy));
+            position.redeem(pos1, partialRedeem, owner, address(sy), 0);
 
             expectedTotal -= partialRedeem;
             assertEq(position.syTotalStaking(), expectedTotal, "total after partial redeem incorrect");
@@ -662,7 +668,7 @@ contract OutrunStakingPositionFuzzTest is Test {
 
         // Harvest wrap yield if any
         vm.prank(owner);
-        uint256 harvested = position.harvestWrapYield(address(sy));
+        uint256 harvested = position.harvestWrapYield(address(sy), 0);
 
         if (harvested > 0) {
             expectedTotal -= harvested;
@@ -736,7 +742,7 @@ contract OutrunStakingPositionFuzzTest is Test {
 
         // Redeem with pro-rata
         vm.prank(owner);
-        (uint256 uAssetBurned,) = position.redeem(positionId, numerator, owner, address(sy));
+        (uint256 uAssetBurned,) = position.redeem(positionId, numerator, owner, address(sy), 0);
 
         // Pro-rata: burned = minted * numerator / staked
         uint256 expectedBurn = Math.mulDiv(amountInSY, numerator, amountInSY);

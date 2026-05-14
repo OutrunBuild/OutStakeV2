@@ -3,17 +3,18 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
-import {MockSY, MockERC20, MockUAsset} from "./OutrunStakingPosition.t.sol";
-import {OutrunStakingPosition} from "../../src/position/OutrunStakingPosition.sol";
+import {MockSY, MockERC20, MockUAsset} from "./helpers/PositionTestMocks.sol";
+import {OutrunStakingPositionUpgradeable} from "../../src/position/OutrunStakingPositionUpgradeable.sol";
 import {IStandardizedYield} from "../../src/yield/interfaces/IStandardizedYield.sol";
 import {SYUtils} from "../../src/libraries/SYUtils.sol";
+import {ProxyTestHelper} from "./helpers/ProxyTestHelper.sol";
 
 /**
  * @title Invariant Test Handler for OutrunStakingPosition
  * @dev Exercises the staking position system with random sequences of operations
  */
 contract PositionHandler is Test {
-    OutrunStakingPosition public position;
+    OutrunStakingPositionUpgradeable public position;
     MockSY public sy;
     MockUAsset public uAsset;
     MockERC20 public underlying;
@@ -35,7 +36,7 @@ contract PositionHandler is Test {
     uint256 public ghostMaxDeadline;
 
     constructor(
-        OutrunStakingPosition _position,
+        OutrunStakingPositionUpgradeable _position,
         MockSY _sy,
         MockUAsset _uAsset,
         MockERC20 _underlying,
@@ -179,7 +180,7 @@ contract PositionHandler is Test {
         uint256 amount = bound(amountRaw, 1, maxRedeem);
 
         vm.prank(actor);
-        try position.wrapRedeem(amount, actor, address(sy)) {
+        try position.wrapRedeem(amount, actor, address(sy), 0) {
         // Redemption succeeded
         }
             catch {
@@ -220,7 +221,7 @@ contract PositionHandler is Test {
         }
 
         vm.prank(actor);
-        try position.redeem(positionId, syRedeemed, actor, address(sy)) returns (uint256 uAssetBurned, uint256) {
+        try position.redeem(positionId, syRedeemed, actor, address(sy), 0) returns (uint256 uAssetBurned, uint256) {
             // Update ghost state
             ghostTotalSyInPositions -= syRedeemed;
             ghostTotalUAssetMintedInPositions -= uAssetBurned;
@@ -294,7 +295,7 @@ contract PositionHandler is Test {
      */
     function harvestWrapYield() external {
         vm.prank(owner);
-        try position.harvestWrapYield(address(sy)) returns (
+        try position.harvestWrapYield(address(sy), 0) returns (
             uint256
         ) {
         // Harvest succeeded
@@ -352,7 +353,7 @@ contract PositionHandler is Test {
  */
 contract OutrunStakingPositionInvariantTest is StdInvariant, Test {
     PositionHandler public handler;
-    OutrunStakingPosition public position;
+    OutrunStakingPositionUpgradeable public position;
     MockSY public sy;
     MockUAsset public uAsset;
     MockERC20 public underlying;
@@ -366,12 +367,17 @@ contract OutrunStakingPositionInvariantTest is StdInvariant, Test {
         sy = new MockSY(address(underlying));
         uAsset = new MockUAsset();
 
-        position = new OutrunStakingPosition(owner, 1, revenuePool, address(sy), address(uAsset));
+        position = OutrunStakingPositionUpgradeable(
+            ProxyTestHelper.deploy(
+                address(new OutrunStakingPositionUpgradeable()),
+                abi.encodeCall(
+                    OutrunStakingPositionUpgradeable.initialize,
+                    (owner, 1, revenuePool, address(sy), address(uAsset), keeper)
+                )
+            )
+        );
 
         uAsset.setMintingCap(address(position), type(uint256).max);
-
-        vm.prank(owner);
-        position.setKeeper(keeper);
 
         handler = new PositionHandler(position, sy, uAsset, underlying, owner, keeper, revenuePool);
 
