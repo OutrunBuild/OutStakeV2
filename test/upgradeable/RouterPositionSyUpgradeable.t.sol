@@ -5,32 +5,33 @@ import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
-import {OutrunERC20} from "../../src/assets/base/OutrunERC20.sol";
-import {OutrunL2StakedTokenSY} from "../../src/yield/OutrunL2StakedTokenSY.sol";
-import {OutrunStakedUsdsSY} from "../../src/yield/adapters/sky/OutrunStakedUsdsSY.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {OutrunL2StakedTokenSYUpgradeable} from "../../src/yield/OutrunL2StakedTokenSYUpgradeable.sol";
+import {OutrunStakedUsdsSYUpgradeable} from "../../src/yield/adapters/sky/OutrunStakedUsdsSYUpgradeable.sol";
+import {ProxyTestHelper} from "./helpers/ProxyTestHelper.sol";
 
 // ---- Mock assets ----
-contract MockWstETH is OutrunERC20 {
-    constructor() OutrunERC20("Wrapped stETH", "wstETH", 18) {}
+contract MockWstETH is ERC20 {
+    constructor() ERC20("Wrapped stETH", "wstETH") {}
 
     function mint(address to, uint256 amount) external {
         _mint(to, amount);
     }
 }
 
-contract MockUSDS is OutrunERC20 {
-    constructor() OutrunERC20("Sky USDS", "USDS", 18) {}
+contract MockUSDS is ERC20 {
+    constructor() ERC20("Sky USDS", "USDS") {}
 
     function mint(address to, uint256 amount) external {
         _mint(to, amount);
     }
 }
 
-contract MockSUSDS is OutrunERC20, IERC4626 {
+contract MockSUSDS is ERC20, IERC4626 {
     address public immutable ASSET;
     uint256 public exchangeRateMultiplier = 1e18;
 
-    constructor(address asset_) OutrunERC20("Staked USDS", "sUSDS", 18) {
+    constructor(address asset_) ERC20("Staked USDS", "sUSDS") {
         ASSET = asset_;
     }
 
@@ -73,7 +74,7 @@ contract MockSUSDS is OutrunERC20, IERC4626 {
     }
 
     function totalAssets() external view returns (uint256) {
-        return totalSupply * exchangeRateMultiplier / 1e18;
+        return totalSupply() * exchangeRateMultiplier / 1e18;
     }
 
     function previewDeposit(uint256 assets) external pure returns (uint256) {
@@ -199,13 +200,21 @@ contract RouterPositionSyTest is Test {
 
     MockWstETH internal wstETH;
     MockExchangeOracle internal oracle;
-    OutrunL2StakedTokenSY internal sy;
+    OutrunL2StakedTokenSYUpgradeable internal sy;
     MockPositionManager internal position;
 
     function setUp() external {
         wstETH = new MockWstETH();
         oracle = new MockExchangeOracle();
-        sy = new OutrunL2StakedTokenSY("SY wstETH", "SYw", OWNER, address(wstETH), address(oracle), address(wstETH), 18);
+        sy = OutrunL2StakedTokenSYUpgradeable(
+            payable(ProxyTestHelper.deploy(
+                    address(new OutrunL2StakedTokenSYUpgradeable()),
+                    abi.encodeCall(
+                        OutrunL2StakedTokenSYUpgradeable.initialize,
+                        ("SY wstETH", "SYw", OWNER, address(wstETH), address(oracle), address(wstETH), 18)
+                    )
+                ))
+        );
         position = new MockPositionManager(address(wstETH));
     }
 
@@ -327,7 +336,12 @@ contract RouterPositionSyTest is Test {
         MockUSDS usds = new MockUSDS();
         MockSUSDS sUSDS = new MockSUSDS(address(usds));
 
-        OutrunStakedUsdsSY sy2 = new OutrunStakedUsdsSY(OWNER, address(usds), address(sUSDS));
+        OutrunStakedUsdsSYUpgradeable sy2 = OutrunStakedUsdsSYUpgradeable(
+            payable(ProxyTestHelper.deploy(
+                    address(new OutrunStakedUsdsSYUpgradeable()),
+                    abi.encodeCall(OutrunStakedUsdsSYUpgradeable.initialize, (OWNER, address(usds), address(sUSDS)))
+                ))
+        );
 
         usds.mint(USER, STAKE_AMOUNT * 10);
         sUSDS.mintShares(USER, STAKE_AMOUNT);

@@ -24,6 +24,7 @@ interface IOutrunStakeManager {
     error ExceedsWrapPoolBalance(uint256 requested, uint256 available);
     error NothingToDraw();
     error SYTransferFailed();
+    error InsufficientTokenOut(uint256 actual, uint256 minExpected);
 
     /**
      * @notice Returns the SY token handled by the staking manager.
@@ -168,10 +169,11 @@ interface IOutrunStakeManager {
      * @param syRedeemed Amount of SY principal to redeem.
      * @param receiver Address receiving the redemption proceeds.
      * @param tokenOut Token requested on redemption.
+     * @param minTokenOut Minimum acceptable token output from redemption.
      * @return UAssetBurned Amount of uAsset burned from the caller.
      * @return amountTokenOut Amount of output token delivered to the receiver.
      */
-    function redeem(uint256 positionId, uint256 syRedeemed, address receiver, address tokenOut)
+    function redeem(uint256 positionId, uint256 syRedeemed, address receiver, address tokenOut, uint256 minTokenOut)
         external
         returns (uint256 UAssetBurned, uint256 amountTokenOut);
 
@@ -181,9 +183,10 @@ interface IOutrunStakeManager {
      * @param amountInUAsset Amount of uAsset to redeem.
      * @param receiver Address receiving the redemption proceeds.
      * @param tokenOut Token requested on redemption.
+     * @param minTokenOut Minimum acceptable token output from redemption.
      * @return amountTokenOut Amount of output token delivered to the receiver.
      */
-    function wrapRedeem(uint256 amountInUAsset, address receiver, address tokenOut)
+    function wrapRedeem(uint256 amountInUAsset, address receiver, address tokenOut, uint256 minTokenOut)
         external
         returns (uint256 amountTokenOut);
 
@@ -205,9 +208,10 @@ interface IOutrunStakeManager {
      * @notice Harvests wrap-pool yield above outstanding wrap debt to the revenue pool.
      * @dev Harvestable yield is limited to wrap-pool SY exceeding debt-equivalent SY.
      * @param tokenOut Token requested for harvested yield.
+     * @param minTokenOut Minimum acceptable token output from the SY redemption.
      * @return amountTokenOut Amount of harvested token sent to the revenue pool.
      */
-    function harvestWrapYield(address tokenOut) external returns (uint256 amountTokenOut);
+    function harvestWrapYield(address tokenOut, uint256 minTokenOut) external returns (uint256 amountTokenOut);
 
     /**
      * @notice Updates the minimum SY stake required for opening a position.
@@ -215,13 +219,6 @@ interface IOutrunStakeManager {
      * @param minStake New minimum stake amount.
      */
     function setMinStake(uint256 minStake) external;
-
-    /**
-     * @notice Updates the uAsset contract used for minting and burning.
-     * @dev Only the owner may update this dependency address.
-     * @param uAsset Address of the new uAsset contract.
-     */
-    function setUAsset(address uAsset) external;
 
     /**
      * @notice Updates the revenue pool receiving harvested wrap yield.
@@ -279,7 +276,6 @@ interface IOutrunStakeManager {
     );
 
     event SetMinStake(uint256 minStake);
-    event SetUAsset(address indexed uAsset);
     event SetRevenuePool(address indexed revenuePool);
     event SetKeeper(address indexed keeper);
 }

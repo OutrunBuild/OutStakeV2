@@ -5,10 +5,12 @@ import {Test} from "forge-std/Test.sol";
 
 import {OutrunRouter} from "../../src/router/OutrunRouter.sol";
 import {IOutrunRouter} from "../../src/router/interfaces/IOutrunRouter.sol";
-import {OutrunStakingPosition} from "../../src/position/OutrunStakingPosition.sol";
+import {IOutrunStakeManager} from "../../src/position/interfaces/IOutrunStakeManager.sol";
+import {OutrunStakingPositionUpgradeable} from "../../src/position/OutrunStakingPositionUpgradeable.sol";
 import {IStandardizedYield} from "../../src/yield/interfaces/IStandardizedYield.sol";
 import {IUniversalAssets} from "../../src/assets/interfaces/IUniversalAssets.sol";
-import {OutrunERC20} from "../../src/assets/base/OutrunERC20.sol";
+import {ProxyTestHelper} from "../upgradeable/helpers/ProxyTestHelper.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 interface IOutrunRouterPrefundless {
     function mintSYFromToken(address SY, address tokenIn, address receiver, uint256 amountInput, uint256 minSyOut)
@@ -21,8 +23,9 @@ interface IOutrunRouterPrefundless {
         returns (uint256 amountInTokenOut);
 }
 
-contract RouterMockSY is OutrunERC20, IStandardizedYield {
+contract RouterMockSY is ERC20, IStandardizedYield {
     error RouterDepositTransferFailed();
+    error RouterInsufficientSharesOut(uint256 actual, uint256 minimum);
 
     address internal immutable underlying;
     uint256 internal rate;
@@ -30,7 +33,7 @@ contract RouterMockSY is OutrunERC20, IStandardizedYield {
     uint256 internal lastDepositAmount;
     uint256 internal lastDepositValue;
 
-    constructor(address underlying_) OutrunERC20("Mock SY", "mSY", 18) {
+    constructor(address underlying_) ERC20("Mock SY", "mSY") {
         underlying = underlying_;
         rate = 1e18;
     }
@@ -43,7 +46,7 @@ contract RouterMockSY is OutrunERC20, IStandardizedYield {
         _mint(receiver, amount);
     }
 
-    function deposit(address receiver, address tokenIn, uint256 amountTokenToDeposit, uint256)
+    function deposit(address receiver, address tokenIn, uint256 amountTokenToDeposit, uint256 minSharesOut)
         external
         payable
         returns (uint256 amountSharesOut)
@@ -57,6 +60,7 @@ contract RouterMockSY is OutrunERC20, IStandardizedYield {
             }
         }
         amountSharesOut = amountTokenToDeposit;
+        if (amountSharesOut < minSharesOut) revert RouterInsufficientSharesOut(amountSharesOut, minSharesOut);
         _mint(receiver, amountSharesOut);
     }
 
@@ -126,18 +130,18 @@ contract RouterMockSY is OutrunERC20, IStandardizedYield {
     }
 }
 
-contract RouterMockERC20 is OutrunERC20 {
-    constructor(string memory name_, string memory symbol_) OutrunERC20(name_, symbol_, 18) {}
+contract RouterMockERC20 is ERC20 {
+    constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
 
     function mint(address receiver, uint256 amount) external {
         _mint(receiver, amount);
     }
 }
 
-contract RouterMockUAsset is OutrunERC20, IUniversalAssets {
+contract RouterMockUAsset is ERC20, IUniversalAssets {
     mapping(address minter => MintingStatus) public mintingStatusTable;
 
-    constructor() OutrunERC20("Mock UAsset", "mUAsset", 18) {}
+    constructor() ERC20("Mock UAsset", "mUAsset") {}
 
     function checkMintableAmount(address minter) external view returns (uint256 amountInMintable) {
         MintingStatus storage status = mintingStatusTable[minter];
@@ -197,7 +201,7 @@ contract OutrunRouterTest is Test {
     RouterMockERC20 internal underlying;
     RouterMockSY internal sy;
     RouterMockUAsset internal uAsset;
-    OutrunStakingPosition internal position;
+    OutrunStakingPositionUpgradeable internal position;
     OutrunRouter internal router;
     RouterMockLauncher internal launcher;
 
@@ -211,7 +215,15 @@ contract OutrunRouterTest is Test {
         uAsset = new RouterMockUAsset();
         launcher = new RouterMockLauncher(address(uAsset));
 
-        position = new OutrunStakingPosition(owner, 1, revenuePool, address(sy), address(uAsset));
+        position = OutrunStakingPositionUpgradeable(
+            ProxyTestHelper.deploy(
+                address(new OutrunStakingPositionUpgradeable()),
+                abi.encodeCall(
+                    OutrunStakingPositionUpgradeable.initialize,
+                    (owner, 1, revenuePool, address(sy), address(uAsset), address(0xC0FFEE))
+                )
+            )
+        );
         router = new OutrunRouter(owner, address(launcher));
 
         uAsset.setMintingCap(address(position), type(uint256).max);
@@ -296,11 +308,7 @@ contract OutrunRouterTest is Test {
         vm.prank(owner);
         // solhint-disable-next-line avoid-low-level-calls
         (bool ok, bytes memory data) = address(router)
-            .call(
-                abi.encodeWithSelector(
-                    IOutrunRouter.wrapStakeFromSY.selector, address(sy), address(position), 100e18, owner
-                )
-            );
+            .call(abi.encodeWithSelector(IOutrunRouter.wrapStakeFromSY.selector, address(position), 100e18, owner, 0));
 
         assertTrue(ok, "wrapStakeFromSY missing");
         uint256 uAssetMinted = abi.decode(data, (uint256));
@@ -308,6 +316,45 @@ contract OutrunRouterTest is Test {
         assertEq(uAssetMinted, 100e18);
         assertEq(uAsset.balanceOf(owner), 100e18);
         assertEq(position.syWrapStaking(), 100e18);
+    }
+
+    function testRouterClearsTransientApprovalsAfterSuccessfulCalls() external {
+        IOutrunRouter.StakeParam memory stakeParam =
+            IOutrunRouter.StakeParam({lockupDays: 30, minSyOut: 0, minUAssetMinted: 0, owner: owner, receiver: owner});
+
+        vm.startPrank(owner);
+        router.mintSYFromToken(address(sy), address(underlying), owner, 1e18, 0);
+        assertEq(underlying.allowance(address(router), address(sy)), 0);
+
+        router.stakeFromToken(address(position), address(underlying), 1e18, stakeParam);
+        assertEq(underlying.allowance(address(router), address(sy)), 0);
+        assertEq(sy.allowance(address(router), address(position)), 0);
+
+        router.stakeFromSY(address(position), 1e18, stakeParam);
+        assertEq(sy.allowance(address(router), address(position)), 0);
+
+        router.wrapStakeFromToken(address(position), address(underlying), 1e18, 0, owner, 0);
+        assertEq(underlying.allowance(address(router), address(sy)), 0);
+        assertEq(sy.allowance(address(router), address(position)), 0);
+
+        router.wrapStakeFromSY(address(position), 1e18, owner, 0);
+        assertEq(sy.allowance(address(router), address(position)), 0);
+
+        router.genesisByToken(address(position), address(underlying), 1e18, 0, 0, 30, 1, owner);
+        assertEq(underlying.allowance(address(router), address(sy)), 0);
+        assertEq(sy.allowance(address(router), address(position)), 0);
+        assertEq(uAsset.allowance(address(router), address(launcher)), 0);
+
+        router.genesisBySY(address(position), 1e18, 30, 1, owner, 0);
+        assertEq(sy.allowance(address(router), address(position)), 0);
+        assertEq(uAsset.allowance(address(router), address(launcher)), 0);
+        vm.stopPrank();
+
+        vm.startPrank(owner);
+        router.wrapStakeFromSY(address(position), 1e18, owner, 0);
+        router.wrapRedeem(address(position), 1e18, owner, address(sy), 0);
+        assertEq(uAsset.allowance(address(router), address(position)), 0);
+        vm.stopPrank();
     }
 
     function testPreviewWrapRedeemMatchesStakeManagerPreview() external {
@@ -338,7 +385,14 @@ contract OutrunRouterTest is Test {
         // solhint-disable-next-line avoid-low-level-calls
         (bool ok, bytes memory data) = address(router)
             .call(
-                abi.encodeWithSelector(IOutrunRouter.wrapRedeem.selector, address(position), 40e18, owner, address(sy))
+                abi.encodeWithSelector(
+                    IOutrunRouter.wrapRedeem.selector,
+                    address(position),
+                    40e18,
+                    owner,
+                    address(sy),
+                    26_666666666666666666
+                )
             );
 
         assertTrue(ok, "wrapRedeem missing");
@@ -349,9 +403,24 @@ contract OutrunRouterTest is Test {
         assertEq(sy.balanceOf(owner), 926_666666666666666666);
     }
 
+    function testWrapRedeemRevertsWhenTokenOutBelowMinimum() external {
+        vm.prank(owner);
+        position.wrapStake(100e18, owner);
+
+        sy.setExchangeRate(15e17);
+
+        vm.prank(owner);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOutrunStakeManager.InsufficientTokenOut.selector, 26_666666666666666666, 26_666666666666666667
+            )
+        );
+        router.wrapRedeem(address(position), 40e18, owner, address(sy), 26_666666666666666667);
+    }
+
     function testGenesisBySYUsesLockedStakeInsteadOfWrapStake() external {
         vm.prank(owner);
-        router.genesisBySY(address(sy), address(position), 100e18, 30, 1, owner);
+        router.genesisBySY(address(position), 100e18, 30, 1, owner, 0);
 
         (address positionOwner, uint256 syStaked, uint256 uAssetMinted,, uint128 deadline) = position.positions(1);
         (uint256 verseId, uint128 launcherUAsset, address launcherUser) = launcher.snapshot();
@@ -371,23 +440,24 @@ contract OutrunRouterTest is Test {
     }
 
     function testStakeFromSYRevertsWhenMintedBelowMinimumUAsset() external {
-        IOutrunRouter.StakeParam memory stakeParam =
-            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: 101e18, owner: owner, receiver: address(0)});
+        IOutrunRouter.StakeParam memory stakeParam = IOutrunRouter.StakeParam({
+            lockupDays: 30, minSyOut: 0, minUAssetMinted: 101e18, owner: owner, receiver: address(0)
+        });
 
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSelector(IOutrunRouter.InsufficientUAssetMinted.selector, 100e18, 101e18));
-        router.stakeFromSY(address(sy), address(position), 100e18, stakeParam);
+        router.stakeFromSY(address(position), 100e18, stakeParam);
     }
 
     function testStakeFromSYMintsUAssetToReceiverWhenSpecified() external {
         address receiver = address(0xBEEF);
 
-        IOutrunRouter.StakeParam memory stakeParam =
-            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: 0, owner: owner, receiver: receiver});
+        IOutrunRouter.StakeParam memory stakeParam = IOutrunRouter.StakeParam({
+            lockupDays: 30, minSyOut: 0, minUAssetMinted: 0, owner: owner, receiver: receiver
+        });
 
         vm.prank(owner);
-        (uint256 positionId, uint256 uAssetMinted) =
-            router.stakeFromSY(address(sy), address(position), 100e18, stakeParam);
+        (uint256 positionId, uint256 uAssetMinted) = router.stakeFromSY(address(position), 100e18, stakeParam);
 
         (address positionOwner, uint256 syStaked, uint256 positionUAssetMinted,, uint128 deadline) =
             position.positions(positionId);
@@ -405,12 +475,12 @@ contract OutrunRouterTest is Test {
 
     function testStakeFromSYDefaultsReceiverToOwnerWhenZero() external {
         // receiver = address(0) should behave like the old code: uAsset goes to owner
-        IOutrunRouter.StakeParam memory stakeParam =
-            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: 0, owner: owner, receiver: address(0)});
+        IOutrunRouter.StakeParam memory stakeParam = IOutrunRouter.StakeParam({
+            lockupDays: 30, minSyOut: 0, minUAssetMinted: 0, owner: owner, receiver: address(0)
+        });
 
         vm.prank(owner);
-        (uint256 positionId, uint256 uAssetMinted) =
-            router.stakeFromSY(address(sy), address(position), 100e18, stakeParam);
+        (uint256 positionId, uint256 uAssetMinted) = router.stakeFromSY(address(position), 100e18, stakeParam);
 
         (address positionOwner, uint256 syStaked, uint256 positionUAssetMinted,,) = position.positions(positionId);
 
@@ -426,12 +496,13 @@ contract OutrunRouterTest is Test {
     function testStakeFromTokenMintsUAssetToReceiverWhenSpecified() external {
         address receiver = address(0xBEEF);
 
-        IOutrunRouter.StakeParam memory stakeParam =
-            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: 0, owner: owner, receiver: receiver});
+        IOutrunRouter.StakeParam memory stakeParam = IOutrunRouter.StakeParam({
+            lockupDays: 30, minSyOut: 0, minUAssetMinted: 0, owner: owner, receiver: receiver
+        });
 
         vm.prank(owner);
         (uint256 positionId, uint256 uAssetMinted) =
-            router.stakeFromToken(address(sy), address(position), address(underlying), 100e18, stakeParam);
+            router.stakeFromToken(address(position), address(underlying), 100e18, stakeParam);
 
         (address positionOwner, uint256 syStaked, uint256 positionUAssetMinted,, uint128 deadline) =
             position.positions(positionId);
@@ -449,12 +520,13 @@ contract OutrunRouterTest is Test {
 
     function testStakeFromTokenDefaultsReceiverToOwnerWhenZero() external {
         // receiver = address(0) should behave like the old code: uAsset goes to owner
-        IOutrunRouter.StakeParam memory stakeParam =
-            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: 0, owner: owner, receiver: address(0)});
+        IOutrunRouter.StakeParam memory stakeParam = IOutrunRouter.StakeParam({
+            lockupDays: 30, minSyOut: 0, minUAssetMinted: 0, owner: owner, receiver: address(0)
+        });
 
         vm.prank(owner);
         (uint256 positionId, uint256 uAssetMinted) =
-            router.stakeFromToken(address(sy), address(position), address(underlying), 100e18, stakeParam);
+            router.stakeFromToken(address(position), address(underlying), 100e18, stakeParam);
 
         (address positionOwner, uint256 syStaked, uint256 positionUAssetMinted,,) = position.positions(positionId);
 
@@ -465,5 +537,39 @@ contract OutrunRouterTest is Test {
         // uAsset is minted to owner since receiver is address(0)
         assertEq(uAsset.balanceOf(owner), 100e18);
         assertEq(uAssetMinted, 100e18);
+    }
+
+    function testStakeFromTokenRevertsWhenSyBelowMinimum() external {
+        IOutrunRouter.StakeParam memory stakeParam = IOutrunRouter.StakeParam({
+            lockupDays: 30, minSyOut: 101e18, minUAssetMinted: 0, owner: owner, receiver: address(0)
+        });
+
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(RouterMockSY.RouterInsufficientSharesOut.selector, 100e18, 101e18));
+        router.stakeFromToken(address(position), address(underlying), 100e18, stakeParam);
+    }
+
+    function testWrapStakeFromTokenRevertsWhenSyBelowMinimum() external {
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(RouterMockSY.RouterInsufficientSharesOut.selector, 100e18, 101e18));
+        router.wrapStakeFromToken(address(position), address(underlying), 100e18, 101e18, owner, 0);
+    }
+
+    function testWrapStakeFromSYRevertsWhenUAssetBelowMinimum() external {
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(IOutrunRouter.InsufficientUAssetMinted.selector, 100e18, 101e18));
+        router.wrapStakeFromSY(address(position), 100e18, owner, 101e18);
+    }
+
+    function testGenesisByTokenRevertsWhenSyBelowMinimum() external {
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(RouterMockSY.RouterInsufficientSharesOut.selector, 100e18, 101e18));
+        router.genesisByToken(address(position), address(underlying), 100e18, 101e18, 0, 30, 1, owner);
+    }
+
+    function testGenesisBySYRevertsWhenUAssetBelowMinimum() external {
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(IOutrunRouter.InsufficientUAssetMinted.selector, 100e18, 101e18));
+        router.genesisBySY(address(position), 100e18, 30, 1, owner, 101e18);
     }
 }

@@ -3,10 +3,12 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 
-import {RouterMockSY, RouterMockERC20, RouterMockUAsset, RouterMockLauncher} from "./OutrunRouter.t.sol";
-import {OutrunStakingPosition} from "../../src/position/OutrunStakingPosition.sol";
+import {RouterMockSY, RouterMockERC20, RouterMockUAsset, RouterMockLauncher} from "./OutrunRouterUpgradeable.t.sol";
+import {OutrunStakingPositionUpgradeable} from "../../src/position/OutrunStakingPositionUpgradeable.sol";
+import {IOutrunStakeManager} from "../../src/position/interfaces/IOutrunStakeManager.sol";
 import {OutrunRouter} from "../../src/router/OutrunRouter.sol";
 import {IOutrunRouter} from "../../src/router/interfaces/IOutrunRouter.sol";
+import {ProxyTestHelper} from "../upgradeable/helpers/ProxyTestHelper.sol";
 
 /**
  * @title OutrunRouterFuzzTest
@@ -23,7 +25,7 @@ contract OutrunRouterFuzzTest is Test {
     RouterMockERC20 internal underlying;
     RouterMockSY internal sy;
     RouterMockUAsset internal uAsset;
-    OutrunStakingPosition internal position;
+    OutrunStakingPositionUpgradeable internal position;
     OutrunRouter internal router;
     RouterMockLauncher internal launcher;
 
@@ -38,7 +40,15 @@ contract OutrunRouterFuzzTest is Test {
         uAsset = new RouterMockUAsset();
         launcher = new RouterMockLauncher(address(uAsset));
 
-        position = new OutrunStakingPosition(owner, 1, revenuePool, address(sy), address(uAsset));
+        position = OutrunStakingPositionUpgradeable(
+            ProxyTestHelper.deploy(
+                address(new OutrunStakingPositionUpgradeable()),
+                abi.encodeCall(
+                    OutrunStakingPositionUpgradeable.initialize,
+                    (owner, 1, revenuePool, address(sy), address(uAsset), address(0xC0FFEE))
+                )
+            )
+        );
         router = new OutrunRouter(owner, address(launcher));
 
         uAsset.setMintingCap(address(position), type(uint256).max);
@@ -143,12 +153,13 @@ contract OutrunRouterFuzzTest is Test {
 
         uint256 userBalanceBefore = underlying.balanceOf(user);
 
-        IOutrunRouter.StakeParam memory stakeParam =
-            IOutrunRouter.StakeParam({lockupDays: lockupDays, minUAssetMinted: 0, owner: user, receiver: address(0)});
+        IOutrunRouter.StakeParam memory stakeParam = IOutrunRouter.StakeParam({
+            lockupDays: lockupDays, minSyOut: 0, minUAssetMinted: 0, owner: user, receiver: address(0)
+        });
 
         vm.prank(user);
         (uint256 positionId, uint256 uAssetMinted) =
-            router.stakeFromToken(address(sy), address(position), address(underlying), amount, stakeParam);
+            router.stakeFromToken(address(position), address(underlying), amount, stakeParam);
 
         // Verify position created with correct state
         (address positionOwner, uint256 syStaked, uint256 positionUAssetMinted,, uint128 deadline) =
@@ -178,12 +189,12 @@ contract OutrunRouterFuzzTest is Test {
 
         uint256 userSYBefore = sy.balanceOf(user);
 
-        IOutrunRouter.StakeParam memory stakeParam =
-            IOutrunRouter.StakeParam({lockupDays: lockupDays, minUAssetMinted: 0, owner: user, receiver: address(0)});
+        IOutrunRouter.StakeParam memory stakeParam = IOutrunRouter.StakeParam({
+            lockupDays: lockupDays, minSyOut: 0, minUAssetMinted: 0, owner: user, receiver: address(0)
+        });
 
         vm.prank(user);
-        (uint256 positionId, uint256 uAssetMinted) =
-            router.stakeFromSY(address(sy), address(position), amount, stakeParam);
+        (uint256 positionId, uint256 uAssetMinted) = router.stakeFromSY(address(position), amount, stakeParam);
 
         // Verify position created with correct state
         (address positionOwner, uint256 syStaked, uint256 positionUAssetMinted,, uint128 deadline) =
@@ -212,12 +223,13 @@ contract OutrunRouterFuzzTest is Test {
         vm.assume(customReceiver != address(0));
         vm.assume(customReceiver != user);
 
-        IOutrunRouter.StakeParam memory stakeParam =
-            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: 0, owner: user, receiver: customReceiver});
+        IOutrunRouter.StakeParam memory stakeParam = IOutrunRouter.StakeParam({
+            lockupDays: 30, minSyOut: 0, minUAssetMinted: 0, owner: user, receiver: customReceiver
+        });
 
         vm.prank(user);
         (uint256 positionId, uint256 uAssetMinted) =
-            router.stakeFromToken(address(sy), address(position), address(underlying), amount, stakeParam);
+            router.stakeFromToken(address(position), address(underlying), amount, stakeParam);
 
         // Verify: position owned by owner
         (address positionOwner,, uint256 positionUAssetMinted,,) = position.positions(positionId);
@@ -235,12 +247,12 @@ contract OutrunRouterFuzzTest is Test {
         vm.assume(customReceiver != address(0));
         vm.assume(customReceiver != user);
 
-        IOutrunRouter.StakeParam memory stakeParam =
-            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: 0, owner: user, receiver: customReceiver});
+        IOutrunRouter.StakeParam memory stakeParam = IOutrunRouter.StakeParam({
+            lockupDays: 30, minSyOut: 0, minUAssetMinted: 0, owner: user, receiver: customReceiver
+        });
 
         vm.prank(user);
-        (uint256 positionId, uint256 uAssetMinted) =
-            router.stakeFromSY(address(sy), address(position), amount, stakeParam);
+        (uint256 positionId, uint256 uAssetMinted) = router.stakeFromSY(address(position), amount, stakeParam);
 
         // Verify: position owned by owner
         (address positionOwner,, uint256 positionUAssetMinted,,) = position.positions(positionId);
@@ -259,14 +271,14 @@ contract OutrunRouterFuzzTest is Test {
         minUAssetMinted = bound(minUAssetMinted, amount + 1, amount + 100e18);
 
         IOutrunRouter.StakeParam memory stakeParam = IOutrunRouter.StakeParam({
-            lockupDays: 30, minUAssetMinted: minUAssetMinted, owner: user, receiver: address(0)
+            lockupDays: 30, minSyOut: 0, minUAssetMinted: minUAssetMinted, owner: user, receiver: address(0)
         });
 
         vm.prank(user);
         vm.expectRevert(
             abi.encodeWithSelector(IOutrunRouter.InsufficientUAssetMinted.selector, amount, minUAssetMinted)
         );
-        router.stakeFromToken(address(sy), address(position), address(underlying), amount, stakeParam);
+        router.stakeFromToken(address(position), address(underlying), amount, stakeParam);
     }
 
     /// forge-config: default.fuzz.runs = 256
@@ -275,14 +287,14 @@ contract OutrunRouterFuzzTest is Test {
         minUAssetMinted = bound(minUAssetMinted, amount + 1, amount + 100e18);
 
         IOutrunRouter.StakeParam memory stakeParam = IOutrunRouter.StakeParam({
-            lockupDays: 30, minUAssetMinted: minUAssetMinted, owner: user, receiver: address(0)
+            lockupDays: 30, minSyOut: 0, minUAssetMinted: minUAssetMinted, owner: user, receiver: address(0)
         });
 
         vm.prank(user);
         vm.expectRevert(
             abi.encodeWithSelector(IOutrunRouter.InsufficientUAssetMinted.selector, amount, minUAssetMinted)
         );
-        router.stakeFromSY(address(sy), address(position), amount, stakeParam);
+        router.stakeFromSY(address(position), amount, stakeParam);
     }
 
     // ==================== Wrap Stake Tests ====================
@@ -297,7 +309,13 @@ contract OutrunRouterFuzzTest is Test {
         (bool ok, bytes memory data) = address(router)
             .call(
                 abi.encodeWithSelector(
-                    IOutrunRouter.wrapStakeFromToken.selector, address(position), address(underlying), amount, receiver
+                    IOutrunRouter.wrapStakeFromToken.selector,
+                    address(position),
+                    address(underlying),
+                    amount,
+                    0,
+                    receiver,
+                    0
                 )
             );
         assertTrue(ok, "wrapStakeFromToken call failed");
@@ -327,9 +345,7 @@ contract OutrunRouterFuzzTest is Test {
         vm.prank(user);
         (bool ok, bytes memory data) = address(router)
             .call(
-                abi.encodeWithSelector(
-                    IOutrunRouter.wrapStakeFromSY.selector, address(sy), address(position), amount, receiver
-                )
+                abi.encodeWithSelector(IOutrunRouter.wrapStakeFromSY.selector, address(position), amount, receiver, 0)
             );
         assertTrue(ok, "wrapStakeFromSY call failed");
         uint256 uAssetMinted = abi.decode(data, (uint256));
@@ -358,7 +374,13 @@ contract OutrunRouterFuzzTest is Test {
         (bool stakeOk,) = address(router)
             .call(
                 abi.encodeWithSelector(
-                    IOutrunRouter.wrapStakeFromToken.selector, address(position), address(underlying), amount, user
+                    IOutrunRouter.wrapStakeFromToken.selector,
+                    address(position),
+                    address(underlying),
+                    amount,
+                    0,
+                    user,
+                    0
                 )
             );
         assertTrue(stakeOk, "wrapStakeFromToken call failed");
@@ -371,7 +393,7 @@ contract OutrunRouterFuzzTest is Test {
         (bool redeemOk, bytes memory redeemData) = address(router)
             .call(
                 abi.encodeWithSelector(
-                    IOutrunRouter.wrapRedeem.selector, address(position), redeemAmount, user, address(sy)
+                    IOutrunRouter.wrapRedeem.selector, address(position), redeemAmount, user, address(sy), 0
                 )
             );
         assertTrue(redeemOk, "wrapRedeem call failed");
@@ -397,7 +419,9 @@ contract OutrunRouterFuzzTest is Test {
                 address(position),
                 address(0), // native token
                 amount,
-                receiver
+                0,
+                receiver,
+                0
             )
         );
         assertTrue(ok, "wrapStakeFromToken native call failed");
@@ -417,15 +441,14 @@ contract OutrunRouterFuzzTest is Test {
     function testFuzz_PreviewStakeFromTokenMatchesActual(uint256 amount) public {
         amount = bound(amount, 1, 1000e18);
 
-        IOutrunRouter.StakeParam memory stakeParam =
-            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: 0, owner: user, receiver: address(0)});
+        IOutrunRouter.StakeParam memory stakeParam = IOutrunRouter.StakeParam({
+            lockupDays: 30, minSyOut: 0, minUAssetMinted: 0, owner: user, receiver: address(0)
+        });
 
-        uint256 preview =
-            router.previewStakeFromToken(address(sy), address(position), address(underlying), amount, stakeParam);
+        uint256 preview = router.previewStakeFromToken(address(position), address(underlying), amount, stakeParam);
 
         vm.prank(user);
-        (, uint256 actualUAsset) =
-            router.stakeFromToken(address(sy), address(position), address(underlying), amount, stakeParam);
+        (, uint256 actualUAsset) = router.stakeFromToken(address(position), address(underlying), amount, stakeParam);
 
         assertEq(preview, actualUAsset, "preview should match actual");
     }
@@ -434,13 +457,14 @@ contract OutrunRouterFuzzTest is Test {
     function testFuzz_PreviewStakeFromSYMatchesActual(uint256 amount) public {
         amount = bound(amount, 1, 1000e18);
 
-        IOutrunRouter.StakeParam memory stakeParam =
-            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: 0, owner: user, receiver: address(0)});
+        IOutrunRouter.StakeParam memory stakeParam = IOutrunRouter.StakeParam({
+            lockupDays: 30, minSyOut: 0, minUAssetMinted: 0, owner: user, receiver: address(0)
+        });
 
         uint256 preview = router.previewStakeFromSY(address(position), amount, stakeParam);
 
         vm.prank(user);
-        (, uint256 actualUAsset) = router.stakeFromSY(address(sy), address(position), amount, stakeParam);
+        (, uint256 actualUAsset) = router.stakeFromSY(address(position), amount, stakeParam);
 
         assertEq(preview, actualUAsset, "preview should match actual");
     }
@@ -449,13 +473,19 @@ contract OutrunRouterFuzzTest is Test {
     function testFuzz_PreviewWrapStakeMatchesActual(uint256 amount) public {
         amount = bound(amount, 1, 1000e18);
 
-        uint256 preview = router.previewWrapStakeFromToken(address(sy), address(position), address(underlying), amount);
+        uint256 preview = router.previewWrapStakeFromToken(address(position), address(underlying), amount);
 
         vm.prank(user);
         (bool ok, bytes memory data) = address(router)
             .call(
                 abi.encodeWithSelector(
-                    IOutrunRouter.wrapStakeFromToken.selector, address(position), address(underlying), amount, user
+                    IOutrunRouter.wrapStakeFromToken.selector,
+                    address(position),
+                    address(underlying),
+                    amount,
+                    0,
+                    user,
+                    0
                 )
             );
         assertTrue(ok, "wrapStakeFromToken call failed");
@@ -474,7 +504,13 @@ contract OutrunRouterFuzzTest is Test {
         (bool stakeOk,) = address(router)
             .call(
                 abi.encodeWithSelector(
-                    IOutrunRouter.wrapStakeFromToken.selector, address(position), address(underlying), amount, user
+                    IOutrunRouter.wrapStakeFromToken.selector,
+                    address(position),
+                    address(underlying),
+                    amount,
+                    0,
+                    user,
+                    0
                 )
             );
         assertTrue(stakeOk, "wrapStakeFromToken call failed");
@@ -485,7 +521,7 @@ contract OutrunRouterFuzzTest is Test {
         (bool redeemOk, bytes memory redeemData) = address(router)
             .call(
                 abi.encodeWithSelector(
-                    IOutrunRouter.wrapRedeem.selector, address(position), redeemAmount, user, address(sy)
+                    IOutrunRouter.wrapRedeem.selector, address(position), redeemAmount, user, address(sy), 0
                 )
             );
         assertTrue(redeemOk, "wrapRedeem call failed");
@@ -505,7 +541,7 @@ contract OutrunRouterFuzzTest is Test {
         uint256 userBalanceBefore = underlying.balanceOf(user);
 
         vm.prank(user);
-        router.genesisByToken{value: 0}(address(position), address(underlying), amount, lockupDays, verseId, user);
+        router.genesisByToken{value: 0}(address(position), address(underlying), amount, 0, 0, lockupDays, verseId, user);
 
         // Verify position created
         (address positionOwner, uint256 syStaked, uint256 uAssetMinted,, uint128 deadline) = position.positions(1);
@@ -543,7 +579,7 @@ contract OutrunRouterFuzzTest is Test {
         uint256 userSYBefore = sy.balanceOf(user);
 
         vm.prank(user);
-        router.genesisBySY(address(sy), address(position), amount, lockupDays, verseId, user);
+        router.genesisBySY(address(position), amount, lockupDays, verseId, user, 0);
 
         // Verify position created
         (address positionOwner, uint256 syStaked, uint256 uAssetMinted,, uint128 deadline) = position.positions(1);
@@ -580,7 +616,7 @@ contract OutrunRouterFuzzTest is Test {
         vm.deal(user, amount);
 
         vm.prank(user);
-        router.genesisByToken{value: amount}(address(position), address(0), amount, lockupDays, verseId, user);
+        router.genesisByToken{value: amount}(address(position), address(0), amount, 0, 0, lockupDays, verseId, user);
 
         // Verify genesis called correctly
         (uint256 launcherVerseId, uint128 launcherUAsset, address launcherUser) = launcher.snapshot();
@@ -601,7 +637,7 @@ contract OutrunRouterFuzzTest is Test {
         underlying.approve(address(router), type(uint256).max);
 
         vm.prank(user);
-        router.genesisByToken{value: 0}(address(position), address(underlying), uint256(amount), 30, 1, user);
+        router.genesisByToken{value: 0}(address(position), address(underlying), uint256(amount), 0, 0, 30, 1, user);
 
         // Verify genesis called correctly
         (, uint128 launcherUAsset,) = launcher.snapshot();
@@ -615,16 +651,15 @@ contract OutrunRouterFuzzTest is Test {
         amount1 = bound(amount1, 1, 500e18);
         amount2 = bound(amount2, 1, 500e18);
 
-        IOutrunRouter.StakeParam memory stakeParam =
-            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: 0, owner: user, receiver: address(0)});
+        IOutrunRouter.StakeParam memory stakeParam = IOutrunRouter.StakeParam({
+            lockupDays: 30, minSyOut: 0, minUAssetMinted: 0, owner: user, receiver: address(0)
+        });
 
         vm.prank(user);
-        (uint256 positionId1,) =
-            router.stakeFromToken(address(sy), address(position), address(underlying), amount1, stakeParam);
+        (uint256 positionId1,) = router.stakeFromToken(address(position), address(underlying), amount1, stakeParam);
 
         vm.prank(user);
-        (uint256 positionId2,) =
-            router.stakeFromToken(address(sy), address(position), address(underlying), amount2, stakeParam);
+        (uint256 positionId2,) = router.stakeFromToken(address(position), address(underlying), amount2, stakeParam);
 
         // Verify two different positions created
         assertTrue(positionId1 != positionId2, "position IDs should be different");
@@ -646,17 +681,24 @@ contract OutrunRouterFuzzTest is Test {
         (bool wrapOk,) = address(router)
             .call(
                 abi.encodeWithSelector(
-                    IOutrunRouter.wrapStakeFromToken.selector, address(position), address(underlying), wrapAmount, user
+                    IOutrunRouter.wrapStakeFromToken.selector,
+                    address(position),
+                    address(underlying),
+                    wrapAmount,
+                    0,
+                    user,
+                    0
                 )
             );
         assertTrue(wrapOk, "wrapStakeFromToken call failed");
 
         // Locked stake
-        IOutrunRouter.StakeParam memory stakeParam =
-            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: 0, owner: user, receiver: address(0)});
+        IOutrunRouter.StakeParam memory stakeParam = IOutrunRouter.StakeParam({
+            lockupDays: 30, minSyOut: 0, minUAssetMinted: 0, owner: user, receiver: address(0)
+        });
 
         vm.prank(user);
-        router.stakeFromToken(address(sy), address(position), address(underlying), stakeAmount, stakeParam);
+        router.stakeFromToken(address(position), address(underlying), stakeAmount, stakeParam);
 
         // Verify accounting separation
         assertEq(position.syWrapStaking(), wrapAmount, "syWrapStaking mismatch");
@@ -669,23 +711,74 @@ contract OutrunRouterFuzzTest is Test {
         amount = bound(amount, 1, 1000e18);
 
         // Test with minUAssetMinted == amount (should pass)
-        IOutrunRouter.StakeParam memory stakeParamPass =
-            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: amount, owner: user, receiver: address(0)});
+        IOutrunRouter.StakeParam memory stakeParamPass = IOutrunRouter.StakeParam({
+            lockupDays: 30, minSyOut: 0, minUAssetMinted: amount, owner: user, receiver: address(0)
+        });
 
         vm.prank(user);
-        (, uint256 uAssetMinted) =
-            router.stakeFromToken(address(sy), address(position), address(underlying), amount, stakeParamPass);
+        (, uint256 uAssetMinted) = router.stakeFromToken(address(position), address(underlying), amount, stakeParamPass);
         assertEq(uAssetMinted, amount, "uAssetMinted should equal amount");
 
         // Reset state for next test - give user more tokens
         underlying.mint(user, amount);
 
         // Test with minUAssetMinted == amount + 1 (should fail)
-        IOutrunRouter.StakeParam memory stakeParamFail =
-            IOutrunRouter.StakeParam({lockupDays: 30, minUAssetMinted: amount + 1, owner: user, receiver: address(0)});
+        IOutrunRouter.StakeParam memory stakeParamFail = IOutrunRouter.StakeParam({
+            lockupDays: 30, minSyOut: 0, minUAssetMinted: amount + 1, owner: user, receiver: address(0)
+        });
 
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(IOutrunRouter.InsufficientUAssetMinted.selector, amount, amount + 1));
-        router.stakeFromToken(address(sy), address(position), address(underlying), amount, stakeParamFail);
+        router.stakeFromToken(address(position), address(underlying), amount, stakeParamFail);
+    }
+
+    /// forge-config: default.fuzz.runs = 256
+    function testFuzz_WrapRedeemSlippageBoundary(uint256 amount, uint256 redeemAmount) public {
+        amount = bound(amount, 1, 1000e18);
+        redeemAmount = bound(redeemAmount, 1, amount);
+
+        vm.prank(user);
+        (bool stakeOk,) = address(router)
+            .call(
+                abi.encodeWithSelector(
+                    IOutrunRouter.wrapStakeFromToken.selector,
+                    address(position),
+                    address(underlying),
+                    amount,
+                    0,
+                    user,
+                    0
+                )
+            );
+        assertTrue(stakeOk, "wrapStakeFromToken call failed");
+
+        uint256 expectedOut = router.previewWrapRedeem(address(position), redeemAmount, address(sy));
+
+        vm.prank(user);
+        uint256 actualOut = router.wrapRedeem(address(position), redeemAmount, user, address(sy), expectedOut);
+        assertEq(actualOut, expectedOut, "wrapRedeem should accept exact minTokenOut");
+
+        if (redeemAmount == amount) return;
+
+        vm.prank(user);
+        (stakeOk,) = address(router)
+            .call(
+                abi.encodeWithSelector(
+                    IOutrunRouter.wrapStakeFromToken.selector,
+                    address(position),
+                    address(underlying),
+                    redeemAmount,
+                    0,
+                    user,
+                    0
+                )
+            );
+        assertTrue(stakeOk, "second wrapStakeFromToken call failed");
+
+        vm.prank(user);
+        vm.expectRevert(
+            abi.encodeWithSelector(IOutrunStakeManager.InsufficientTokenOut.selector, expectedOut, expectedOut + 1)
+        );
+        router.wrapRedeem(address(position), redeemAmount, user, address(sy), expectedOut + 1);
     }
 }
