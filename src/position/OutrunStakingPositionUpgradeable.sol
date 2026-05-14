@@ -268,27 +268,10 @@ contract OutrunStakingPositionUpgradeable is
     {
         if (receiver == address(0)) revert ZeroInput();
         address _SY = SY();
-        address _uAsset = uAsset();
-        Position storage position = _getStorage().positions[positionId];
-        uint128 deadline = position.deadline;
-        if (block.timestamp < deadline) revert LockTimeNotExpired(deadline);
-
-        uint256 syStaked = position.syStaked;
-        uint256 positionUAssetMinted = position.UAssetMinted;
-        if (syRedeemed == 0) revert ZeroInput();
-        if (syRedeemed > syStaked) revert ExceedsPositionBalance(syRedeemed, syStaked);
-        if (tokenOut == _SY && syRedeemed < minTokenOut) revert InsufficientTokenOut(syRedeemed, minTokenOut);
-
-        UAssetBurned = Math.mulDiv(positionUAssetMinted, syRedeemed, syStaked);
-        IUniversalAssets(_uAsset).repay(msg.sender, UAssetBurned);
-        _applyPositionRedeem(positionId, position, syRedeemed, UAssetBurned);
-
-        if (tokenOut == _SY) {
-            amountTokenOut = syRedeemed;
-            _transferSY(receiver, syRedeemed);
-        } else {
-            amountTokenOut = IStandardizedYield(_SY).redeem(receiver, syRedeemed, tokenOut, minTokenOut, false);
-        }
+        UAssetBurned = _previewRedeemPositionDebt(positionId, syRedeemed);
+        _checkDirectSYMinTokenOut(_SY, tokenOut, syRedeemed, minTokenOut);
+        _applyRedeemPositionDebt(positionId, syRedeemed, UAssetBurned);
+        amountTokenOut = _redeemTokenOut(_SY, receiver, tokenOut, syRedeemed, minTokenOut);
 
         emit Redeem(positionId, msg.sender, syRedeemed, UAssetBurned, receiver, tokenOut, amountTokenOut);
     }
@@ -470,8 +453,56 @@ contract OutrunStakingPositionUpgradeable is
         position.UAssetMinted = remainingUAsset;
     }
 
+    // slither-disable-next-line timestamp
+    function _previewRedeemPositionDebt(uint256 positionId, uint256 syRedeemed)
+        internal
+        view
+        returns (uint256 UAssetBurned)
+    {
+        Position storage position = _getStorage().positions[positionId];
+        uint128 deadline = position.deadline;
+        if (block.timestamp < deadline) revert LockTimeNotExpired(deadline);
+
+        uint256 syStaked = position.syStaked;
+        uint256 positionUAssetMinted = position.UAssetMinted;
+        if (syRedeemed == 0) revert ZeroInput();
+        if (syRedeemed > syStaked) revert ExceedsPositionBalance(syRedeemed, syStaked);
+
+        UAssetBurned = Math.mulDiv(positionUAssetMinted, syRedeemed, syStaked);
+    }
+
+    // slither-disable-next-line reentrancy-no-eth
+    function _applyRedeemPositionDebt(uint256 positionId, uint256 syRedeemed, uint256 UAssetBurned) internal {
+        Position storage position = _getStorage().positions[positionId];
+        IUniversalAssets(uAsset()).repay(msg.sender, UAssetBurned);
+        _applyPositionRedeem(positionId, position, syRedeemed, UAssetBurned);
+    }
+
+    function _redeemTokenOut(address _SY, address receiver, address tokenOut, uint256 syRedeemed, uint256 minTokenOut)
+        internal
+        returns (uint256 amountTokenOut)
+    {
+        if (tokenOut == _SY) {
+            amountTokenOut = syRedeemed;
+            _transferSY(_SY, receiver, syRedeemed);
+        } else {
+            amountTokenOut = IStandardizedYield(_SY).redeem(receiver, syRedeemed, tokenOut, minTokenOut, false);
+        }
+    }
+
+    function _checkDirectSYMinTokenOut(address _SY, address tokenOut, uint256 syRedeemed, uint256 minTokenOut)
+        internal
+        pure
+    {
+        if (tokenOut == _SY && syRedeemed < minTokenOut) revert InsufficientTokenOut(syRedeemed, minTokenOut);
+    }
+
     function _transferSY(address receiver, uint256 syAmount) internal {
-        if (!IERC20(SY()).transfer(receiver, syAmount)) revert SYTransferFailed();
+        _transferSY(SY(), receiver, syAmount);
+    }
+
+    function _transferSY(address _SY, address receiver, uint256 syAmount) internal {
+        if (!IERC20(_SY).transfer(receiver, syAmount)) revert SYTransferFailed();
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}
