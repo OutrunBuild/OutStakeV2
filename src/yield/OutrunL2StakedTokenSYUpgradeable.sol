@@ -30,7 +30,11 @@ contract OutrunL2StakedTokenSYUpgradeable is SYBaseUpgradeable {
         uint8 underlyingAssetOnEthDecimals_
     ) external initializer {
         __SYBase_init(name_, symbol_, token_, owner_);
-        _initializeL2(exchangeRateOracle_, underlyingAssetOnEthAddr_, underlyingAssetOnEthDecimals_);
+        if (exchangeRateOracle_ == address(0) || underlyingAssetOnEthAddr_ == address(0)) revert SYZeroAddress();
+        OutrunL2StakedTokenSYStorage storage $ = _getStorage();
+        $.exchangeRateOracle = exchangeRateOracle_;
+        $.underlyingAssetOnEthAddr = underlyingAssetOnEthAddr_;
+        $.underlyingAssetOnEthDecimals = underlyingAssetOnEthDecimals_;
     }
 
     function _getStorage() private pure returns (OutrunL2StakedTokenSYStorage storage $) {
@@ -38,14 +42,6 @@ contract OutrunL2StakedTokenSYUpgradeable is SYBaseUpgradeable {
         assembly {
             $.slot := OUTRUN_L2_STAKED_TOKEN_SY_STORAGE_LOCATION
         }
-    }
-
-    function _initializeL2(address exchangeRateOracle_, address underlyingAssetOnEthAddr_, uint8 decimals_) internal {
-        if (exchangeRateOracle_ == address(0) || underlyingAssetOnEthAddr_ == address(0)) revert SYZeroAddress();
-        OutrunL2StakedTokenSYStorage storage $ = _getStorage();
-        $.exchangeRateOracle = exchangeRateOracle_;
-        $.underlyingAssetOnEthAddr = underlyingAssetOnEthAddr_;
-        $.underlyingAssetOnEthDecimals = decimals_;
     }
 
     function exchangeRateOracle() public view returns (address) {
