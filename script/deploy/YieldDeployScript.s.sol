@@ -36,14 +36,6 @@ contract YieldDeployScript is BaseScript {
         _supportAUSDC();
     }
 
-    function _deployUpgradeable(bytes memory implCreationCode, bytes memory initCalldata) internal returns (address) {
-        address impl;
-        assembly {
-            impl := create(0, add(implCreationCode, 0x20), mload(implCreationCode))
-        }
-        return address(new ERC1967Proxy(impl, initCalldata));
-    }
-
     function _deploySP(address sy, address uAsset) internal returns (address) {
         address impl = address(new OutrunStakingPositionUpgradeable());
         address sp = address(
