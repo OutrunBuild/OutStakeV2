@@ -22,6 +22,8 @@
 
 ### 1.3 收益层
 
+当前 yield adapter 路径以 `find src/yield -type f` 和 `.harness/policy.json` 分类为准；本节列出当前收益层 product adapter、共享 base 与 interface 源文件。
+
 - `src/yield/SYBaseUpgradeable.sol`
 - `src/yield/adapters/aave/OutrunAaveV3SYUpgradeable.sol`
 - `src/yield/adapters/aster/OutrunAsBNBSYUpgradeable.sol`
@@ -49,10 +51,23 @@
 
 ### 1.5 集成与 Oracle 层
 
-- `src/integrations/{aave,aster,etherfi,lido,lista,sky}/interfaces/*.sol`
+- `src/integrations/aave/interfaces/IAToken.sol`
+- `src/integrations/aave/interfaces/IAaveV3Pool.sol`
+- `src/integrations/aster/interfaces/IAsBnbMinter.sol`
+- `src/integrations/aster/interfaces/IListaBNBStakeManager.sol`
+- `src/integrations/aster/interfaces/IYieldProxy.sol`
+- `src/integrations/etherfi/interfaces/IDepositAdapter.sol`
+- `src/integrations/etherfi/interfaces/ILiquidityPool.sol`
+- `src/integrations/etherfi/interfaces/IWeETH.sol`
+- `src/integrations/lido/interfaces/IL2StETH.sol`
+- `src/integrations/lido/interfaces/IStETH.sol`
+- `src/integrations/lido/interfaces/IWstETH.sol`
+- `src/integrations/lista/interfaces/IListaStakeManager.sol`
+- `src/integrations/sky/interfaces/IPSM3.sol`
 - `src/libraries/oracle/OutrunExchangeOracleAdapter.sol`
 - 外部协议最小 interface 与 adapter 调用封装；oracle adapter 作为薄层标准化精度归一化。
 - `OutrunExchangeOracleAdapter` 不部署在 proxy 后；需要更换 oracle normalization 规则时部署新 adapter，再由 oracle-backed SY proxy 的 owner 更新 `exchangeRateOracle`。
+- 后续执行 adapter / integration 相关任务时，以 `find src -type f` 得到的当前文件树和 `.harness/policy.json` 分类为准；本文件提供架构背景，不覆盖实际文件存在性与 harness surface 分类。
 
 ### 1.6 底层库
 
@@ -61,7 +76,7 @@
 - `src/libraries/ReentrancyGuard.sol`
 - `src/libraries/AaveAdapterLib.sol`
 - `src/libraries/ArrayLib.sol`
-- `src/libraries/AutoIncrementId.sol`
+- `src/libraries/AutoIncrementIdUpgradeable.sol`
 - `src/libraries/IWETH.sol`
 - `src/libraries/WadRayMath.sol`
 - 跨业务域共享的 token 传输、汇率换算、重入保护、数组操作、ID 生成、错误定义等基础工具。
