@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.28;
 
-import {OutrunERC20} from "../../src/assets/base/OutrunERC20.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {TokenHelper} from "../../src/libraries/TokenHelper.sol";
 import {IMintable, OnlyFaucet} from "./MockUSDC.sol";
 
@@ -14,16 +14,23 @@ interface IMockAUSDC is IMintable {
 /**
  * @dev Just For Memeverse Genesis Test
  */
-contract MockAUSDC is IMockAUSDC, OutrunERC20, TokenHelper {
+contract MockAUSDC is IMockAUSDC, ERC20, TokenHelper {
+    uint8 private immutable _mockDecimals;
+
     address public immutable MOCK_USDC;
 
     address public faucet;
 
-    constructor(string memory _name, string memory _symbol, uint8 _decimals, address _mockUSDC, address _faucet)
-        OutrunERC20(_name, _symbol, _decimals)
+    constructor(string memory _name, string memory _symbol, uint8 decimals_, address _mockUSDC, address _faucet)
+        ERC20(_name, _symbol)
     {
+        _mockDecimals = decimals_;
         MOCK_USDC = _mockUSDC;
         faucet = _faucet;
+    }
+
+    function decimals() public view override returns (uint8) {
+        return _mockDecimals;
     }
 
     function mint(address account, uint256 amount) external override {
