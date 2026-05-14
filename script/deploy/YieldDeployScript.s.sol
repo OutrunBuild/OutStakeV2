@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: UNLICENSED
+// solhint-disable no-console
 pragma solidity ^0.8.28;
 
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+
 import {BaseScript} from "../lib/BaseScript.s.sol";
-import {OutrunStakingPosition} from "../../src/position/OutrunStakingPosition.sol";
+import {console} from "forge-std/console.sol";
+import {OutrunStakingPositionUpgradeable} from "../../src/position/OutrunStakingPositionUpgradeable.sol";
 import {IUniversalAssets} from "../../src/assets/interfaces/IUniversalAssets.sol";
 
-import {OutrunWstETHSY} from "../../src/yield/adapters/lido/OutrunWstETHSY.sol";
-import {OutrunAaveV3SY} from "../../src/yield/adapters/aave/OutrunAaveV3SY.sol";
-import {OutrunStakedUSDeSY} from "../../src/yield/adapters/ethena/OutrunStakedUSDeSY.sol";
+import {OutrunWstETHSYUpgradeable} from "../../src/yield/adapters/lido/OutrunWstETHSYUpgradeable.sol";
+import {OutrunAaveV3SYUpgradeable} from "../../src/yield/adapters/aave/OutrunAaveV3SYUpgradeable.sol";
+import {OutrunStakedUSDeSYUpgradeable} from "../../src/yield/adapters/ethena/OutrunStakedUSDeSYUpgradeable.sol";
 
 contract YieldDeployScript is BaseScript {
     address internal UETH;
@@ -32,6 +36,26 @@ contract YieldDeployScript is BaseScript {
         _supportAUSDC();
     }
 
+    function _deployUpgradeable(bytes memory implCreationCode, bytes memory initCalldata) internal returns (address) {
+        address impl;
+        assembly {
+            impl := create(0, add(implCreationCode, 0x20), mload(implCreationCode))
+        }
+        return address(new ERC1967Proxy(impl, initCalldata));
+    }
+
+    function _deploySP(address sy, address uAsset) internal returns (address) {
+        address impl = address(new OutrunStakingPositionUpgradeable());
+        address sp = address(
+            new ERC1967Proxy(
+                impl,
+                abi.encodeCall(OutrunStakingPositionUpgradeable.initialize, (owner, 0, revenuePool, sy, uAsset, keeper))
+            )
+        );
+        IUniversalAssets(uAsset).setMintingCap(sp, 1000000000 ether);
+        return sp;
+    }
+
     /**
      * Support wstETH (Sepolia)
      */
@@ -42,15 +66,16 @@ contract YieldDeployScript is BaseScript {
         address wstETH = vm.envAddress("SEPOLIA_WSTETH");
 
         // SY
-        OutrunWstETHSY SY_wstETH = new OutrunWstETHSY(owner, stETH, wstETH);
-        address wstETHSYAddress = address(SY_wstETH);
+        address syImpl = address(new OutrunWstETHSYUpgradeable());
+        address wstETHSYAddress = address(
+            new ERC1967Proxy(syImpl, abi.encodeCall(OutrunWstETHSYUpgradeable.initialize, (owner, stETH, wstETH)))
+        );
 
         // Position
-        OutrunStakingPosition SP_wstETH = new OutrunStakingPosition(owner, 0, revenuePool, wstETHSYAddress, UETH);
-        address wstETHSPAddress = address(SP_wstETH);
+        address wstETHSPAddress = _deploySP(wstETHSYAddress, UETH);
 
-        SP_wstETH.setKeeper(keeper);
-        IUniversalAssets(UETH).setMintingCap(wstETHSPAddress, 1000000000 ether);
+        console.log("SY_wstETH deployed on %s", wstETHSYAddress);
+        console.log("SP_wstETH deployed on %s", wstETHSPAddress);
     }
 
     /**
@@ -63,15 +88,16 @@ contract YieldDeployScript is BaseScript {
         address sUSDe = vm.envAddress("SEPOLIA_SUSDE");
 
         // SY
-        OutrunStakedUSDeSY SY_sUSDe = new OutrunStakedUSDeSY(owner, USDe, sUSDe);
-        address sUSDeSYAddress = address(SY_sUSDe);
+        address syImpl = address(new OutrunStakedUSDeSYUpgradeable());
+        address sUSDeSYAddress = address(
+            new ERC1967Proxy(syImpl, abi.encodeCall(OutrunStakedUSDeSYUpgradeable.initialize, (owner, USDe, sUSDe)))
+        );
 
         // Position
-        OutrunStakingPosition SP_sUSDe = new OutrunStakingPosition(owner, 0, revenuePool, sUSDeSYAddress, UUSD);
-        address sUSDeSPAddress = address(SP_sUSDe);
+        address sUSDeSPAddress = _deploySP(sUSDeSYAddress, UUSD);
 
-        SP_sUSDe.setKeeper(keeper);
-        IUniversalAssets(UUSD).setMintingCap(sUSDeSPAddress, 1000000000 ether);
+        console.log("SY_sUSDe deployed on %s", sUSDeSYAddress);
+        console.log("SP_sUSDe deployed on %s", sUSDeSPAddress);
     }
 
     /**
@@ -91,14 +117,20 @@ contract YieldDeployScript is BaseScript {
         }
 
         // SY
-        OutrunAaveV3SY SY_aUSDC = new OutrunAaveV3SY("SY AaveE aUSDC", "SY aUSDC", aUSDC, aavePool, owner);
-        address aUSDCSYAddress = address(SY_aUSDC);
+        address syImpl = address(new OutrunAaveV3SYUpgradeable());
+        address aUSDCSYAddress = address(
+            new ERC1967Proxy(
+                syImpl,
+                abi.encodeCall(
+                    OutrunAaveV3SYUpgradeable.initialize, ("SY AaveE aUSDC", "SY aUSDC", aUSDC, aavePool, owner)
+                )
+            )
+        );
 
         // Position
-        OutrunStakingPosition SP_aUSDC = new OutrunStakingPosition(owner, 0, revenuePool, aUSDCSYAddress, UUSD);
-        address aUSDCSPAddress = address(SP_aUSDC);
+        address aUSDCSPAddress = _deploySP(aUSDCSYAddress, UUSD);
 
-        SP_aUSDC.setKeeper(keeper);
-        IUniversalAssets(UUSD).setMintingCap(aUSDCSPAddress, 1000000000 ether);
+        console.log("SY_aUSDC deployed on %s", aUSDCSYAddress);
+        console.log("SP_aUSDC deployed on %s", aUSDCSPAddress);
     }
 }

@@ -1,0 +1,108 @@
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity ^0.8.28;
+
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+
+import {IUniversalAssets} from "../interfaces/IUniversalAssets.sol";
+import {OutrunOFTUpgradeable} from "../omnichain/OutrunOFTUpgradeable.sol";
+
+contract OutrunUniversalAssetsUpgradeable is Initializable, IUniversalAssets, OutrunOFTUpgradeable, UUPSUpgradeable {
+    /// @custom:storage-location erc7201:outrun.storage.OutrunUniversalAssets
+    struct OutrunUniversalAssetsStorage {
+        mapping(address minter => MintingStatus) mintingStatusTable;
+    }
+
+    // keccak256(abi.encode(uint256(keccak256("outrun.storage.OutrunUniversalAssets")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant OUTRUN_UNIVERSAL_ASSETS_STORAGE_LOCATION =
+        0x2b82e9d5002467e1c5131297c0670c5f52b39ef4cd7112616d88ce4844484100;
+
+    error InvalidOFTUpgradeConfig();
+    error DecimalsMismatch(uint8 expected, uint8 provided);
+
+    constructor(uint8 localDecimals_, address lzEndpoint) OutrunOFTUpgradeable(localDecimals_, lzEndpoint) {}
+
+    function initialize(string calldata name_, string calldata symbol_, uint8 decimals_, address owner_)
+        external
+        initializer
+    {
+        if (decimals_ != _localDecimalsForValidation()) {
+            revert DecimalsMismatch(_localDecimalsForValidation(), decimals_);
+        }
+        __UUPSUpgradeable_init();
+        __OutrunOFT_init(name_, symbol_, decimals_, owner_);
+    }
+
+    function _getOutrunUniversalAssetsStorage() private pure returns (OutrunUniversalAssetsStorage storage $) {
+        // slither-disable-next-line assembly
+        // solhint-disable-next-line no-inline-assembly
+        assembly {
+            $.slot := OUTRUN_UNIVERSAL_ASSETS_STORAGE_LOCATION
+        }
+    }
+
+    function mintingStatusTable(address minter) public view returns (MintingStatus memory) {
+        return _getOutrunUniversalAssetsStorage().mintingStatusTable[minter];
+    }
+
+    function checkMintableAmount(address minter) external view override returns (uint256 amountInMintable) {
+        MintingStatus storage status = _getOutrunUniversalAssetsStorage().mintingStatusTable[minter];
+        uint256 mintingCap = status.mintingCap;
+        uint256 amountInMinted = status.amountInMinted;
+        amountInMintable = mintingCap > amountInMinted ? mintingCap - amountInMinted : 0;
+    }
+
+    function setMintingCap(address minter, uint256 mintingCap) public override onlyOwner {
+        require(minter != address(0), ZeroInput());
+
+        MintingStatus storage status = _getOutrunUniversalAssetsStorage().mintingStatusTable[minter];
+        uint256 oldMintingCap = status.mintingCap;
+        status.mintingCap = mintingCap;
+
+        emit SetMintingCap(minter, oldMintingCap, mintingCap);
+    }
+
+    function revokeMinter(address minter) external override onlyOwner {
+        require(minter != address(0), ZeroInput());
+
+        MintingStatus storage status = _getOutrunUniversalAssetsStorage().mintingStatusTable[minter];
+        uint256 oldMintingCap = status.mintingCap;
+        status.mintingCap = 0;
+
+        emit RevokeMinter(minter, oldMintingCap);
+    }
+
+    function mint(address receiver, uint256 amount) external override whenNotPaused {
+        require(amount != 0 && receiver != address(0), ZeroInput());
+
+        MintingStatus storage status = _getOutrunUniversalAssetsStorage().mintingStatusTable[msg.sender];
+        require(status.amountInMinted + amount <= status.mintingCap, ReachMintCap());
+
+        status.amountInMinted += amount;
+        _mint(receiver, amount);
+
+        emit MintUAsset(msg.sender, receiver, amount);
+    }
+
+    function repay(address account, uint256 amount) external override {
+        MintingStatus storage status = _getOutrunUniversalAssetsStorage().mintingStatusTable[msg.sender];
+        uint256 amountInMinted = status.amountInMinted;
+        require(amountInMinted >= amount, ReachBurnCap());
+
+        status.amountInMinted = amountInMinted - amount;
+
+        if (account != msg.sender) _spendAllowance(account, msg.sender, amount);
+        _burn(account, amount);
+
+        emit BurnUAsset(msg.sender, amount);
+    }
+
+    function _authorizeUpgrade(address newImplementation) internal view override onlyOwner {
+        OutrunUniversalAssetsUpgradeable implementation = OutrunUniversalAssetsUpgradeable(newImplementation);
+        if (
+            address(implementation.endpoint()) != address(endpoint)
+                || implementation.decimalConversionRate() != decimalConversionRate
+                || implementation.localDecimals() != _localDecimalsForValidation()
+        ) revert InvalidOFTUpgradeConfig();
+    }
+}

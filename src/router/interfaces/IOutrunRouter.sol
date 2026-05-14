@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 interface IOutrunRouter {
     struct StakeParam {
         uint128 lockupDays;
+        uint256 minSyOut;
         uint256 minUAssetMinted;
         address owner;
         address receiver; // uAsset receiver; falls back to owner when address(0)
@@ -40,21 +41,17 @@ interface IOutrunRouter {
 
     /**
      * @notice Quotes the uAsset amount minted when staking from an input token.
-     * @dev Uses the SY deposit preview and stake-manager preview without moving funds.
-     * @param SY Standardized yield contract used for the initial deposit.
+     * @dev Derives canonical SY from `SP.SY()`, then uses the SY deposit preview and stake-manager preview.
      * @param SP Stake manager receiving the SY stake.
      * @param tokenIn Token to deposit into SY.
      * @param tokenAmount Amount of `tokenIn` to convert.
      * @param stakeParam Stake settings carried into the preview.
      * @return UAssetMintable Estimated uAsset minted by the stake flow.
      */
-    function previewStakeFromToken(
-        address SY,
-        address SP,
-        address tokenIn,
-        uint256 tokenAmount,
-        StakeParam calldata stakeParam
-    ) external view returns (uint256 UAssetMintable);
+    function previewStakeFromToken(address SP, address tokenIn, uint256 tokenAmount, StakeParam calldata stakeParam)
+        external
+        view
+        returns (uint256 UAssetMintable);
 
     /**
      * @notice Quotes the uAsset amount minted when staking existing SY.
@@ -71,22 +68,20 @@ interface IOutrunRouter {
 
     /**
      * @notice Quotes the uAsset amount minted when wrap-staking from an input token.
-     * @dev Combines the SY deposit preview with the stake-manager wrap preview.
-     * @param SY Standardized yield contract used for the initial deposit.
+     * @dev Derives canonical SY from `SP.SY()`, then combines the SY deposit preview with the wrap preview.
      * @param SP Stake manager receiving the wrapped stake.
      * @param tokenIn Token to deposit into SY.
      * @param tokenAmount Amount of `tokenIn` to convert.
      * @return UAssetMintable Estimated uAsset minted by the wrap-stake flow.
      */
-    function previewWrapStakeFromToken(address SY, address SP, address tokenIn, uint256 tokenAmount)
+    function previewWrapStakeFromToken(address SP, address tokenIn, uint256 tokenAmount)
         external
         view
         returns (uint256 UAssetMintable);
 
     /**
      * @notice Deposits an input token, converts it into SY, and stakes it.
-     * @dev Pulls the input token into the router, mints SY, and stakes on behalf of `stakeParam.owner`.
-     * @param SY Standardized yield contract used for the initial deposit.
+     * @dev Derives canonical SY from `SP.SY()`, mints it, and stakes on behalf of `stakeParam.owner`.
      * @param SP Stake manager receiving the SY stake.
      * @param tokenIn Token to deposit into SY.
      * @param tokenAmount Amount of `tokenIn` to convert and stake.
@@ -94,52 +89,51 @@ interface IOutrunRouter {
      * @return positionId Newly created staking position id.
      * @return UAssetMinted Amount of uAsset minted for the stake.
      */
-    function stakeFromToken(
-        address SY,
-        address SP,
-        address tokenIn,
-        uint256 tokenAmount,
-        StakeParam calldata stakeParam
-    ) external payable returns (uint256 positionId, uint256 UAssetMinted);
+    function stakeFromToken(address SP, address tokenIn, uint256 tokenAmount, StakeParam calldata stakeParam)
+        external
+        payable
+        returns (uint256 positionId, uint256 UAssetMinted);
 
     /**
      * @notice Stakes existing SY into the stake manager.
-     * @dev Pulls SY into the router before staking on behalf of `stakeParam.owner`.
-     * @param SY Standardized yield token being staked.
+     * @dev Derives canonical SY from `SP.SY()` and pulls it into the router before staking.
      * @param SP Stake manager receiving the SY stake.
      * @param amountInSY Amount of SY to stake.
      * @param stakeParam Stake settings including lockup, slippage floor, and recipient.
      * @return positionId Newly created staking position id.
      * @return UAssetMinted Amount of uAsset minted for the stake.
      */
-    function stakeFromSY(address SY, address SP, uint256 amountInSY, StakeParam calldata stakeParam)
+    function stakeFromSY(address SP, uint256 amountInSY, StakeParam calldata stakeParam)
         external
         returns (uint256 positionId, uint256 UAssetMinted);
 
     /**
      * @notice Deposits an input token, converts it into SY, and wrap-stakes it.
-     * @dev Mints SY into the router and immediately wrap-stakes into uAsset for `uAssetRecipient`.
+     * @dev Derives canonical SY from `SP.SY()`, mints it, and immediately wrap-stakes for `uAssetRecipient`.
      * @param SP Stake manager receiving the wrapped stake.
      * @param tokenIn Token to deposit into SY.
      * @param tokenAmount Amount of `tokenIn` to convert and wrap-stake.
      * @param uAssetRecipient Recipient of the wrapped uAsset position.
      * @return UAssetMinted Amount of uAsset minted to `uAssetRecipient`.
      */
-    function wrapStakeFromToken(address SP, address tokenIn, uint256 tokenAmount, address uAssetRecipient)
-        external
-        payable
-        returns (uint256 UAssetMinted);
+    function wrapStakeFromToken(
+        address SP,
+        address tokenIn,
+        uint256 tokenAmount,
+        uint256 minSyOut,
+        address uAssetRecipient,
+        uint256 minUAssetMinted
+    ) external payable returns (uint256 UAssetMinted);
 
     /**
      * @notice Wrap-stakes existing SY into uAsset.
-     * @dev Pulls SY into the router and forwards it to the stake manager for wrap staking.
-     * @param SY Standardized yield token being wrap-staked.
+     * @dev Derives canonical SY from `SP.SY()` and forwards it to the stake manager for wrap staking.
      * @param SP Stake manager receiving the wrapped stake.
      * @param amountInSY Amount of SY to wrap-stake.
      * @param uAssetRecipient Recipient of the minted uAsset.
      * @return UAssetMinted Amount of uAsset minted to `uAssetRecipient`.
      */
-    function wrapStakeFromSY(address SY, address SP, uint256 amountInSY, address uAssetRecipient)
+    function wrapStakeFromSY(address SP, uint256 amountInSY, address uAssetRecipient, uint256 minUAssetMinted)
         external
         returns (uint256 UAssetMinted);
 
@@ -163,15 +157,16 @@ interface IOutrunRouter {
      * @param amountInUAsset Amount of uAsset to redeem.
      * @param receiver Recipient of the redeemed token output.
      * @param tokenOut Token requested on redemption.
+     * @param minTokenOut Minimum acceptable token output from redemption.
      * @return amountTokenOut Amount of `tokenOut` sent to `receiver`.
      */
-    function wrapRedeem(address SP, uint256 amountInUAsset, address receiver, address tokenOut)
+    function wrapRedeem(address SP, uint256 amountInUAsset, address receiver, address tokenOut, uint256 minTokenOut)
         external
         returns (uint256 amountTokenOut);
 
     /**
      * @notice Creates a genesis position starting from an input token.
-     * @dev Mints and stakes through the router, then forwards the resulting uAsset amount into the launcher genesis flow.
+     * @dev Derives canonical SY from `SP.SY()`, mints and stakes it, then forwards uAsset into genesis.
      * @param SP Stake manager receiving the genesis stake.
      * @param tokenIn Token to deposit into SY before staking.
      * @param tokenAmount Amount of `tokenIn` to convert and stake.
@@ -183,6 +178,8 @@ interface IOutrunRouter {
         address SP,
         address tokenIn,
         uint256 tokenAmount,
+        uint256 minSyOut,
+        uint256 minUAssetMinted,
         uint128 lockupDays,
         uint256 verseId,
         address genesisUser
@@ -190,8 +187,7 @@ interface IOutrunRouter {
 
     /**
      * @notice Creates a genesis position starting from existing SY.
-     * @dev Pulls SY into the router, stakes it for `genesisUser`, then launches genesis with the minted uAsset.
-     * @param SY Standardized yield token being staked.
+     * @dev Derives canonical SY from `SP.SY()`, stakes it for `genesisUser`, then launches genesis.
      * @param SP Stake manager receiving the genesis stake.
      * @param amountInSY Amount of SY to stake for genesis.
      * @param lockupDays Lockup duration forwarded to the stake manager.
@@ -199,12 +195,12 @@ interface IOutrunRouter {
      * @param genesisUser User credited for the genesis position.
      */
     function genesisBySY(
-        address SY,
         address SP,
         uint128 amountInSY,
         uint128 lockupDays,
         uint256 verseId,
-        address genesisUser
+        address genesisUser,
+        uint256 minUAssetMinted
     ) external;
 
     /**

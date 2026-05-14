@@ -6,7 +6,7 @@ import {Test} from "forge-std/Test.sol";
 import {TokenHelper} from "../../src/libraries/TokenHelper.sol";
 import {NativeAmountMismatch, NativeTransferFailed} from "../../src/libraries/CommonErrors.sol";
 import {IWETH} from "../../src/libraries/IWETH.sol";
-import {OutrunERC20} from "../../src/assets/base/OutrunERC20.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -39,8 +39,8 @@ contract TokenHelperHarness is TokenHelper {
 }
 
 // Mock ERC20 with mint capability
-contract MockERC20 is OutrunERC20 {
-    constructor(string memory _name, string memory _symbol, uint8 _decimals) OutrunERC20(_name, _symbol, _decimals) {}
+contract MockERC20 is ERC20 {
+    constructor(string memory _name, string memory _symbol, uint8 _decimals) ERC20(_name, _symbol) {}
 
     function mint(address to, uint256 amount) external {
         _mint(to, amount);
@@ -96,6 +96,7 @@ contract MockWETH is IWETH {
         return true;
     }
 
+    // solhint-disable-next-line no-complex-fallback
     receive() external payable {
         balanceOf[msg.sender] += msg.value;
         totalSupply += msg.value;
@@ -111,8 +112,8 @@ contract MockWETH is IWETH {
     }
 
     // Pausable token for testing OutrunERC20Pausable
-    contract PausableToken is OutrunERC20, Pausable, Ownable {
-        constructor() OutrunERC20("Pausable Token", "PAUSE", 18) Ownable(msg.sender) {}
+    contract PausableToken is ERC20, Pausable, Ownable {
+        constructor() ERC20("Pausable Token", "PAUSE") Ownable(msg.sender) {}
 
         function _update(address from, address to, uint256 value) internal virtual override whenNotPaused {
             super._update(from, to, value);

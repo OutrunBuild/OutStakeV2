@@ -62,8 +62,9 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         _transferIn(tokenIn, msg.sender, amountInput);
 
         uint256 amountInNative = tokenIn == NATIVE ? amountInput : 0;
-        _safeApproveInf(tokenIn, SY);
+        _approveExact(tokenIn, SY, amountInput);
         amountInSYOut = IStandardizedYield(SY).deposit{value: amountInNative}(receiver, tokenIn, amountInput, minSyOut);
+        _clearApproval(tokenIn, SY);
     }
 
     function _redeemSy(address SY, address receiver, address tokenOut, uint256 amountInSY, uint256 minTokenOut)
@@ -76,21 +77,19 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
 
     /**
      * @notice Quotes the uAsset amount minted when staking from an input token.
-     * @dev Uses the SY deposit preview and stake-manager preview without moving funds.
-     * @param SY Standardized yield contract used for the initial deposit.
+     * @dev Derives canonical SY from `SP.SY()`, then uses the SY deposit preview and stake-manager preview.
      * @param SP Stake manager receiving the SY stake.
      * @param tokenIn Token to deposit into SY.
      * @param tokenAmount Amount of `tokenIn` to convert.
      * @param stakeParam Stake settings carried into the preview.
      * @return UAssetMintable Estimated uAsset minted by the stake flow.
      */
-    function previewStakeFromToken(
-        address SY,
-        address SP,
-        address tokenIn,
-        uint256 tokenAmount,
-        StakeParam calldata stakeParam
-    ) external view returns (uint256 UAssetMintable) {
+    function previewStakeFromToken(address SP, address tokenIn, uint256 tokenAmount, StakeParam calldata stakeParam)
+        external
+        view
+        returns (uint256 UAssetMintable)
+    {
+        address SY = IOutrunStakeManager(SP).SY();
         uint256 amountInSY = IStandardizedYield(SY).previewDeposit(tokenIn, tokenAmount);
         UAssetMintable = IOutrunStakeManager(SP).previewStake(amountInSY);
         stakeParam.lockupDays;
@@ -115,26 +114,25 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
 
     /**
      * @notice Quotes the uAsset amount minted when wrap-staking from an input token.
-     * @dev Combines the SY deposit preview with the stake-manager wrap preview.
-     * @param SY Standardized yield contract used for the initial deposit.
+     * @dev Derives canonical SY from `SP.SY()`, then combines the SY deposit preview with the wrap preview.
      * @param SP Stake manager receiving the wrapped stake.
      * @param tokenIn Token to deposit into SY.
      * @param tokenAmount Amount of `tokenIn` to convert.
      * @return UAssetMintable Estimated uAsset minted by the wrap-stake flow.
      */
-    function previewWrapStakeFromToken(address SY, address SP, address tokenIn, uint256 tokenAmount)
+    function previewWrapStakeFromToken(address SP, address tokenIn, uint256 tokenAmount)
         external
         view
         returns (uint256 UAssetMintable)
     {
+        address SY = IOutrunStakeManager(SP).SY();
         uint256 amountInSY = IStandardizedYield(SY).previewDeposit(tokenIn, tokenAmount);
         UAssetMintable = IOutrunStakeManager(SP).previewWrapStake(amountInSY);
     }
 
     /**
      * @notice Deposits an input token, converts it into SY, and stakes it.
-     * @dev Pulls the input token into the router, mints SY, and stakes on behalf of `stakeParam.owner`.
-     * @param SY Standardized yield contract used for the initial deposit.
+     * @dev Derives canonical SY from `SP.SY()`, mints it, and stakes on behalf of `stakeParam.owner`.
      * @param SP Stake manager receiving the SY stake.
      * @param tokenIn Token to deposit into SY.
      * @param tokenAmount Amount of `tokenIn` to convert and stake.
@@ -142,14 +140,13 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
      * @return positionId Newly created staking position id.
      * @return UAssetMinted Amount of uAsset minted for the stake.
      */
-    function stakeFromToken(
-        address SY,
-        address SP,
-        address tokenIn,
-        uint256 tokenAmount,
-        StakeParam calldata stakeParam
-    ) public payable returns (uint256 positionId, uint256 UAssetMinted) {
-        uint256 amountInSY = _mintSY(SY, tokenIn, address(this), tokenAmount, 0);
+    function stakeFromToken(address SP, address tokenIn, uint256 tokenAmount, StakeParam calldata stakeParam)
+        public
+        payable
+        returns (uint256 positionId, uint256 UAssetMinted)
+    {
+        address SY = IOutrunStakeManager(SP).SY();
+        uint256 amountInSY = _mintSY(SY, tokenIn, address(this), tokenAmount, stakeParam.minSyOut);
         // receiver defaults to owner when not specified (address(0))
         address uAssetReceiver = stakeParam.receiver == address(0) ? stakeParam.owner : stakeParam.receiver;
         (positionId, UAssetMinted) =
@@ -162,18 +159,18 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
 
     /**
      * @notice Stakes existing SY into the stake manager.
-     * @dev Pulls SY into the router before staking on behalf of `stakeParam.owner`.
-     * @param SY Standardized yield token being staked.
+     * @dev Derives canonical SY from `SP.SY()` and pulls it into the router before staking.
      * @param SP Stake manager receiving the SY stake.
      * @param amountInSY Amount of SY to stake.
      * @param stakeParam Stake settings including lockup, slippage floor, and recipient.
      * @return positionId Newly created staking position id.
      * @return UAssetMinted Amount of uAsset minted for the stake.
      */
-    function stakeFromSY(address SY, address SP, uint256 amountInSY, StakeParam calldata stakeParam)
+    function stakeFromSY(address SP, uint256 amountInSY, StakeParam calldata stakeParam)
         public
         returns (uint256 positionId, uint256 UAssetMinted)
     {
+        address SY = IOutrunStakeManager(SP).SY();
         _transferFrom(IERC20(SY), msg.sender, address(this), amountInSY);
         // receiver defaults to owner when not specified (address(0))
         address uAssetReceiver = stakeParam.receiver == address(0) ? stakeParam.owner : stakeParam.receiver;
@@ -188,41 +185,49 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
     /**
      * @notice Deposits an input token, converts it into SY, and wrap-stakes it.
      * @dev Mints SY into the router and immediately wrap-stakes into uAsset for `uAssetRecipient`.
+     * @dev Derives SY from `SP.SY()`. SP owner is a fully trusted role across the system.
      * @param SP Stake manager receiving the wrapped stake.
      * @param tokenIn Token to deposit into SY.
      * @param tokenAmount Amount of `tokenIn` to convert and wrap-stake.
      * @param uAssetRecipient Recipient of the wrapped uAsset position.
      * @return UAssetMinted Amount of uAsset minted to `uAssetRecipient`.
      */
-    function wrapStakeFromToken(address SP, address tokenIn, uint256 tokenAmount, address uAssetRecipient)
-        public
-        payable
-        returns (uint256 UAssetMinted)
-    {
+    function wrapStakeFromToken(
+        address SP,
+        address tokenIn,
+        uint256 tokenAmount,
+        uint256 minSyOut,
+        address uAssetRecipient,
+        uint256 minUAssetMinted
+    ) public payable returns (uint256 UAssetMinted) {
         address SY = IOutrunStakeManager(SP).SY();
-        uint256 amountInSY = _mintSY(SY, tokenIn, address(this), tokenAmount, 0);
+        uint256 amountInSY = _mintSY(SY, tokenIn, address(this), tokenAmount, minSyOut);
 
-        _safeApproveInf(SY, SP);
+        _approveExact(SY, SP, amountInSY);
         UAssetMinted = IOutrunStakeManager(SP).wrapStake(amountInSY, uAssetRecipient);
+        _clearApproval(SY, SP);
+        require(UAssetMinted >= minUAssetMinted, InsufficientUAssetMinted(UAssetMinted, minUAssetMinted));
     }
 
     /**
      * @notice Wrap-stakes existing SY into uAsset.
-     * @dev Pulls SY into the router and forwards it to the stake manager for wrap staking.
-     * @param SY Standardized yield token being wrap-staked.
+     * @dev Derives canonical SY from `SP.SY()` and forwards it to the stake manager for wrap staking.
      * @param SP Stake manager receiving the wrapped stake.
      * @param amountInSY Amount of SY to wrap-stake.
      * @param uAssetRecipient Recipient of the minted uAsset.
      * @return UAssetMinted Amount of uAsset minted to `uAssetRecipient`.
      */
-    function wrapStakeFromSY(address SY, address SP, uint256 amountInSY, address uAssetRecipient)
+    function wrapStakeFromSY(address SP, uint256 amountInSY, address uAssetRecipient, uint256 minUAssetMinted)
         public
         returns (uint256 UAssetMinted)
     {
+        address SY = IOutrunStakeManager(SP).SY();
         _transferFrom(IERC20(SY), msg.sender, address(this), amountInSY);
 
-        _safeApproveInf(SY, SP);
+        _approveExact(SY, SP, amountInSY);
         UAssetMinted = IOutrunStakeManager(SP).wrapStake(amountInSY, uAssetRecipient);
+        _clearApproval(SY, SP);
+        require(UAssetMinted >= minUAssetMinted, InsufficientUAssetMinted(UAssetMinted, minUAssetMinted));
     }
 
     /**
@@ -249,9 +254,20 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         address positionOwner,
         address uAssetReceiver
     ) internal returns (uint256 positionId, uint256 UAssetMinted) {
-        _safeApproveInf(SY, SP);
+        _approveExact(SY, SP, amountInSY);
         (positionId, UAssetMinted) =
             IOutrunStakeManager(SP).stake(amountInSY, lockupDays, positionOwner, uAssetReceiver);
+        _clearApproval(SY, SP);
+    }
+
+    function _approveExact(address token, address spender, uint256 amount) internal {
+        if (token == NATIVE) return;
+        _safeApprove(token, spender, amount);
+    }
+
+    function _clearApproval(address token, address spender) internal {
+        if (token == NATIVE) return;
+        _safeApprove(token, spender, 0);
     }
 
     /**
@@ -261,22 +277,25 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
      * @param amountInUAsset Amount of uAsset to redeem.
      * @param receiver Recipient of the redeemed token output.
      * @param tokenOut Token requested on redemption.
+     * @param minTokenOut Minimum acceptable token output from redemption.
      * @return amountTokenOut Amount of `tokenOut` sent to `receiver`.
      */
-    function wrapRedeem(address SP, uint256 amountInUAsset, address receiver, address tokenOut)
+    function wrapRedeem(address SP, uint256 amountInUAsset, address receiver, address tokenOut, uint256 minTokenOut)
         external
         returns (uint256 amountTokenOut)
     {
         address uAsset = IOutrunStakeManager(SP).uAsset();
         _transferFrom(IERC20(uAsset), msg.sender, address(this), amountInUAsset);
-        _safeApproveInf(uAsset, SP);
+        _approveExact(uAsset, SP, amountInUAsset);
 
-        amountTokenOut = IOutrunStakeManager(SP).wrapRedeem(amountInUAsset, receiver, tokenOut);
+        amountTokenOut = IOutrunStakeManager(SP).wrapRedeem(amountInUAsset, receiver, tokenOut, minTokenOut);
+        _clearApproval(uAsset, SP);
     }
 
     /**
      * @notice Creates a genesis position starting from an input token.
      * @dev Mints and stakes through the router, then forwards the resulting uAsset amount into the launcher genesis flow.
+     * @dev Derives SY from `SP.SY()`. SP owner is a fully trusted role across the system.
      * @param SP Stake manager receiving the genesis stake.
      * @param tokenIn Token to deposit into SY before staking.
      * @param tokenAmount Amount of `tokenIn` to convert and stake.
@@ -288,25 +307,28 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         address SP,
         address tokenIn,
         uint256 tokenAmount,
+        uint256 minSyOut,
+        uint256 minUAssetMinted,
         uint128 lockupDays,
         uint256 verseId,
         address genesisUser
     ) external payable {
         address SY = IOutrunStakeManager(SP).SY();
-        uint256 amountInSY = _mintSY(SY, tokenIn, address(this), tokenAmount, 0);
+        uint256 amountInSY = _mintSY(SY, tokenIn, address(this), tokenAmount, minSyOut);
         address uAsset = IOutrunStakeManager(SP).uAsset();
         (, uint256 amountInUAsset) = _stakeFromSYBalance(SY, SP, amountInSY, lockupDays, genesisUser, address(this));
+        require(amountInUAsset >= minUAssetMinted, InsufficientUAssetMinted(amountInUAsset, minUAssetMinted));
         if (amountInUAsset > type(uint128).max) revert InvalidParam();
-        _safeApproveInf(uAsset, memeverseLauncher);
+        _approveExact(uAsset, memeverseLauncher, amountInUAsset);
         // amountInUAsset is bounded by type(uint128).max immediately before this cast.
         // forge-lint: disable-next-line(unsafe-typecast)
         IMemeverseLauncher(memeverseLauncher).genesis(verseId, uint128(amountInUAsset), genesisUser);
+        _clearApproval(uAsset, memeverseLauncher);
     }
 
     /**
      * @notice Creates a genesis position starting from existing SY.
-     * @dev Pulls SY into the router, stakes it for `genesisUser`, then launches genesis with the minted uAsset.
-     * @param SY Standardized yield token being staked.
+     * @dev Derives canonical SY from `SP.SY()`, stakes it for `genesisUser`, then launches genesis.
      * @param SP Stake manager receiving the genesis stake.
      * @param amountInSY Amount of SY to stake for genesis.
      * @param lockupDays Lockup duration forwarded to the stake manager.
@@ -314,21 +336,24 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
      * @param genesisUser User credited for the genesis position.
      */
     function genesisBySY(
-        address SY,
         address SP,
         uint128 amountInSY,
         uint128 lockupDays,
         uint256 verseId,
-        address genesisUser
+        address genesisUser,
+        uint256 minUAssetMinted
     ) external {
+        address SY = IOutrunStakeManager(SP).SY();
         _transferFrom(IERC20(SY), msg.sender, address(this), amountInSY);
         address uAsset = IOutrunStakeManager(SP).uAsset();
         (, uint256 amountInUAsset) = _stakeFromSYBalance(SY, SP, amountInSY, lockupDays, genesisUser, address(this));
+        require(amountInUAsset >= minUAssetMinted, InsufficientUAssetMinted(amountInUAsset, minUAssetMinted));
         if (amountInUAsset > type(uint128).max) revert InvalidParam();
-        _safeApproveInf(uAsset, memeverseLauncher);
+        _approveExact(uAsset, memeverseLauncher, amountInUAsset);
         // amountInUAsset is bounded by type(uint128).max immediately before this cast.
         // forge-lint: disable-next-line(unsafe-typecast)
         IMemeverseLauncher(memeverseLauncher).genesis(verseId, uint128(amountInUAsset), genesisUser);
+        _clearApproval(uAsset, memeverseLauncher);
     }
 
     /**
