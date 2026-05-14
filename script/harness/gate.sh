@@ -1197,9 +1197,10 @@ else
 fi
 
 declare -a targeted_test_files=()
+fork_only_test_file="test/upgradeable/SYAdaptersFork.t.sol"
 if [ "$verification_profile" = "fast" ] && [ "$hard_blocked" -eq 0 ]; then
     for changed_test_file in "${solidity_test_files[@]}"; do
-        if [ -f "$changed_test_file" ]; then
+        if [ -f "$changed_test_file" ] && [ "$changed_test_file" != "$fork_only_test_file" ]; then
             append_unique targeted_test_files "$changed_test_file"
         fi
     done
@@ -1227,7 +1228,7 @@ if [ "$verification_profile" = "fast" ] && [ "$hard_blocked" -eq 0 ]; then
               + (.test_mapping[$key].rules[]? | select(.id == $rule_id) | .evidence_tests)
             )[]' "$policy_file")
         for mapped_test in "${mapped_tests[@]}"; do
-            if [ -f "$mapped_test" ]; then
+            if [ -f "$mapped_test" ] && [ "$mapped_test" != "$fork_only_test_file" ]; then
                 append_unique targeted_test_files "$mapped_test"
             fi
         done
