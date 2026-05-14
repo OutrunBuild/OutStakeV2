@@ -3,7 +3,8 @@ pragma solidity ^0.8.28;
 
 interface IPSM3 {
     /// @notice Swaps an exact amount of `assetIn` for as much `assetOut` as the PSM returns.
-    /// @dev Swaps a specified amount of `assetIn` for `assetOut` using the current PSM conversion path.
+    /// @dev OutrunL2StakedUsdsSY calls this with local slippage set by the adapter flow and consumes `amountOut`
+    ///      as deposit or redemption output.
     /// @param assetIn Address of the ERC-20 asset to swap in.
     /// @param assetOut Address of the ERC-20 asset to swap out.
     /// @param amountIn Amount of the asset to swap in.
@@ -21,7 +22,7 @@ interface IPSM3 {
     ) external returns (uint256 amountOut);
 
     /// @notice Swaps for an exact amount of `assetOut`, bounded by `maxAmountIn`.
-    /// @dev Swaps the minimum required `assetIn` amount for a target `assetOut` amount through the PSM.
+    /// @dev Exposed for the PSM surface; current local adapters do not rely on this path for SY accounting.
     /// @param assetIn Address of the ERC-20 asset to swap in.
     /// @param assetOut Address of the ERC-20 asset to swap out.
     /// @param amountOut Amount of the asset to receive from the swap.
@@ -39,7 +40,7 @@ interface IPSM3 {
     ) external returns (uint256 amountIn);
 
     /// @notice Quotes `assetOut` for an exact `assetIn` swap.
-    /// @dev Returns the amount of `assetOut` implied by the current PSM conversion path.
+    /// @dev OutrunL2StakedUsdsSY consumes this for `exchangeRate()`, deposit previews, and redemption previews.
     /// @param assetIn Address of the ERC-20 asset to swap in.
     /// @param assetOut Address of the ERC-20 asset to swap out.
     /// @param amountIn Amount of the asset to swap in.
@@ -50,7 +51,8 @@ interface IPSM3 {
         returns (uint256 amountOut);
 
     /// @notice Quotes `assetIn` required for an exact `assetOut` swap.
-    /// @dev Returns the amount of `assetIn` implied by the current PSM conversion path.
+    /// @dev Exposed for quoting the PSM exact-output path; current local adapters do not rely on this path for
+    ///      SY accounting.
     /// @param assetIn Address of the ERC-20 asset to swap in.
     /// @param assetOut Address of the ERC-20 asset to swap out.
     /// @param amountOut Amount of the asset to receive from the swap.

@@ -4,24 +4,24 @@ pragma solidity ^0.8.28;
 
 interface IL2StETH {
     /**
-     * @notice Wraps the underlying L2 token into the wrapper token.
-     * @dev This mirrors the upstream L2 wrapper entrypoint exposed by Lido.
-     * @param wrappableTokenAmount The amount of underlying token to wrap.
-     * @return The amount of wrapped token minted.
+     * @notice Converts wrappable/share units into L2 stETH token units.
+     * @dev OutrunL2WrappableWstETHSY calls this when redeeming SY into the L2 stETH token.
+     * @param wrappableTokenAmount The amount of wrappable/share units to convert.
+     * @return The amount of L2 stETH token units returned.
      */
     function wrap(uint256 wrappableTokenAmount) external returns (uint256);
 
     /**
-     * @notice Unwraps the wrapper token back into the underlying L2 token.
-     * @dev This mirrors the upstream L2 wrapper exitpoint exposed by Lido.
-     * @param wrapperTokenAmount The amount of wrapped token to burn.
-     * @return The amount of underlying token returned.
+     * @notice Converts L2 stETH token units into wrappable/share units.
+     * @dev OutrunL2WrappableWstETHSY calls this when depositing L2 stETH into SY.
+     * @param wrapperTokenAmount The amount of L2 stETH token units to convert.
+     * @return The amount of wrappable/share units returned.
      */
     function unwrap(uint256 wrapperTokenAmount) external returns (uint256);
 
     /**
      * @notice Quotes token amount for a share amount.
-     * @dev This helper exposes the wrapper's share-to-token conversion.
+     * @dev OutrunL2WrappableWstETHSY consumes this for `exchangeRate()` and redemption previews.
      * @param sharesAmount The amount of shares to convert.
      * @return The corresponding token amount.
      */
@@ -29,7 +29,7 @@ interface IL2StETH {
 
     /**
      * @notice Quotes share amount for a token amount.
-     * @dev This helper exposes the wrapper's token-to-share conversion.
+     * @dev OutrunL2WrappableWstETHSY consumes this for deposit previews.
      * @param tokenAmount The amount of tokens to convert.
      * @return The corresponding share amount.
      */

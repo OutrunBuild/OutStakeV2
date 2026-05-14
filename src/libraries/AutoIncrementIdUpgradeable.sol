@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 abstract contract AutoIncrementIdUpgradeable is Initializable {
+    /// @dev ERC-7201 namespace dedicated to the monotonically increasing id counter.
     /// @custom:storage-location erc7201:outrun.storage.AutoIncrementId
     struct AutoIncrementIdStorage {
         uint256 idCounter;
@@ -21,10 +22,12 @@ abstract contract AutoIncrementIdUpgradeable is Initializable {
 
     function __AutoIncrementId_init() internal onlyInitializing {}
 
+    /// @notice Returns the last issued id.
     function idCounter() public view returns (uint256) {
         return _getAutoIncrementIdStorage().idCounter;
     }
 
+    /// @dev Increments the counter before returning, so ids start at 1 and are monotonic.
     function _nextId() internal returns (uint256) {
         AutoIncrementIdStorage storage $ = _getAutoIncrementIdStorage();
         unchecked {

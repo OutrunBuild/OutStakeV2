@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 interface IDepositAdapter {
     /**
      * @notice Deposits native ETH through Ether.fi and receives weETH.
-     * @dev The adapter handles the upstream staking path and returns the wrapped output amount.
+     * @dev OutrunWeETHSY calls this for native-token deposits and consumes the return value as minted SY shares.
      * @param _referral The referral address passed to the upstream deposit adapter.
      * @return The amount of weETH minted for the deposit.
      */

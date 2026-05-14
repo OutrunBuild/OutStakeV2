@@ -5,7 +5,8 @@ interface IAaveV3Pool {
     /**
      * @notice Supplies an `amount` of underlying asset into the reserve, receiving in return overlying aTokens.
      * - E.g. User supplies 100 USDC and gets in return 100 aUSDC
-     * @dev The caller is responsible for approving the pool to pull `amount` of `asset` beforehand.
+     * @dev OutrunAaveV3SY approves and calls this when depositing underlying. This interface records the call
+     * boundary only; reserve accounting remains external to this repository.
      * @param asset The address of the underlying asset to supply
      * @param amount The amount to be supplied
      * @param onBehalfOf The address that will receive the aTokens, same as msg.sender if the user
@@ -19,7 +20,8 @@ interface IAaveV3Pool {
     /**
      * @notice Withdraws an `amount` of underlying asset from the reserve, burning the equivalent aTokens owned
      * E.g. User has 100 aUSDC, calls withdraw() and receives 100 USDC, burning the 100 aUSDC
-     * @dev Passing `type(uint256).max` requests a full balance withdrawal for the chosen reserve asset.
+     * @dev OutrunAaveV3SY consumes the returned amount as redemption output. Passing `type(uint256).max` requests
+     * a full balance withdrawal for the chosen reserve asset.
      * @param asset The address of the underlying asset to withdraw
      * @param amount The underlying amount to be withdrawn
      *   - Send the value type(uint256).max in order to withdraw the whole aToken balance
@@ -32,7 +34,7 @@ interface IAaveV3Pool {
 
     /**
      * @notice Returns the normalized income of the reserve
-     * @dev The returned accumulator is the pool-specific value used to derive current asset/share exchange rates.
+     * @dev OutrunAaveV3SY consumes this as its local `exchangeRate()` source for the reserve.
      * @param asset The address of the underlying asset of the reserve
      * @return The reserve's normalized income
      */

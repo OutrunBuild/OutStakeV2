@@ -30,11 +30,13 @@ interface IWETH is IERC20 {
     event Withdrawal(address indexed src, uint256 wad);
 
     /// @notice Wrap native ETH into WETH.
-    /// @dev Mints WETH 1:1 for the supplied ETH value.
+    /// @dev TokenHelper uses this for local native/ERC20 normalization when the configured wrapped-native token
+    ///      is the output token.
     function deposit() external payable;
 
     /// @notice Unwrap WETH into native ETH.
-    /// @dev Burns WETH and returns the same amount of native ETH.
+    /// @dev TokenHelper uses this for local native/ERC20 normalization when the configured wrapped-native token
+    ///      is the input token.
     /// @param wad Amount of WETH to burn and withdraw.
     function withdraw(uint256 wad) external;
 }

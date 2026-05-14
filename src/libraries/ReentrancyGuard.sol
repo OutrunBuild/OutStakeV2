@@ -2,7 +2,8 @@
 pragma solidity ^0.8.28;
 
 /**
- * @dev Outrun's ReentrancyGuard implementation, support transient variable.
+ * @dev Outrun's ReentrancyGuard implementation using transient storage.
+ * Assumes EIP-1153 support so `locked` is cleared by the EVM at the end of each transaction.
  */
 abstract contract ReentrancyGuard {
     bool private transient locked;

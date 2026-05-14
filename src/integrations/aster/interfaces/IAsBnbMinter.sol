@@ -4,28 +4,29 @@ pragma solidity ^0.8.28;
 interface IAsBnbMinter {
     /**
      * @notice Returns the asBNB token wired to the minter.
-     * @dev The upstream implementation exposes this as a public state variable getter.
+     * @dev OutrunAsBNBSY checks this during initialization to bind the configured yield-bearing token.
      * @return The asBNB token address.
      */
     function asBnb() external view returns (address);
 
     /**
      * @notice Returns the slisBNB token accepted by the minter.
-     * @dev The upstream implementation exposes this as a public state variable getter.
+     * @dev OutrunAsBNBSY checks this during initialization to bind its supported token set.
      * @return The slisBNB token address.
      */
     function token() external view returns (address);
 
     /**
      * @notice Returns the yield proxy used by the minter.
-     * @dev The upstream implementation exposes this as a public state variable getter.
+     * @dev OutrunAsBNBSY reads this to reach the Lista stake manager used for local conversion previews.
      * @return The yield proxy address.
      */
     function yieldProxy() external view returns (address);
 
     /**
      * @notice Mints asBNB from slisBNB.
-     * @dev Returns zero when the request is queued by Aster instead of settled immediately.
+     * @dev Called by OutrunAsBNBSY after it holds slisBNB. A zero return is treated locally as a queued Aster
+     * request and requires the yield proxy status check.
      * @param amountIn The slisBNB amount to deposit.
      * @return The asBNB amount minted, or zero when Aster queues the request.
      */
@@ -33,14 +34,15 @@ interface IAsBnbMinter {
 
     /**
      * @notice Mints asBNB from native BNB.
-     * @dev msg.value is the BNB deposit; returns zero when queued by Aster.
+     * @dev Called by OutrunAsBNBSY with `msg.value` as the BNB deposit. A zero return is treated locally as a
+     * queued Aster request and requires the yield proxy status check.
      * @return The asBNB amount minted, or zero when Aster queues the request.
      */
     function mintAsBnb() external payable returns (uint256);
 
     /**
      * @notice Quotes the token-side asset value represented by an asBNB amount.
-     * @dev Converts asBNB to the equivalent slisBNB amount at the current exchange rate.
+     * @dev OutrunAsBNBSY combines this with Lista conversion quotes for local preview and exchange-rate reads.
      * @param asBNBAmount The asBNB amount to convert.
      * @return The corresponding token-side amount.
      */
@@ -48,7 +50,7 @@ interface IAsBnbMinter {
 
     /**
      * @notice Quotes the asBNB amount represented by a token-side amount.
-     * @dev Converts slisBNB to the equivalent asBNB amount at the current exchange rate.
+     * @dev OutrunAsBNBSY consumes this for slisBNB deposit previews and does not assert the upstream rate source.
      * @param tokenAmount The token-side amount to convert.
      * @return The corresponding asBNB amount.
      */

@@ -4,14 +4,14 @@ pragma solidity ^0.8.28;
 interface IWstETH {
     /**
      * @notice Returns the stETH amount represented by one wstETH.
-     * @dev This is the wrapper's current exchange rate helper.
+     * @dev OutrunWstETHSY consumes this as its local `exchangeRate()` source.
      * @return The stETH-per-wstETH exchange rate.
      */
     function stEthPerToken() external view returns (uint256);
 
     /**
      * @notice Quotes wstETH output for a stETH input amount.
-     * @dev This is a read-only conversion helper on the upstream wrapper.
+     * @dev OutrunWstETHSY consumes this for stETH deposit previews.
      * @param stETHAmount The stETH amount to convert.
      * @return The corresponding wstETH amount.
      */
@@ -19,7 +19,7 @@ interface IWstETH {
 
     /**
      * @notice Quotes stETH output for a wstETH input amount.
-     * @dev This is a read-only conversion helper on the upstream wrapper.
+     * @dev OutrunWstETHSY consumes this for redemption previews.
      * @param wstETHAmount The wstETH amount to convert.
      * @return The corresponding stETH amount.
      */
@@ -27,7 +27,7 @@ interface IWstETH {
 
     /**
      * @notice Wraps stETH into wstETH.
-     * @dev The caller must provide the stETH amount expected by the upstream wrapper.
+     * @dev OutrunWstETHSY calls this after it holds stETH and consumes the return value as minted SY shares.
      * @param stETHAmount The amount of stETH to wrap.
      * @return The amount of wstETH minted.
      */
@@ -35,7 +35,7 @@ interface IWstETH {
 
     /**
      * @notice Unwraps wstETH into stETH.
-     * @dev The caller burns wstETH and receives the corresponding stETH amount.
+     * @dev OutrunWstETHSY calls this on redemption when stETH is the requested output.
      * @param wstETHAmount The amount of wstETH to unwrap.
      * @return The amount of stETH returned.
      */

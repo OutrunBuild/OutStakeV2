@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 interface IWeETH {
     /**
      * @notice Wraps eETH into weETH.
-     * @dev The caller must supply the eETH amount expected by the upstream wrapper contract.
+     * @dev OutrunWeETHSY calls this after it holds eETH and consumes the return value as minted SY shares.
      * @param _eETHAmount The amount of eETH to wrap.
      * @return The amount of weETH minted.
      */
@@ -12,7 +12,7 @@ interface IWeETH {
 
     /**
      * @notice Unwraps weETH into eETH.
-     * @dev The caller burns weETH and receives the corresponding eETH amount.
+     * @dev OutrunWeETHSY calls this on redemption when eETH is the requested output.
      * @param _weETHAmount The amount of weETH to unwrap.
      * @return The amount of eETH returned.
      */

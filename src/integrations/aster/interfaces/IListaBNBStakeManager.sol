@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 interface IListaBNBStakeManager {
     /**
      * @notice Quotes the slisBNB output for a native BNB input amount.
-     * @dev Returns the current conversion quote without performing a stake.
+     * @dev OutrunAsBNBSY consumes this as a read-only conversion quote before calling the asBNB minter.
      * @param amount The BNB amount to convert.
      * @return The corresponding slisBNB amount.
      */
@@ -12,7 +12,7 @@ interface IListaBNBStakeManager {
 
     /**
      * @notice Quotes the native BNB output for a slisBNB input amount.
-     * @dev Returns the current conversion quote without performing an unstake.
+     * @dev OutrunAsBNBSY consumes this to express asBNB value in native BNB terms for `exchangeRate()`.
      * @param amount The slisBNB amount to convert.
      * @return The corresponding BNB amount.
      */

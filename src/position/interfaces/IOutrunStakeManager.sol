@@ -3,8 +3,14 @@ pragma solidity ^0.8.28;
 
 /**
  * @title Outrun SY Stake Manager interface
+ * @notice Manages locked positions and the shared wrap pool backed by one canonical SY and one uAsset.
  */
 interface IOutrunStakeManager {
+    /**
+     * @notice Locked position accounting record.
+     * @dev `owner` controls draw and owner-redemption paths. `syStaked` is principal in SY units, and
+     * `UAssetMinted` is this position's outstanding uAsset debt. `deadline` gates owner and keeper redemption.
+     */
     struct Position {
         address owner;
         uint256 syStaked;
@@ -28,49 +34,49 @@ interface IOutrunStakeManager {
 
     /**
      * @notice Returns the SY token handled by the staking manager.
-     * @dev This is the standardized yield token used for staking principal accounting.
+     * @dev Router flows treat this as the canonical SY for this manager and do not accept a separate SY address.
      * @return Address of the standardized yield token.
      */
     function SY() external view returns (address);
 
     /**
      * @notice Returns the universal asset minted against stakes.
-     * @dev The returned contract handles minting and burning of the position debt token.
+     * @dev The stake manager is the uAsset minter; mint cap and repay accounting remain minter-scoped in uAsset.
      * @return Address of the uAsset contract.
      */
     function uAsset() external view returns (address);
 
     /**
      * @notice Returns the total SY currently tracked across positions and wrap pool.
-     * @dev Includes locked positions and the public wrap-stake pool.
+     * @dev Includes locked-position principal and wrap-pool principal; it is not only user-owned unlocked SY.
      * @return Total SY held as staking principal.
      */
     function syTotalStaking() external view returns (uint256);
 
     /**
      * @notice Returns the SY principal currently allocated to the wrap pool.
-     * @dev This excludes SY locked only inside individual positions.
+     * @dev This excludes SY locked only inside individual positions and is used with `wrapUAssetDebt` for harvest.
      * @return Total wrap pool SY balance tracked by the contract.
      */
     function syWrapStaking() external view returns (uint256);
 
     /**
      * @notice Returns the outstanding wrap-pool uAsset debt.
-     * @dev This debt is compared against wrap-pool principal when harvesting yield.
+     * @dev Aggregate principal debt for the shared wrap pool; individual wrap users do not receive position ids.
      * @return Total uAsset debt minted against wrap stake deposits.
      */
     function wrapUAssetDebt() external view returns (uint256);
 
     /**
      * @notice Returns the keeper allowed to execute keeper-only redemptions.
-     * @dev Keeper redemptions are a privileged path distinct from owner-driven redemptions.
+     * @dev Keeper redemptions burn keeper-provided uAsset and split released SY; they are not owner redemptions.
      * @return Address with keeper privileges.
      */
     function keeper() external view returns (address);
 
     /**
      * @notice Returns the stored data for a staking position.
-     * @dev Reverts are implementation-specific when the position does not exist.
+     * @dev A zero owner identifies a missing/deleted position in the current implementation.
      * @param positionId Identifier of the position to inspect.
      * @return owner Owner of the position.
      * @return syStaked SY principal currently staked in the position.
@@ -85,7 +91,8 @@ interface IOutrunStakeManager {
 
     /**
      * @notice Previews how much uAsset a direct stake would mint.
-     * @dev Intended for quote-only flows and does not mutate state.
+     * @dev Quote-only. Uses current `SY.exchangeRate()` and the same conversion direction as `stake`, but does
+     * not reserve cap, transfer SY, create a position, or apply slippage protection.
      * @param amountInSY Amount of SY to stake.
      * @return UAssetMintable Amount of uAsset expected to be minted.
      */
@@ -93,7 +100,8 @@ interface IOutrunStakeManager {
 
     /**
      * @notice Previews how much uAsset a wrap stake would mint.
-     * @dev Intended for quote-only flows and does not mutate state.
+     * @dev Quote-only. Uses current `SY.exchangeRate()` and the same conversion direction as `wrapStake`, but
+     * does not reserve cap, transfer SY, or update wrap-pool debt.
      * @param amountInSY Amount of SY to add to the wrap pool.
      * @return UAssetMintable Amount of uAsset expected to be minted.
      */
@@ -101,7 +109,8 @@ interface IOutrunStakeManager {
 
     /**
      * @notice Previews additional uAsset drawable from an existing position.
-     * @dev Returns only the incremental drawable amount above existing minted debt.
+     * @dev Quote-only. Returns only the current value above the position's existing debt; it does not update
+     * position debt or reserve uAsset mint cap.
      * @param positionId Identifier of the position to inspect.
      * @return UAssetMintable Additional uAsset currently drawable from the position.
      */
@@ -109,7 +118,8 @@ interface IOutrunStakeManager {
 
     /**
      * @notice Previews a position redemption into SY or another output token.
-     * @dev Intended for quote-only flows and does not mutate state.
+     * @dev Quote-only. Debt burn is proportional to `syRedeemed / position.syStaked`. Token output is either
+     * direct SY or the current `SY.previewRedeem` result for `tokenOut`.
      * @param positionId Identifier of the position being redeemed.
      * @param syRedeemed Amount of SY principal to redeem from the position.
      * @param tokenOut Token requested on redemption.
@@ -123,7 +133,8 @@ interface IOutrunStakeManager {
 
     /**
      * @notice Previews a wrap-pool redemption into SY or another output token.
-     * @dev Intended for quote-only flows and does not mutate state.
+     * @dev Quote-only. Converts uAsset debt to SY with the current exchange rate, then previews optional SY
+     * redemption into `tokenOut`.
      * @param amountInUAsset Amount of uAsset to redeem.
      * @param tokenOut Token requested on redemption.
      * @return amountTokenOut Amount of output token expected to be received.
@@ -132,7 +143,8 @@ interface IOutrunStakeManager {
 
     /**
      * @notice Stakes SY into a locked position and mints uAsset to a chosen receiver.
-     * @dev Creates a new position entry for `positionOwner` while minting the initial uAsset debt to `uAssetReceiver`.
+     * @dev Pulls SY from `msg.sender`, creates a locked position owned by `positionOwner`, and mints initial debt
+     * to `uAssetReceiver`. The initial debt is current SY asset value, not a fixed 1:1 amount.
      * @param amountInSY Amount of SY to stake.
      * @param lockupDays Number of days the position remains locked.
      * @param positionOwner Address that owns the created position.
@@ -146,7 +158,7 @@ interface IOutrunStakeManager {
 
     /**
      * @notice Mints newly drawable uAsset from an existing position.
-     * @dev Uses the current SY-to-asset conversion to determine incremental draw capacity.
+     * @dev Position-owner path. Uses current SY asset value to mint only appreciation above existing position debt.
      * @param positionId Identifier of the position to draw against.
      * @param recipient Address receiving the minted uAsset.
      * @return amountInUAsset Amount of uAsset minted to the recipient.
@@ -155,7 +167,8 @@ interface IOutrunStakeManager {
 
     /**
      * @notice Adds SY to the wrap pool and mints uAsset to a recipient.
-     * @dev This flow does not create a per-user position record.
+     * @dev Pulls SY from `msg.sender`, increases shared wrap-pool principal and debt, and does not create a
+     * per-user position record.
      * @param amountInSY Amount of SY to add to the wrap pool.
      * @param uAssetRecipient Address receiving the minted uAsset.
      * @return UAssetAmount Amount of uAsset minted.
@@ -164,7 +177,8 @@ interface IOutrunStakeManager {
 
     /**
      * @notice Redeems part or all of a position after lock expiry.
-     * @dev Burns the caller's uAsset debt before transferring redemption proceeds.
+     * @dev Position-owner path. Burns uAsset from the caller via `repay`, reduces position principal/debt
+     * proportionally, and enforces `minTokenOut` on direct SY or downstream SY redemption.
      * @param positionId Identifier of the position to redeem from.
      * @param syRedeemed Amount of SY principal to redeem.
      * @param receiver Address receiving the redemption proceeds.
@@ -179,7 +193,8 @@ interface IOutrunStakeManager {
 
     /**
      * @notice Redeems wrap-pool uAsset into SY or another token.
-     * @dev Burns wrap-pool debt and reduces wrap-pool principal accounting.
+     * @dev Burns caller-provided uAsset through the stake manager minter account, reduces shared wrap debt and
+     * principal, then sends direct SY or redeemed `tokenOut` to `receiver`.
      * @param amountInUAsset Amount of uAsset to redeem.
      * @param receiver Address receiving the redemption proceeds.
      * @param tokenOut Token requested on redemption.
@@ -192,12 +207,13 @@ interface IOutrunStakeManager {
 
     /**
      * @notice Lets the keeper redeem a matured position by burning keeper-provided uAsset.
-     * @dev Splits redeemed SY between keeper principal recovery and owner excess value.
+     * @dev Keeper-only path. Burns keeper-provided uAsset, sends debt-equivalent SY capped by the released
+     * position SY to `receiver`, and sends any remaining released excess SY to the position owner.
      * @param positionId Identifier of the position being redeemed.
      * @param amountInUAsset Amount of uAsset the keeper burns.
      * @param receiver Address receiving the keeper principal in SY.
      * @return UAssetBurned Amount of uAsset burned by the keeper.
-     * @return keeperPrincipalSY Amount of SY principal sent to the keeper receiver.
+     * @return keeperPrincipalSY Debt-equivalent SY sent to the keeper receiver, capped by released position SY.
      * @return ownerExcessSY Excess SY sent back to the position owner.
      */
     function keepRedeem(uint256 positionId, uint256 amountInUAsset, address receiver)
@@ -206,7 +222,8 @@ interface IOutrunStakeManager {
 
     /**
      * @notice Harvests wrap-pool yield above outstanding wrap debt to the revenue pool.
-     * @dev Harvestable yield is limited to wrap-pool SY exceeding debt-equivalent SY.
+     * @dev Owner-only path. Harvestable yield is wrap-pool SY exceeding debt-equivalent SY at the current
+     * exchange rate; wrap uAsset debt is unchanged.
      * @param tokenOut Token requested for harvested yield.
      * @param minTokenOut Minimum acceptable token output from the SY redemption.
      * @return amountTokenOut Amount of harvested token sent to the revenue pool.

@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 interface ILiquidityPool {
     /**
      * @notice Quotes the number of shares represented by an asset amount.
-     * @dev This is a read-only conversion helper exposed by the Ether.fi liquidity pool.
+     * @dev OutrunWeETHSY consumes this for deposit previews; this interface does not assert upstream rate validity.
      * @param _amount The asset amount to convert.
      * @return The corresponding share amount.
      */
@@ -12,7 +12,7 @@ interface ILiquidityPool {
 
     /**
      * @notice Quotes the asset amount represented by a share amount.
-     * @dev This is a read-only conversion helper exposed by the Ether.fi liquidity pool.
+     * @dev OutrunWeETHSY consumes this for `exchangeRate()` and redemption previews.
      * @param _share The share amount to convert.
      * @return The corresponding asset amount.
      */

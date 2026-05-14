@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 interface IStETH {
     /**
      * @notice Quotes shares for a pooled ETH amount.
-     * @dev This helper exposes the current stETH share conversion.
+     * @dev OutrunWstETHSY consumes this for native ETH deposit previews.
      * @param ethAmount The pooled ETH amount to convert.
      * @return The corresponding share amount.
      */
@@ -12,7 +12,7 @@ interface IStETH {
 
     /**
      * @notice Quotes pooled ETH for a share amount.
-     * @dev This helper exposes the current stETH share redemption conversion.
+     * @dev OutrunWstETHSY consumes this after Lido submit returns shares and for stETH redemption previews.
      * @param shareAmount The share amount to convert.
      * @return The corresponding pooled ETH amount.
      */
@@ -20,7 +20,7 @@ interface IStETH {
 
     /**
      * @notice Stakes native ETH into stETH.
-     * @dev The referral address is forwarded to the upstream Lido submit path.
+     * @dev OutrunWstETHSY calls this for native ETH deposits before wrapping the resulting stETH value.
      * @param referral The referral address supplied to Lido.
      * @return The share amount minted by the submit call.
      */

@@ -13,9 +13,12 @@ error ArrayLengthMismatch();
 abstract contract TokenHelper is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
+    /// @dev Sentinel used to route native token transfers instead of ERC20 calls.
     address internal constant NATIVE = address(0);
+    /// @dev Approval refresh threshold; some tokens store allowances in 96 bits.
     uint256 internal constant LOWER_BOUND_APPROVAL = type(uint96).max / 2; // some tokens use 96 bits for approval
 
+    /// @dev For native token inputs, `msg.value` must equal `amount`; for ERC20 inputs, it must be zero.
     function _transferIn(address token, address from, uint256 amount) internal {
         if (token == NATIVE) {
             if (msg.value != amount) revert NativeAmountMismatch();
@@ -25,10 +28,12 @@ abstract contract TokenHelper is ReentrancyGuard {
         }
     }
 
+    /// @dev Skips the ERC20 call for zero amount transfers.
     function _transferFrom(IERC20 token, address from, address to, uint256 amount) internal {
         if (amount != 0) token.safeTransferFrom(from, to, amount);
     }
 
+    /// @dev Skips zero amounts; native transfers revert with `NativeTransferFailed` when the call fails.
     function _transferOut(address token, address to, uint256 amount) internal {
         if (amount == 0) return;
         if (token == NATIVE) {
@@ -39,6 +44,7 @@ abstract contract TokenHelper is ReentrancyGuard {
         }
     }
 
+    /// @dev Transfers each token/amount pair and requires both arrays to have the same length.
     function _transferOut(address[] memory tokens, address to, uint256[] memory amounts) internal {
         uint256 numTokens = tokens.length;
         if (numTokens != amounts.length) revert ArrayLengthMismatch();
@@ -50,10 +56,12 @@ abstract contract TokenHelper is ReentrancyGuard {
         }
     }
 
+    /// @dev Returns this contract's native balance for the sentinel, otherwise the ERC20 balance.
     function _selfBalance(address token) internal view returns (uint256) {
         return (token == NATIVE) ? address(this).balance : IERC20(token).balanceOf(address(this));
     }
 
+    /// @dev Returns this contract's ERC20 balance.
     function _selfBalance(IERC20 token) internal view returns (uint256) {
         return token.balanceOf(address(this));
     }
@@ -64,6 +72,7 @@ abstract contract TokenHelper is ReentrancyGuard {
         IERC20(token).forceApprove(to, value);
     }
 
+    /// @dev Keeps ERC20 allowance at max once it falls below `LOWER_BOUND_APPROVAL`; native sentinel is ignored.
     function _safeApproveInf(address token, address to) internal {
         if (token == NATIVE) return;
         if (IERC20(token).allowance(address(this), to) < LOWER_BOUND_APPROVAL) {
@@ -72,6 +81,7 @@ abstract contract TokenHelper is ReentrancyGuard {
         }
     }
 
+    /// @dev Wraps native token into WETH when `tokenIn` is sentinel; otherwise unwraps `tokenIn` WETH.
     // solhint-disable-next-line func-name-mixedcase
     function _wrap_unwrap_ETH(address tokenIn, address tokenOut, uint256 netTokenIn) internal {
         if (tokenIn == NATIVE) IWETH(tokenOut).deposit{value: netTokenIn}();

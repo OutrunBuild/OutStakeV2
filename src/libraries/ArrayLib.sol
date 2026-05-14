@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 library ArrayLib {
+    /// @notice Returns the sum of all input values.
     function sum(uint256[] memory input) internal pure returns (uint256) {
         uint256 value = 0;
         uint256 length = input.length;
@@ -14,7 +15,7 @@ library ArrayLib {
         return value;
     }
 
-    /// @notice return index of the element if found, else return uint256.max
+    /// @notice Returns the element index when found, otherwise returns `type(uint256).max`.
     function find(address[] memory array, address element) internal pure returns (uint256 index) {
         uint256 length = array.length;
         for (uint256 i = 0; i < length;) {
@@ -26,6 +27,7 @@ library ArrayLib {
         return type(uint256).max;
     }
 
+    /// @notice Returns a copy of `inp` with `element` appended at the tail.
     function append(address[] memory inp, address element) internal pure returns (address[] memory out) {
         uint256 length = inp.length;
         out = new address[](length + 1);
@@ -38,12 +40,13 @@ library ArrayLib {
         out[length] = element;
     }
 
+    /// @notice Returns a copy of `inp` with `element` inserted at the head.
     function appendHead(address[] memory inp, address element) internal pure returns (address[] memory out) {
         uint256 length = inp.length;
         out = new address[](length + 1);
         out[0] = element;
-        for (uint256 i = 1; i <= length;) {
-            out[i] = inp[i - 1];
+        for (uint256 i = 0; i < length;) {
+            out[i + 1] = inp[i];
             unchecked {
                 ++i;
             }
@@ -51,10 +54,10 @@ library ArrayLib {
     }
 
     /**
-     * @dev This function assumes a and b each contains unidentical elements
-     * @param a array of addresses a
-     * @param b array of addresses b
-     * @return out Concatenation of a and b containing unidentical elements
+     * @dev Assumes each input array has no duplicate elements internally.
+     * @param a First address array.
+     * @param b Second address array.
+     * @return out Concatenation of `a` and addresses from `b` that are not in `a`.
      */
     function merge(address[] memory a, address[] memory b) internal pure returns (address[] memory out) {
         unchecked {
@@ -83,18 +86,12 @@ library ArrayLib {
         }
     }
 
-    // various version of contains
+    /// @notice Returns whether `array` contains `element`.
     function contains(address[] memory array, address element) internal pure returns (bool) {
-        uint256 length = array.length;
-        for (uint256 i = 0; i < length;) {
-            if (array[i] == element) return true;
-            unchecked {
-                ++i;
-            }
-        }
-        return false;
+        return find(array, element) != type(uint256).max;
     }
 
+    /// @notice Returns whether `array` contains `element`.
     function contains(bytes4[] memory array, bytes4 element) internal pure returns (bool) {
         uint256 length = array.length;
         for (uint256 i = 0; i < length;) {
@@ -106,17 +103,20 @@ library ArrayLib {
         return false;
     }
 
+    /// @notice Creates an address array with one element.
     function create(address a) internal pure returns (address[] memory res) {
         res = new address[](1);
         res[0] = a;
     }
 
+    /// @notice Creates an address array with two elements.
     function create(address a, address b) internal pure returns (address[] memory res) {
         res = new address[](2);
         res[0] = a;
         res[1] = b;
     }
 
+    /// @notice Creates an address array with three elements.
     function create(address a, address b, address c) internal pure returns (address[] memory res) {
         res = new address[](3);
         res[0] = a;
@@ -124,6 +124,7 @@ library ArrayLib {
         res[2] = c;
     }
 
+    /// @notice Creates an address array with four elements.
     function create(address a, address b, address c, address d) internal pure returns (address[] memory res) {
         res = new address[](4);
         res[0] = a;
@@ -132,6 +133,7 @@ library ArrayLib {
         res[3] = d;
     }
 
+    /// @notice Creates an address array with five elements.
     function create(address a, address b, address c, address d, address e)
         internal
         pure
@@ -145,6 +147,7 @@ library ArrayLib {
         res[4] = e;
     }
 
+    /// @notice Creates a uint256 array with one element.
     function create(uint256 a) internal pure returns (uint256[] memory res) {
         res = new uint256[](1);
         res[0] = a;

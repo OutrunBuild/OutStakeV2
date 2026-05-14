@@ -3,8 +3,14 @@ pragma solidity ^0.8.28;
 
 /**
  * @title Outrun omnichain universal assets interface
+ * @notice uAsset exposes a minter-scoped debt token surface for position and wrap accounting.
  */
 interface IUniversalAssets {
+    /**
+     * @notice Minting state for one minter address.
+     * @dev `mintingCap` is the minter's configured ceiling; `amountInMinted` is that minter's outstanding
+     * debt after mints minus repayments. The table is not a global debt pool.
+     */
     struct MintingStatus {
         uint256 mintingCap;
         uint256 amountInMinted;
@@ -12,7 +18,7 @@ interface IUniversalAssets {
 
     /**
      * @notice Returns the remaining uAsset minting allowance for a minter.
-     * @dev Computes the allowance from the minter's configured cap and minted amount.
+     * @dev Computes `max(mintingCap - amountInMinted, 0)` for the queried minter.
      * @param minter Address whose minting capacity is being queried.
      * @return amountInMintable Remaining amount the minter can mint.
      */
@@ -20,7 +26,8 @@ interface IUniversalAssets {
 
     /**
      * @notice Sets the minting cap for a minter.
-     * @dev Updating the cap changes how much additional uAsset the minter may issue.
+     * @dev Owner-controlled configuration. Updating the cap changes only future mint headroom; it does not
+     * rewrite `amountInMinted`.
      * @param minter Address whose cap is updated.
      * @param mintingCap New minting cap assigned to the minter.
      */
@@ -28,14 +35,14 @@ interface IUniversalAssets {
 
     /**
      * @notice Revokes minting permission by clearing a minter's cap.
-     * @dev Existing minted debt is not burned by this operation.
+     * @dev Sets `mintingCap` to zero. Existing `amountInMinted` remains outstanding until the minter repays.
      * @param minter Address whose minting permission is revoked.
      */
     function revokeMinter(address minter) external;
 
     /**
      * @notice Mints uAsset to a receiver using the caller's minting allowance.
-     * @dev Implementations are expected to enforce caller-specific mint caps.
+     * @dev `msg.sender` is the minter whose `amountInMinted` increases and whose cap is checked.
      * @param receiver Address receiving the minted uAsset.
      * @param amount Amount of uAsset to mint.
      */
@@ -43,7 +50,8 @@ interface IUniversalAssets {
 
     /**
      * @notice Repays the caller's own minted debt using uAsset held by an account.
-     * @dev The caller is always treated as the debt owner/minter whose outstanding debt is reduced.
+     * @dev `msg.sender` is the minter whose `amountInMinted` decreases. `account` is the balance burned; when
+     * `account != msg.sender`, the caller must have allowance to burn `account`'s uAsset.
      * @param account Address whose uAsset balance is burned.
      * @param amount Amount of uAsset to burn.
      */
