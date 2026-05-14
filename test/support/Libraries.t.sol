@@ -15,7 +15,7 @@ contract WadRayMathTest is Test {
     using WadRayMath for uint256;
 
     // Helper contract to test reverts through external calls
-    WadRayMathHelper helper;
+    WadRayMathHelper internal helper;
 
     function setUp() public {
         helper = new WadRayMathHelper();
@@ -144,11 +144,11 @@ contract ArrayLibTest is Test {
     using ArrayLib for address[];
     using ArrayLib for bytes4[];
 
-    address constant A = address(0x1);
-    address constant B = address(0x2);
-    address constant C = address(0x3);
-    address constant D = address(0x4);
-    address constant E = address(0x5);
+    address internal constant A = address(0x1);
+    address internal constant B = address(0x2);
+    address internal constant C = address(0x3);
+    address internal constant D = address(0x4);
+    address internal constant E = address(0x5);
 
     function testSumReturnsZeroForEmptyArray() public {
         uint256[] memory arr = new uint256[](0);
@@ -415,7 +415,7 @@ contract MockGuarded is ReentrancyGuard {
 }
 
 contract ReentrancyGuardTest is Test {
-    MockGuarded guarded;
+    MockGuarded internal guarded;
 
     function setUp() public {
         guarded = new MockGuarded();

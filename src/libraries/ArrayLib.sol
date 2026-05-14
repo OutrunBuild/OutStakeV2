@@ -4,7 +4,8 @@ pragma solidity ^0.8.28;
 library ArrayLib {
     function sum(uint256[] memory input) internal pure returns (uint256) {
         uint256 value = 0;
-        for (uint256 i = 0; i < input.length;) {
+        uint256 length = input.length;
+        for (uint256 i = 0; i < length;) {
             value += input[i];
             unchecked {
                 ++i;
@@ -58,20 +59,22 @@ library ArrayLib {
     function merge(address[] memory a, address[] memory b) internal pure returns (address[] memory out) {
         unchecked {
             uint256 countUnidenticalB = 0;
-            bool[] memory isUnidentical = new bool[](b.length);
-            for (uint256 i = 0; i < b.length; ++i) {
+            uint256 bLength = b.length;
+            bool[] memory isUnidentical = new bool[](bLength);
+            for (uint256 i = 0; i < bLength; ++i) {
                 if (!contains(a, b[i])) {
                     ++countUnidenticalB;
                     isUnidentical[i] = true;
                 }
             }
 
-            out = new address[](a.length + countUnidenticalB);
-            for (uint256 i = 0; i < a.length; ++i) {
+            uint256 aLength = a.length;
+            out = new address[](aLength + countUnidenticalB);
+            for (uint256 i = 0; i < aLength; ++i) {
                 out[i] = a[i];
             }
-            uint256 id = a.length;
-            for (uint256 i = 0; i < b.length; ++i) {
+            uint256 id = aLength;
+            for (uint256 i = 0; i < bLength; ++i) {
                 if (isUnidentical[i]) {
                     out[id] = b[i];
                     ++id;
