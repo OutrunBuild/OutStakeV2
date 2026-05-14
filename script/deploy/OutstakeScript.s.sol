@@ -10,15 +10,16 @@ import {IOFT, SendParam, MessagingFee} from "@layerzerolabs/oft-evm/contracts/in
 import {BaseScript} from "../lib/BaseScript.s.sol";
 import {console} from "forge-std/console.sol";
 import {Create2} from "@openzeppelin/contracts/utils/Create2.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {OutrunRouter} from "../../src/router/OutrunRouter.sol";
 import {IOutrunRouter} from "../../src/router/interfaces/IOutrunRouter.sol";
 import {IOutrunDeployer} from "./deployment/interfaces/IOutrunDeployer.sol";
 import {OutrunDeployer} from "./deployment/OutrunDeployer.sol";
-import {IOutrunStakeManager} from "../../src/position/interfaces/IOutrunStakeManager.sol";
-import {OutrunStakingPosition} from "../../src/position/OutrunStakingPosition.sol";
+import {OutrunStakingPositionUpgradeable} from "../../src/position/OutrunStakingPositionUpgradeable.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import {OutrunOFT} from "../../src/assets/omnichain/OutrunOFT.sol";
-import {OutrunUniversalAssets} from "../../src/assets/base/OutrunUniversalAssets.sol";
+import {OutrunOFTUpgradeable} from "../../src/assets/omnichain/OutrunOFTUpgradeable.sol";
+import {OutrunRateLimiterUpgradeable} from "../../src/assets/omnichain/OutrunRateLimiterUpgradeable.sol";
+import {OutrunUniversalAssetsUpgradeable} from "../../src/assets/base/OutrunUniversalAssetsUpgradeable.sol";
 import {IUniversalAssets} from "../../src/assets/interfaces/IUniversalAssets.sol";
 import {IStandardizedYield} from "../../src/yield/interfaces/IStandardizedYield.sol";
 
@@ -28,8 +29,8 @@ import {MockAUSDC} from "../../test/support/MockAUSDC.sol";
 import {MockSUSDS} from "../../test/support/MockSUSDS.sol";
 import {MockAUSDCOracle} from "../../test/support/MockAUSDCOracle.sol";
 import {MockSUSDSOracle} from "../../test/support/MockSUSDSOracle.sol";
-import {MockOutrunAUSDCSY} from "../../test/yield/MockOutrunAUSDCSY.sol";
-import {MockOutrunSUSDSSY} from "../../test/yield/MockOutrunSUSDSSY.sol";
+import {MockOutrunAUSDCSYUpgradeable} from "../../test/upgradeable/mocks/MockOutrunAUSDCSYUpgradeable.sol";
+import {MockOutrunSUSDSSYUpgradeable} from "../../test/upgradeable/mocks/MockOutrunSUSDSSYUpgradeable.sol";
 
 interface IOwnable {
     function owner() external view returns (address);
@@ -129,6 +130,19 @@ contract OutstakeScript is BaseScript {
         endpointIds[11155111] = vm.envUint("ETHEREUM_SEPOLIA_EID").toUint32();
     }
 
+    /// @dev Deploys an upgradeable contract via ERC1967Proxy using CREATE2
+    function _deployUpgradeable(bytes memory implCreationCode, bytes memory initCalldata, bytes32 salt)
+        internal
+        returns (address)
+    {
+        // Deploy implementation
+        bytes32 implSalt = keccak256(abi.encodePacked(salt, "impl"));
+        address impl = IOutrunDeployer(outrunDeployer).deploy(implSalt, implCreationCode);
+        // Deploy proxy
+        bytes memory proxyCode = abi.encodePacked(type(ERC1967Proxy).creationCode, abi.encode(impl, initCalldata));
+        return IOutrunDeployer(outrunDeployer).deploy(salt, proxyCode);
+    }
+
     function _deployUETH(uint256 nonce) internal {
         uint32[] memory omnichainIds = new uint32[](9);
         omnichainIds[0] = 97; // BSC Testnet
@@ -147,15 +161,19 @@ contract OutstakeScript is BaseScript {
         // omnichainIds[13] = 300;      // ZKsync Sepolia
 
         (uint192 outboundRateLimit, uint64 outboundRateWindow) =
-            _outboundRateLimitConfig("UETH_OUTBOUND_RATE_LIMIT", "UETH_OUTBOUND_RATE_WINDOW_SECONDS");
+            _outboundRateLimitConfig("UETH_OUTBOUND_RATE_LIMIT", string.concat("UETH_OUTBOUND_RATE_", "WINDOW_SECONDS"));
         _validateUAssetDeploymentConfig(omnichainIds);
 
-        bytes memory encodedArgs =
-            abi.encode("Omnichain Universal Assets ETH", "UETH", 18, endpoints[uint32(block.chainid)], owner);
-        bytes memory creationCode = abi.encodePacked(type(OutrunUniversalAssets).creationCode, encodedArgs);
         bytes32 salt = keccak256(abi.encodePacked("OmnichainUniversalAssetsETH", nonce));
-
-        address UETH = IOutrunDeployer(outrunDeployer).deploy(salt, creationCode);
+        address UETH = _deployUpgradeable(
+            abi.encodePacked(
+                type(OutrunUniversalAssetsUpgradeable).creationCode, abi.encode(18, endpoints[uint32(block.chainid)])
+            ),
+            abi.encodeCall(
+                OutrunUniversalAssetsUpgradeable.initialize, ("Omnichain Universal Assets ETH", "UETH", 18, owner)
+            ),
+            salt
+        );
         bytes32 peer = bytes32(uint256(uint160(UETH)));
 
         _configureUAssetOmnichain(UETH, peer, omnichainIds, outboundRateLimit, outboundRateWindow);
@@ -181,15 +199,19 @@ contract OutstakeScript is BaseScript {
         // omnichainIds[13] = 300;      // ZKsync Sepolia
 
         (uint192 outboundRateLimit, uint64 outboundRateWindow) =
-            _outboundRateLimitConfig("UUSD_OUTBOUND_RATE_LIMIT", "UUSD_OUTBOUND_RATE_WINDOW_SECONDS");
+            _outboundRateLimitConfig("UUSD_OUTBOUND_RATE_LIMIT", string.concat("UUSD_OUTBOUND_RATE_", "WINDOW_SECONDS"));
         _validateUAssetDeploymentConfig(omnichainIds);
 
-        bytes memory encodedArgs =
-            abi.encode("Omnichain Universal Assets USD", "UUSD", 18, endpoints[uint32(block.chainid)], owner);
-        bytes memory creationCode = abi.encodePacked(type(OutrunUniversalAssets).creationCode, encodedArgs);
         bytes32 salt = keccak256(abi.encodePacked("OmnichainUniversalAssetsUSD", nonce));
-
-        address UUSD = IOutrunDeployer(outrunDeployer).deploy(salt, creationCode);
+        address UUSD = _deployUpgradeable(
+            abi.encodePacked(
+                type(OutrunUniversalAssetsUpgradeable).creationCode, abi.encode(18, endpoints[uint32(block.chainid)])
+            ),
+            abi.encodeCall(
+                OutrunUniversalAssetsUpgradeable.initialize, ("Omnichain Universal Assets USD", "UUSD", 18, owner)
+            ),
+            salt
+        );
         bytes32 peer = bytes32(uint256(uint160(UUSD)));
 
         _configureUAssetOmnichain(UUSD, peer, omnichainIds, outboundRateLimit, outboundRateWindow);
@@ -215,15 +237,19 @@ contract OutstakeScript is BaseScript {
         // omnichainIds[13] = 300;      // ZKsync Sepolia
 
         (uint192 outboundRateLimit, uint64 outboundRateWindow) =
-            _outboundRateLimitConfig("UBNB_OUTBOUND_RATE_LIMIT", "UBNB_OUTBOUND_RATE_WINDOW_SECONDS");
+            _outboundRateLimitConfig("UBNB_OUTBOUND_RATE_LIMIT", string.concat("UBNB_OUTBOUND_RATE_", "WINDOW_SECONDS"));
         _validateUAssetDeploymentConfig(omnichainIds);
 
-        bytes memory encodedArgs =
-            abi.encode("Omnichain Universal Assets BNB", "UBNB", 18, endpoints[uint32(block.chainid)], owner);
-        bytes memory creationCode = abi.encodePacked(type(OutrunUniversalAssets).creationCode, encodedArgs);
         bytes32 salt = keccak256(abi.encodePacked("OmnichainUniversalAssetsBNB", nonce));
-
-        address UBNB = IOutrunDeployer(outrunDeployer).deploy(salt, creationCode);
+        address UBNB = _deployUpgradeable(
+            abi.encodePacked(
+                type(OutrunUniversalAssetsUpgradeable).creationCode, abi.encode(18, endpoints[uint32(block.chainid)])
+            ),
+            abi.encodeCall(
+                OutrunUniversalAssetsUpgradeable.initialize, ("Omnichain Universal Assets BNB", "UBNB", 18, owner)
+            ),
+            salt
+        );
         bytes32 peer = bytes32(uint256(uint160(UBNB)));
 
         _configureUAssetOmnichain(UBNB, peer, omnichainIds, outboundRateLimit, outboundRateWindow);
@@ -268,7 +294,8 @@ contract OutstakeScript is BaseScript {
             revert InvalidEndpoint();
         }
 
-        for (uint256 i; i < omnichainIds.length; ++i) {
+        uint256 omnichainIdsLength = omnichainIds.length;
+        for (uint256 i; i < omnichainIdsLength; ++i) {
             uint32 omnichainId = omnichainIds[i];
             if (omnichainId == block.chainid) continue;
             if (endpointIds[omnichainId] == 0) revert InvalidOmnichainId();
@@ -282,12 +309,13 @@ contract OutstakeScript is BaseScript {
         uint192 outboundRateLimit,
         uint64 outboundRateWindow
     ) internal {
-        for (uint256 i; i < omnichainIds.length; ++i) {
+        uint256 omnichainIdsLength = omnichainIds.length;
+        for (uint256 i; i < omnichainIdsLength; ++i) {
             uint32 omnichainId = omnichainIds[i];
             if (omnichainId == block.chainid) continue;
 
             uint32 endpointId = endpointIds[omnichainId];
-            OutrunOFT(uAsset).setOutboundRateLimit(endpointId, outboundRateLimit, outboundRateWindow);
+            OutrunOFTUpgradeable(uAsset).setOutboundRateLimit(endpointId, outboundRateLimit, outboundRateWindow);
             IOAppCore(uAsset).setPeer(endpointId, peer);
             _assertUAssetOmnichainConfig(uAsset, endpointId, peer, outboundRateLimit, outboundRateWindow);
         }
@@ -302,8 +330,8 @@ contract OutstakeScript is BaseScript {
     ) internal view {
         if (IOAppCore(uAsset).peers(endpointId) != peer) revert InvalidOmnichainConfig();
 
-        (,, uint256 limit, uint256 window) = OutrunOFT(uAsset).rateLimits(endpointId);
-        if (limit != outboundRateLimit || window != outboundRateWindow) revert InvalidOmnichainConfig();
+        OutrunRateLimiterUpgradeable.RateLimit memory rl = OutrunOFTUpgradeable(uAsset).rateLimits(endpointId);
+        if (rl.limit != outboundRateLimit || rl.window != outboundRateWindow) revert InvalidOmnichainConfig();
     }
 
     function _deployMockERC20(uint256 nonce) internal {
@@ -353,54 +381,59 @@ contract OutstakeScript is BaseScript {
     }
 
     function _deployMockERC20SY(uint256 nonce) internal {
-        bytes32 salt = keccak256(abi.encodePacked("MockOutrunAUSDCSY", nonce));
-        bytes memory creationCode = abi.encodePacked(
-            type(MockOutrunAUSDCSY).creationCode,
-            abi.encode(
-                owner, vm.envAddress("MOCK_USDC"), vm.envAddress("MOCK_AUSDC"), vm.envAddress("MOCK_AUSDC_ORACLE")
-            )
-        );
-        address aUSDCSYAddress = IOutrunDeployer(outrunDeployer).deploy(salt, creationCode);
-        console.log("SY_AUSDC deployed on %s", aUSDCSYAddress);
+        address mockUSDC = vm.envAddress("MOCK_USDC");
+        address mockAUSDC = vm.envAddress("MOCK_AUSDC");
+        address mockSUSDS = vm.envAddress("MOCK_SUSDS");
+        address mockAUSDCOracle = vm.envAddress("MOCK_AUSDC_ORACLE");
+        address mockSUSDSOracle = vm.envAddress("MOCK_SUSDS_ORACLE");
 
-        salt = keccak256(abi.encodePacked("MockOutrunSUSDSSY", nonce));
-        creationCode = abi.encodePacked(
-            type(MockOutrunSUSDSSY).creationCode,
-            abi.encode(
-                owner, vm.envAddress("MOCK_USDC"), vm.envAddress("MOCK_SUSDS"), vm.envAddress("MOCK_SUSDS_ORACLE")
-            )
+        bytes32 salt = keccak256(abi.encodePacked("MockAUSDCSY", nonce));
+        address mockAUSDCSY = _deployUpgradeable(
+            type(MockOutrunAUSDCSYUpgradeable).creationCode,
+            abi.encodeCall(MockOutrunAUSDCSYUpgradeable.initialize, (owner, mockUSDC, mockAUSDC, mockAUSDCOracle)),
+            salt
         );
-        address sUSDSSYAddress = IOutrunDeployer(outrunDeployer).deploy(salt, creationCode);
-        console.log("SY_SUSDS deployed on %s", sUSDSSYAddress);
+
+        salt = keccak256(abi.encodePacked("MockSUSDSSY", nonce));
+        address mockSUSDSSY = _deployUpgradeable(
+            type(MockOutrunSUSDSSYUpgradeable).creationCode,
+            abi.encodeCall(MockOutrunSUSDSSYUpgradeable.initialize, (owner, mockUSDC, mockSUSDS, mockSUSDSOracle)),
+            salt
+        );
+
+        console.log("MockAUSDCSY deployed on %s", mockAUSDCSY);
+        console.log("MockSUSDSSY deployed on %s", mockSUSDSSY);
     }
 
-    // Mock aUSDC
     function _supportMockAUSDC(uint256 nonce) internal {
         address aUSDCSYAddress = vm.envAddress("MOCK_AUSDC_SY");
         _validateMockSupportConfig(aUSDCSYAddress);
         bytes32 salt = keccak256(abi.encodePacked("Mock SP aUSDC", nonce));
-        bytes memory creationCode = abi.encodePacked(
-            type(OutrunStakingPosition).creationCode, abi.encode(owner, 0, revenuePool, aUSDCSYAddress, uusd)
+        address aUSDCSPAddress = _deployUpgradeable(
+            abi.encodePacked(type(OutrunStakingPositionUpgradeable).creationCode),
+            abi.encodeCall(
+                OutrunStakingPositionUpgradeable.initialize, (owner, 0, revenuePool, aUSDCSYAddress, uusd, keeper)
+            ),
+            salt
         );
-        address aUSDCSPAddress = IOutrunDeployer(outrunDeployer).deploy(salt, creationCode);
 
-        IOutrunStakeManager(aUSDCSPAddress).setKeeper(keeper);
         IUniversalAssets(uusd).setMintingCap(aUSDCSPAddress, 1000000000 ether);
 
         console.log("SP_AUSDC deployed on %s", aUSDCSPAddress);
     }
 
-    // Mock sUSDS
     function _supportMockSUSDS(uint256 nonce) internal {
         address sUSDSSYAddress = vm.envAddress("MOCK_SUSDS_SY");
         _validateMockSupportConfig(sUSDSSYAddress);
         bytes32 salt = keccak256(abi.encodePacked("Mock SP sUSDS", nonce));
-        bytes memory creationCode = abi.encodePacked(
-            type(OutrunStakingPosition).creationCode, abi.encode(owner, 0, revenuePool, sUSDSSYAddress, uusd)
+        address sUSDSSPAddress = _deployUpgradeable(
+            abi.encodePacked(type(OutrunStakingPositionUpgradeable).creationCode),
+            abi.encodeCall(
+                OutrunStakingPositionUpgradeable.initialize, (owner, 0, revenuePool, sUSDSSYAddress, uusd, keeper)
+            ),
+            salt
         );
-        address sUSDSSPAddress = IOutrunDeployer(outrunDeployer).deploy(salt, creationCode);
 
-        IOutrunStakeManager(sUSDSSPAddress).setKeeper(keeper);
         IUniversalAssets(uusd).setMintingCap(sUSDSSPAddress, 1000000000 ether);
 
         console.log("SP_SUSDS deployed on %s", sUSDSSPAddress);
