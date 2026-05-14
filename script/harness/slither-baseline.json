@@ -140,22 +140,13 @@
       "key": "timestamp|src/assets/omnichain/OutrunOFT.sol|OutrunOFT._maxQuoteAmountLD(uint32) uses timestamp for comparisons"
     },
     {
-      "id": "451a41fa0eb4691b4d22832580b3d42fba8db80e640a2b81bcb89999763d33d0",
-      "check": "solc-version",
+      "id": "",
+      "check": "assembly",
       "impact": "Informational",
       "confidence": "High",
-      "location": "src/integrations/lido/interfaces/IL2StETH.sol#L3",
-      "summary": "Version constraint ^0.8.10 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)",
-      "key": "solc-version|src/integrations/lido/interfaces/IL2StETH.sol|Version constraint ^0.8.10 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)"
-    },
-    {
-      "id": "6369375e670d3e5b5a223ff6141a303cf950d0b066cc576d87d47c135db72977",
-      "check": "solc-version",
-      "impact": "Informational",
-      "confidence": "High",
-      "location": "src/integrations/sky/interfaces/IPSM3.sol#L2",
-      "summary": "Version constraint ^0.8.13 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)",
-      "key": "solc-version|src/integrations/sky/interfaces/IPSM3.sol|Version constraint ^0.8.13 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)"
+      "location": "src/assets/base/OutrunUniversalAssetsUpgradeable.sol#L36-L42",
+      "summary": "OutrunUniversalAssetsUpgradeable._getOutrunUniversalAssetsStorage() uses assembly",
+      "key": "assembly|src/assets/base/OutrunUniversalAssetsUpgradeable.sol|OutrunUniversalAssetsUpgradeable._getOutrunUniversalAssetsStorage() uses assembly"
     }
   ]
 }

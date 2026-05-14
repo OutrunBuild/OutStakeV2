@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.28;
 
+// solhint-disable-next-line interface-starts-with-i
 interface AggregatorInterface {
     /// @notice Return the number of decimals used by the answer.
     /// @dev Matches the underlying aggregator precision metadata.

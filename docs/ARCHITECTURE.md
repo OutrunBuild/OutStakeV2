@@ -62,7 +62,6 @@
 - `src/libraries/AaveAdapterLib.sol`
 - `src/libraries/ArrayLib.sol`
 - `src/libraries/AutoIncrementId.sol`
-- `src/libraries/CommonErrors.sol`
 - `src/libraries/IWETH.sol`
 - `src/libraries/WadRayMath.sol`
 - 跨业务域共享的 token 传输、汇率换算、重入保护、数组操作、ID 生成、错误定义等基础工具。
@@ -153,7 +152,7 @@ OutrunStakingPositionUpgradeable (concrete)
   依赖:
     → IUniversalAssets (uAsset)          mint / repay
     → IStandardizedYield (SY)            exchangeRate / redeem
-    → SYUtils, CommonErrors
+    → SYUtils
 ```
 
 #### Router 依赖扇出
@@ -166,7 +165,7 @@ OutrunRouter (concrete)
     → IStandardizedYield               deposit / redeem / preview*
     → IOutrunStakeManager              stake / wrapStake / wrapRedeem / preview*
     → IMemeverseLauncher               genesis
-    → TokenHelper, CommonErrors
+    → TokenHelper
 ```
 
 #### SY Adapter 统一结构
@@ -181,8 +180,6 @@ Concrete Adapter (e.g. OutrunAaveV3SYUpgradeable)
       ⟶ OwnableUpgradeable              ← openzeppelin-upgradeable
     ⟶ TokenHelper
     ⟶ UUPSUpgradeable                   ← openzeppelin-upgradeable
-    → CommonErrors
-
 Concrete Adapter (e.g. OutrunL2WstETHSYUpgradeable)
   依赖:
     → IExchangeRateOracle              getExchangeRate()

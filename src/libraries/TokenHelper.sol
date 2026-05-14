@@ -3,9 +3,12 @@ pragma solidity ^0.8.28;
 
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import {ArrayLengthMismatch, NativeAmountMismatch, NativeTransferFailed} from "./CommonErrors.sol";
 import {IWETH} from "./IWETH.sol";
 import {ReentrancyGuard} from "./ReentrancyGuard.sol";
+
+error NativeAmountMismatch();
+error NativeTransferFailed();
+error ArrayLengthMismatch();
 
 abstract contract TokenHelper is ReentrancyGuard {
     using SafeERC20 for IERC20;
