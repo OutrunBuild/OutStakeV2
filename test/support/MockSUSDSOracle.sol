@@ -1,31 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.28;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {MockExchangeRateOracle} from "./MockExchangeRateOracle.sol";
 
 /**
  * @dev Mock sUSDS Oracle
  */
-contract MockSUSDSOracle is Ownable {
-    error InvalidOracleAnswer();
-
+contract MockSUSDSOracle is MockExchangeRateOracle {
     uint8 public constant DECIMALS = 18;
     uint8 public constant RAW_DECIMALS = 18;
 
-    int256 public latestAnswer;
+    constructor(address _owner) MockExchangeRateOracle(_owner, 1e18) {}
 
-    constructor(address _owner) Ownable(_owner) {
-        latestAnswer = 1e18;
+    function _decimals() internal pure override returns (uint8) {
+        return DECIMALS;
     }
 
-    function getExchangeRate() external view returns (uint256) {
-        if (latestAnswer <= 0) revert InvalidOracleAnswer();
-        // latestAnswer is checked to be strictly positive before converting to uint256.
-        // forge-lint: disable-next-line(unsafe-typecast)
-        return (uint256(latestAnswer) * 10 ** DECIMALS) / 10 ** RAW_DECIMALS;
-    }
-
-    function setLatestAnswer(int256 _latestAnswer) external onlyOwner {
-        latestAnswer = _latestAnswer;
+    function _rawDecimals() internal pure override returns (uint8) {
+        return RAW_DECIMALS;
     }
 }
