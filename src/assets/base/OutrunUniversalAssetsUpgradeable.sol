@@ -41,12 +41,16 @@ contract OutrunUniversalAssetsUpgradeable is Initializable, IUniversalAssets, Ou
         }
     }
 
-    function mintingStatusTable(address minter) public view returns (MintingStatus memory) {
+    function _mintingStatus(address minter) private view returns (MintingStatus storage) {
         return _getOutrunUniversalAssetsStorage().mintingStatusTable[minter];
     }
 
+    function mintingStatusTable(address minter) public view returns (MintingStatus memory) {
+        return _mintingStatus(minter);
+    }
+
     function checkMintableAmount(address minter) external view override returns (uint256 amountInMintable) {
-        MintingStatus storage status = _getOutrunUniversalAssetsStorage().mintingStatusTable[minter];
+        MintingStatus storage status = _mintingStatus(minter);
         uint256 mintingCap = status.mintingCap;
         uint256 amountInMinted = status.amountInMinted;
         amountInMintable = mintingCap > amountInMinted ? mintingCap - amountInMinted : 0;
@@ -55,7 +59,7 @@ contract OutrunUniversalAssetsUpgradeable is Initializable, IUniversalAssets, Ou
     function setMintingCap(address minter, uint256 mintingCap) public override onlyOwner {
         require(minter != address(0), ZeroInput());
 
-        MintingStatus storage status = _getOutrunUniversalAssetsStorage().mintingStatusTable[minter];
+        MintingStatus storage status = _mintingStatus(minter);
         uint256 oldMintingCap = status.mintingCap;
         status.mintingCap = mintingCap;
 
@@ -65,7 +69,7 @@ contract OutrunUniversalAssetsUpgradeable is Initializable, IUniversalAssets, Ou
     function revokeMinter(address minter) external override onlyOwner {
         require(minter != address(0), ZeroInput());
 
-        MintingStatus storage status = _getOutrunUniversalAssetsStorage().mintingStatusTable[minter];
+        MintingStatus storage status = _mintingStatus(minter);
         uint256 oldMintingCap = status.mintingCap;
         status.mintingCap = 0;
 
@@ -75,7 +79,7 @@ contract OutrunUniversalAssetsUpgradeable is Initializable, IUniversalAssets, Ou
     function mint(address receiver, uint256 amount) external override whenNotPaused {
         require(amount != 0 && receiver != address(0), ZeroInput());
 
-        MintingStatus storage status = _getOutrunUniversalAssetsStorage().mintingStatusTable[msg.sender];
+        MintingStatus storage status = _mintingStatus(msg.sender);
         require(status.amountInMinted + amount <= status.mintingCap, ReachMintCap());
 
         status.amountInMinted += amount;
@@ -85,7 +89,7 @@ contract OutrunUniversalAssetsUpgradeable is Initializable, IUniversalAssets, Ou
     }
 
     function repay(address account, uint256 amount) external override {
-        MintingStatus storage status = _getOutrunUniversalAssetsStorage().mintingStatusTable[msg.sender];
+        MintingStatus storage status = _mintingStatus(msg.sender);
         uint256 amountInMinted = status.amountInMinted;
         require(amountInMinted >= amount, ReachBurnCap());
 
