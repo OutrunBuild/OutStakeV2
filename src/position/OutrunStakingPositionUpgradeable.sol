@@ -162,17 +162,13 @@ contract OutrunStakingPositionUpgradeable is
         if (syRedeemed > position.syStaked) revert ExceedsPositionBalance(syRedeemed, position.syStaked);
 
         UAssetBurned = Math.mulDiv(position.UAssetMinted, syRedeemed, position.syStaked);
-        address _SY = SY();
-        if (tokenOut == _SY) amountTokenOut = syRedeemed;
-        else amountTokenOut = IStandardizedYield(_SY).previewRedeem(tokenOut, syRedeemed);
+        amountTokenOut = _previewTokenOut(SY(), tokenOut, syRedeemed);
     }
 
     function previewWrapRedeem(uint256 amountInUAsset, address tokenOut) public view returns (uint256 amountTokenOut) {
         if (amountInUAsset == 0) revert ZeroInput();
         uint256 amountInSY = _assetToSy(amountInUAsset);
-        address _SY = SY();
-        if (tokenOut == _SY) amountTokenOut = amountInSY;
-        else amountTokenOut = IStandardizedYield(_SY).previewRedeem(tokenOut, amountInSY);
+        amountTokenOut = _previewTokenOut(SY(), tokenOut, amountInSY);
     }
 
     function stake(uint256 amountInSY, uint128 lockupDays, address positionOwner, address uAssetReceiver)
@@ -487,6 +483,18 @@ contract OutrunStakingPositionUpgradeable is
             _transferSY(_SY, receiver, syRedeemed);
         } else {
             amountTokenOut = IStandardizedYield(_SY).redeem(receiver, syRedeemed, tokenOut, minTokenOut, false);
+        }
+    }
+
+    function _previewTokenOut(address _SY, address tokenOut, uint256 amountInSY)
+        internal
+        view
+        returns (uint256 amountTokenOut)
+    {
+        if (tokenOut == _SY) {
+            amountTokenOut = amountInSY;
+        } else {
+            amountTokenOut = IStandardizedYield(_SY).previewRedeem(tokenOut, amountInSY);
         }
     }
 
