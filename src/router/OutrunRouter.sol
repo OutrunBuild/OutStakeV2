@@ -150,10 +150,7 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         address uAssetReceiver = stakeParam.receiver == address(0) ? stakeParam.owner : stakeParam.receiver;
         (positionId, UAssetMinted) =
             _stakeFromSYBalance(SY, SP, amountInSY, stakeParam.lockupDays, stakeParam.owner, uAssetReceiver);
-        require(
-            UAssetMinted >= stakeParam.minUAssetMinted,
-            InsufficientUAssetMinted(UAssetMinted, stakeParam.minUAssetMinted)
-        );
+        _assertMinUAssetMinted(UAssetMinted, stakeParam.minUAssetMinted);
     }
 
     /**
@@ -175,10 +172,7 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         address uAssetReceiver = stakeParam.receiver == address(0) ? stakeParam.owner : stakeParam.receiver;
         (positionId, UAssetMinted) =
             _stakeFromSYBalance(SY, SP, amountInSY, stakeParam.lockupDays, stakeParam.owner, uAssetReceiver);
-        require(
-            UAssetMinted >= stakeParam.minUAssetMinted,
-            InsufficientUAssetMinted(UAssetMinted, stakeParam.minUAssetMinted)
-        );
+        _assertMinUAssetMinted(UAssetMinted, stakeParam.minUAssetMinted);
     }
 
     /**
@@ -205,7 +199,7 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         _approveExact(SY, SP, amountInSY);
         UAssetMinted = IOutrunStakeManager(SP).wrapStake(amountInSY, uAssetRecipient);
         _clearApproval(SY, SP);
-        require(UAssetMinted >= minUAssetMinted, InsufficientUAssetMinted(UAssetMinted, minUAssetMinted));
+        _assertMinUAssetMinted(UAssetMinted, minUAssetMinted);
     }
 
     /**
@@ -226,7 +220,7 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         _approveExact(SY, SP, amountInSY);
         UAssetMinted = IOutrunStakeManager(SP).wrapStake(amountInSY, uAssetRecipient);
         _clearApproval(SY, SP);
-        require(UAssetMinted >= minUAssetMinted, InsufficientUAssetMinted(UAssetMinted, minUAssetMinted));
+        _assertMinUAssetMinted(UAssetMinted, minUAssetMinted);
     }
 
     /**
@@ -267,6 +261,10 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
     function _clearApproval(address token, address spender) internal {
         if (token == NATIVE) return;
         _safeApprove(token, spender, 0);
+    }
+
+    function _assertMinUAssetMinted(uint256 UAssetMinted, uint256 minUAssetMinted) internal pure {
+        require(UAssetMinted >= minUAssetMinted, InsufficientUAssetMinted(UAssetMinted, minUAssetMinted));
     }
 
     /**
@@ -316,7 +314,7 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         uint256 amountInSY = _mintSY(SY, tokenIn, address(this), tokenAmount, minSyOut);
         address uAsset = IOutrunStakeManager(SP).uAsset();
         (, uint256 amountInUAsset) = _stakeFromSYBalance(SY, SP, amountInSY, lockupDays, genesisUser, address(this));
-        require(amountInUAsset >= minUAssetMinted, InsufficientUAssetMinted(amountInUAsset, minUAssetMinted));
+        _assertMinUAssetMinted(amountInUAsset, minUAssetMinted);
         if (amountInUAsset > type(uint128).max) revert InvalidParam();
         _approveExact(uAsset, memeverseLauncher, amountInUAsset);
         // amountInUAsset is bounded by type(uint128).max immediately before this cast.
@@ -346,7 +344,7 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         _transferFrom(IERC20(SY), msg.sender, address(this), amountInSY);
         address uAsset = IOutrunStakeManager(SP).uAsset();
         (, uint256 amountInUAsset) = _stakeFromSYBalance(SY, SP, amountInSY, lockupDays, genesisUser, address(this));
-        require(amountInUAsset >= minUAssetMinted, InsufficientUAssetMinted(amountInUAsset, minUAssetMinted));
+        _assertMinUAssetMinted(amountInUAsset, minUAssetMinted);
         if (amountInUAsset > type(uint128).max) revert InvalidParam();
         _approveExact(uAsset, memeverseLauncher, amountInUAsset);
         // amountInUAsset is bounded by type(uint128).max immediately before this cast.
