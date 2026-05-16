@@ -2,7 +2,7 @@
 
 ## 1. 文档目的
 
-本文档说明 `OutStakeV2` 当前实现中的核心账务规则，包括 `uAsset` minter-cap、position debt、wrap 池、汇率换算、赎回按比例销债、keeper redeem 分账与 wrap yield harvest。本文只记录当前本地代码已实现的 upgradeable-only 账务逻辑。
+本文档说明 `OutStakeV2` 当前实现中的核心账务规则，包括 `uAsset` minter-cap、position debt、wrap 池、汇率换算、赎回按比例销债、keeper redeem 分账与 wrap yield harvest。
 
 ## 1.1 Upgradeable accounting readiness
 
@@ -27,9 +27,12 @@
 - `checkMintableAmount(minter)` 返回 `mintingCap - amountInMinted`，最低到 0。
 - `mint(receiver, amount)` 由调用者自己的 minter 额度承担，成功后增加调用者的 `amountInMinted`。
 - `repay(account, amount)` 减少调用者（`msg.sender`，即 minter）自己的 `amountInMinted`；`account` 是被 burn 的地址，必须持有足够的 `uAsset`。若 `account != msg.sender`，则还必须先授权 `msg.sender` 消耗对应 `uAsset`。
-- `revokeMinter(minter)` 只把 cap 设为 0，不会自动清空历史已铸债务。
+- `revokeMinter(minter)` 只把 cap 设为 0 以禁止后续 mint，不会自动清空历史已铸债务；既有 `amountInMinted` 保留到后续 repay。
+- `transferMinterDebt(from, to, amount)` 当前已实现为 owner-only 操作：要求 `from`、`to` 均非零、彼此不同、`amount` 非零；仅在两个 minter 地址之间迁移未偿债务，不 mint、不 burn、不 transfer，也不改变 `totalSupply` 或任一账户 `balance`。
+- `transferMinterDebt` 执行时减少 `from.amountInMinted`、增加 `to.amountInMinted`，并要求来源 minter 具备足额未偿债务、目标 minter 具备足够 `mintingCap` headroom；用途限定为运维修复或迁移，不用于用户债务豁免。
+- `transferMinterDebt` 只迁移 `uAsset` 的 minter 级债务；若该 minter 还被 `OutrunStakingPositionUpgradeable` 的 position debt、wrap debt 或其他模块账本引用，操作方必须同步完成对应账本迁移，`uAsset` 不会单独更新这些 position/wrap 记录。
 
-因此，`uAsset` 当前不是”全局总债务池”，而是”按 minter 独立记账的铸造额度和未偿债务”。
+因此，`uAsset` 当前不是”全局总债务池”，而是”按 minter 独立记账的铸造额度和未偿债务”；owner 只能迁移这笔 minter 维度债务归属，不能消灭债务或改变总供应，也不能仅靠 `uAsset` 调账就让 position/wrap 账本自动一致。
 
 ## 3. Position debt 账务
 

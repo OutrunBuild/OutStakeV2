@@ -76,6 +76,24 @@ contract OutrunUniversalAssetsUpgradeable is Initializable, IUniversalAssets, Ou
         emit RevokeMinter(minter, oldMintingCap);
     }
 
+    function transferMinterDebt(address from, address to, uint256 amount) external override onlyOwner {
+        require(from != address(0) && to != address(0) && from != to && amount != 0, ZeroInput());
+
+        MintingStatus storage fromStatus = _mintingStatus(from);
+        uint256 fromAmountInMinted = fromStatus.amountInMinted;
+        require(fromAmountInMinted >= amount, ReachBurnCap());
+
+        MintingStatus storage toStatus = _mintingStatus(to);
+        uint256 toAmountInMinted = toStatus.amountInMinted;
+        uint256 toMintingCap = toStatus.mintingCap;
+        require(toMintingCap >= toAmountInMinted && amount <= toMintingCap - toAmountInMinted, ReachMintCap());
+
+        fromStatus.amountInMinted = fromAmountInMinted - amount;
+        toStatus.amountInMinted = toAmountInMinted + amount;
+
+        emit TransferMinterDebt(from, to, amount);
+    }
+
     function mint(address receiver, uint256 amount) external override whenNotPaused {
         require(amount != 0 && receiver != address(0), ZeroInput());
 

@@ -102,21 +102,48 @@ contract MockERC20 is ERC20 {
 }
 
 contract MockUAsset is ERC20, IUniversalAssets {
+    address public immutable owner;
+
     mapping(address minter => MintingStatus) public mintingStatusTable;
 
-    constructor() ERC20("Mock UAsset", "mUAsset") {}
+    error OwnableUnauthorizedAccount(address account);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, OwnableUnauthorizedAccount(msg.sender));
+        _;
+    }
+
+    constructor() ERC20("Mock UAsset", "mUAsset") {
+        owner = msg.sender;
+    }
 
     function checkMintableAmount(address minter) external view returns (uint256 amountInMintable) {
         MintingStatus storage status = mintingStatusTable[minter];
         amountInMintable = status.mintingCap > status.amountInMinted ? status.mintingCap - status.amountInMinted : 0;
     }
 
-    function setMintingCap(address minter, uint256 mintingCap) public {
+    function setMintingCap(address minter, uint256 mintingCap) public onlyOwner {
+        require(minter != address(0), ZeroInput());
         mintingStatusTable[minter].mintingCap = mintingCap;
     }
 
-    function revokeMinter(address minter) external {
+    function revokeMinter(address minter) external onlyOwner {
+        require(minter != address(0), ZeroInput());
         mintingStatusTable[minter].mintingCap = 0;
+    }
+
+    function transferMinterDebt(address from, address to, uint256 amount) external onlyOwner {
+        require(from != address(0) && to != address(0) && from != to && amount != 0, ZeroInput());
+
+        MintingStatus storage fromStatus = mintingStatusTable[from];
+        require(fromStatus.amountInMinted >= amount, ReachBurnCap());
+
+        MintingStatus storage toStatus = mintingStatusTable[to];
+        require(toStatus.mintingCap >= toStatus.amountInMinted, ReachMintCap());
+        require(amount <= toStatus.mintingCap - toStatus.amountInMinted, ReachMintCap());
+
+        fromStatus.amountInMinted -= amount;
+        toStatus.amountInMinted += amount;
     }
 
     function mint(address receiver, uint256 amount) external {

@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {OFTReceipt, SendParam} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
 
 import {OutrunUniversalAssetsUpgradeable} from "../../src/assets/base/OutrunUniversalAssetsUpgradeable.sol";
+import {IUniversalAssets} from "../../src/assets/interfaces/IUniversalAssets.sol";
 import {MockLzEndpoint} from "./helpers/OFTTestHelper.sol";
 import {MockUAssetUUPSV2, MockUAssetUUPSV2DifferentSharedDecimals} from "./mocks/MockUUPSVersion.sol";
 import {ProxyTestHelper} from "./helpers/ProxyTestHelper.sol";
@@ -15,6 +16,7 @@ contract OutrunUniversalAssetsUpgradeableTest is Test {
 
     address internal owner = address(0xA11CE);
     address internal minter = address(0xB0B);
+    address internal otherMinter = address(0xB0B2);
     address internal receiver = address(0xCAFE);
 
     function setUp() external {
@@ -115,6 +117,120 @@ contract OutrunUniversalAssetsUpgradeableTest is Test {
         assertEq(uAsset.balanceOf(receiver), 25e18);
         assertEq(uAsset.totalSupply(), 25e18);
         assertEq(uAsset.checkMintableAmount(minter), 75e18);
+    }
+
+    function testRevokeKeepsDebtClearsCapBlocksMintAndAllowsRepay() external {
+        vm.prank(owner);
+        uAsset.setMintingCap(minter, 100e18);
+
+        vm.prank(minter);
+        uAsset.mint(receiver, 40e18);
+
+        vm.prank(owner);
+        uAsset.revokeMinter(minter);
+
+        IUniversalAssets.MintingStatus memory status = uAsset.mintingStatusTable(minter);
+        assertEq(status.mintingCap, 0);
+        assertEq(status.amountInMinted, 40e18);
+        assertEq(uAsset.checkMintableAmount(minter), 0);
+
+        vm.prank(minter);
+        vm.expectRevert(IUniversalAssets.ReachMintCap.selector);
+        uAsset.mint(receiver, 1);
+
+        vm.prank(receiver);
+        uAsset.approve(minter, 10e18);
+
+        vm.prank(minter);
+        uAsset.repay(receiver, 10e18);
+
+        status = uAsset.mintingStatusTable(minter);
+        assertEq(status.amountInMinted, 30e18);
+        assertEq(uAsset.balanceOf(receiver), 30e18);
+        assertEq(uAsset.totalSupply(), 30e18);
+    }
+
+    function testOwnerCanTransferMinterDebtWithoutChangingSupplyOrBalances() external {
+        vm.prank(owner);
+        uAsset.setMintingCap(minter, 100e18);
+        vm.prank(owner);
+        uAsset.setMintingCap(otherMinter, 50e18);
+
+        vm.prank(minter);
+        uAsset.mint(receiver, 60e18);
+
+        uint256 totalSupplyBefore = uAsset.totalSupply();
+        uint256 receiverBalanceBefore = uAsset.balanceOf(receiver);
+        uint256 minterBalanceBefore = uAsset.balanceOf(minter);
+        uint256 otherMinterBalanceBefore = uAsset.balanceOf(otherMinter);
+
+        vm.prank(owner);
+        uAsset.transferMinterDebt(minter, otherMinter, 25e18);
+
+        IUniversalAssets.MintingStatus memory fromStatus = uAsset.mintingStatusTable(minter);
+        IUniversalAssets.MintingStatus memory toStatus = uAsset.mintingStatusTable(otherMinter);
+        assertEq(fromStatus.amountInMinted, 35e18);
+        assertEq(toStatus.amountInMinted, 25e18);
+        assertEq(fromStatus.mintingCap, 100e18);
+        assertEq(toStatus.mintingCap, 50e18);
+        assertEq(uAsset.totalSupply(), totalSupplyBefore);
+        assertEq(uAsset.balanceOf(receiver), receiverBalanceBefore);
+        assertEq(uAsset.balanceOf(minter), minterBalanceBefore);
+        assertEq(uAsset.balanceOf(otherMinter), otherMinterBalanceBefore);
+    }
+
+    function testTransferMinterDebtRejectsInvalidInputsAndCapOverflow() external {
+        vm.startPrank(owner);
+        uAsset.setMintingCap(minter, 100e18);
+        uAsset.setMintingCap(otherMinter, 20e18);
+        vm.stopPrank();
+
+        vm.prank(minter);
+        uAsset.mint(receiver, 60e18);
+
+        vm.startPrank(owner);
+        vm.expectRevert(IUniversalAssets.ZeroInput.selector);
+        uAsset.transferMinterDebt(address(0), otherMinter, 1);
+
+        vm.expectRevert(IUniversalAssets.ZeroInput.selector);
+        uAsset.transferMinterDebt(minter, address(0), 1);
+
+        vm.expectRevert(IUniversalAssets.ZeroInput.selector);
+        uAsset.transferMinterDebt(minter, otherMinter, 0);
+
+        vm.expectRevert(IUniversalAssets.ReachBurnCap.selector);
+        uAsset.transferMinterDebt(minter, otherMinter, 61e18);
+
+        vm.expectRevert(IUniversalAssets.ReachMintCap.selector);
+        uAsset.transferMinterDebt(minter, otherMinter, 21e18);
+        vm.stopPrank();
+    }
+
+    function testTransferMinterDebtRejectsSameAddressWithoutChangingState() external {
+        vm.prank(owner);
+        uAsset.setMintingCap(minter, 100e18);
+
+        vm.prank(minter);
+        uAsset.mint(receiver, 40e18);
+
+        uint256 totalSupplyBefore = uAsset.totalSupply();
+        uint256 receiverBalanceBefore = uAsset.balanceOf(receiver);
+
+        vm.prank(owner);
+        vm.expectRevert(IUniversalAssets.ZeroInput.selector);
+        uAsset.transferMinterDebt(minter, minter, 10e18);
+
+        IUniversalAssets.MintingStatus memory status = uAsset.mintingStatusTable(minter);
+        assertEq(status.mintingCap, 100e18);
+        assertEq(status.amountInMinted, 40e18);
+        assertEq(uAsset.totalSupply(), totalSupplyBefore);
+        assertEq(uAsset.balanceOf(receiver), receiverBalanceBefore);
+    }
+
+    function testNonOwnerCannotTransferMinterDebt() external {
+        vm.prank(minter);
+        vm.expectRevert();
+        uAsset.transferMinterDebt(minter, otherMinter, 1);
     }
 
     function testOutboundRateLimitThroughProxy() external {

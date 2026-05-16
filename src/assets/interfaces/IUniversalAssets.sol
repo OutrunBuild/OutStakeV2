@@ -41,6 +41,16 @@ interface IUniversalAssets {
     function revokeMinter(address minter) external;
 
     /**
+     * @notice Transfers outstanding minted debt from one minter record to another.
+     * @dev Owner-only debt accounting operation. Does not mint, burn, transfer, or change total supply.
+     * `from` and `to` must be nonzero, distinct minter records.
+     * @param from Minter whose outstanding debt is decreased.
+     * @param to Minter whose outstanding debt is increased.
+     * @param amount Amount of outstanding debt to transfer.
+     */
+    function transferMinterDebt(address from, address to, uint256 amount) external;
+
+    /**
      * @notice Mints uAsset to a receiver using the caller's minting allowance.
      * @dev `msg.sender` is the minter whose `amountInMinted` increases and whose cap is checked.
      * @param receiver Address receiving the minted uAsset.
@@ -64,6 +74,8 @@ interface IUniversalAssets {
     event SetMintingCap(address indexed minter, uint256 oldMintingCap, uint256 newMintingCap);
 
     event RevokeMinter(address indexed minter, uint256 oldMintingCap);
+
+    event TransferMinterDebt(address indexed from, address indexed to, uint256 amount);
 
     error ZeroInput();
 

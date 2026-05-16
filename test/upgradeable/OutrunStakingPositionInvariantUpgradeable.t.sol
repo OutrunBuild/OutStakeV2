@@ -216,7 +216,6 @@ contract PositionHandler is Test {
         uint256 uAssetNeeded = _estimateUAssetBurn(positionId, syRedeemed);
         if (uAsset.balanceOf(actor) < uAssetNeeded) {
             // Mint more uAsset to actor for testing
-            uAsset.setMintingCap(address(this), type(uint256).max);
             uAsset.mint(actor, uAssetNeeded - uAsset.balanceOf(actor) + 1e18);
         }
 
@@ -260,7 +259,6 @@ contract PositionHandler is Test {
 
         // Ensure keeper has enough uAsset
         if (uAsset.balanceOf(keeper) < amountInUAsset) {
-            uAsset.setMintingCap(address(this), type(uint256).max);
             uAsset.mint(keeper, amountInUAsset - uAsset.balanceOf(keeper) + 1e18);
         }
 
@@ -380,6 +378,7 @@ contract OutrunStakingPositionInvariantTest is StdInvariant, Test {
         uAsset.setMintingCap(address(position), type(uint256).max);
 
         handler = new PositionHandler(position, sy, uAsset, underlying, owner, keeper, revenuePool);
+        uAsset.setMintingCap(address(handler), type(uint256).max);
 
         // Target the handler for invariant testing
         targetContract(address(handler));

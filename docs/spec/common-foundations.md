@@ -22,6 +22,10 @@
 - `1e18` 是统一换算基准
 - oracle-backed upgradeable adapters 通过 `exchangeRateOracle` storage 读取外部汇率
 - `OutrunExchangeOracleAdapter` 只做精度归一化，不做 freshness、bounds、fallback 或多源聚合
+- `uAsset` minter 债务由 `amountInMinted` 记录；`revokeMinter(minter)` 通过把 `mintingCap` 置零禁止后续 mint，但保留既有 `amountInMinted` 直到偿还
+- `transferMinterDebt(from, to, amount)` 当前已实现为 owner-only 操作：要求 `from`、`to` 均非零、彼此不同、`amount` 非零；仅在两个 minter 地址之间迁移未偿债务，不 mint、不 burn、不 transfer，也不改变 `totalSupply` 或任一账户 `balance`
+- `transferMinterDebt` 执行时减少 `from.amountInMinted`、增加 `to.amountInMinted`，并要求来源 minter 具备足额未偿债务、目标 minter 具备足够 `mintingCap` headroom；用途限定为运维修复或迁移，不用于用户债务豁免
+- `transferMinterDebt` 只迁移 `uAsset` 的 minter 级债务；若该 minter 还受 position、wrap 等模块账本约束，操作方只能在这些账本保持一致的协调迁移流程中使用它，`uAsset` 本身不会同步更新 position/wrap 台账
 
 ## Pause 与跨链 OFT 执行边界
 
