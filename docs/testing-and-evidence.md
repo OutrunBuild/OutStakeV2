@@ -8,7 +8,7 @@
 - `test/deploy/`
 - `test/support/`
 
-`test/upgradeable/` 是当前产品测试主入口，覆盖 upgradeable assets、position、router proxy integration、SY base、proxy-backed adapters、oracle setter、fork-only SY adapter evidence、fuzz、invariant 和 adversarial cases。
+`test/upgradeable/` 是当前产品测试主入口，覆盖 upgradeable assets、position、router proxy integration、SY base、proxy-backed adapters、oracle setter、SY adapter fork coverage、fuzz、invariant 和 adversarial cases。`SYAdaptersFork.t.sol` 中已有固定 block 的 Ethereum mainnet、BSC mainnet、Optimism mainnet 与 Base mainnet fork evidence；没有固定 block 的 fork 结果不得作为可审计 pinned-block evidence。
 
 `test/deploy/` 覆盖 upgradeable deployment scripts。
 
@@ -42,3 +42,4 @@
 
 - 外部协议真实结算、价格更新、队列、权限和可用性仍属于外部依赖。
 - 当前测试更偏向统一 proxy-backed 回归，而非每个 adapter 的独立专项集。
+- `npm run test:fork` 当前运行 `SYAdaptersFork.t.sol` 的 pinned fork coverage：Ethereum mainnet block `25_108_887`、BSC mainnet block `98_653_065`、Optimism mainnet block `151_675_883` 与 Base mainnet block `46_080_598`。只有测试显式固定 block number 并记录可复现 trace 后，运行结果才可作为 pinned-block evidence；当前仓内 fork 环境变量名是 `ETHEREUM_MAINNET_RPC`、`BSC_MAINNET_RPC`、`OPTIMISM_MAINNET_RPC` 和 `BASE_MAINNET_RPC`，不得改写为 `MAINNET_RPC_URL`、`BSC_RPC_URL` 或其他别名。

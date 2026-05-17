@@ -18,6 +18,7 @@ import {OutrunStakedUsdsSYUpgradeable} from "../../src/yield/adapters/sky/Outrun
 import {OutrunL2StakedUsdsSYUpgradeable} from "../../src/yield/adapters/sky/OutrunL2StakedUsdsSYUpgradeable.sol";
 import {OutrunSlisBNBSYUpgradeable} from "../../src/yield/adapters/lista/OutrunSlisBNBSYUpgradeable.sol";
 import {OutrunAsBNBSYUpgradeable} from "../../src/yield/adapters/aster/OutrunAsBNBSYUpgradeable.sol";
+import {IStandardizedYield} from "../../src/yield/interfaces/IStandardizedYield.sol";
 import {ProxyTestHelper} from "./helpers/ProxyTestHelper.sol";
 
 contract MockToken is ERC20 {
@@ -617,6 +618,103 @@ contract SYAdaptersUpgradeableTest is Test {
         vm.stopPrank();
     }
 
+    function testAdapterMatrixTokensPreviewExchangeRateAndInvalidTokenReverts() external {
+        MockToken underlying = new MockToken("Underlying", "UND", 18);
+        MockAToken aToken = new MockAToken(address(underlying));
+        MockAavePool aavePool = new MockAavePool();
+        aavePool.setReserve(address(underlying), aToken, 1e27);
+        address aave = ProxyTestHelper.deploy(
+            address(new OutrunAaveV3SYUpgradeable()),
+            abi.encodeCall(
+                OutrunAaveV3SYUpgradeable.initialize, ("SY Aave", "SYA", address(aToken), address(aavePool), owner)
+            )
+        );
+        _assertAdapterMatrix(
+            aave, _tokens(address(underlying), address(aToken)), _tokens(address(underlying), address(aToken))
+        );
+
+        MockToken eETH = new MockToken("eETH", "eETH", 18);
+        address weETH = _deployWeETHWith(eETH);
+        _assertAdapterMatrix(
+            weETH, _tokens(NATIVE, address(eETH), address(token)), _tokens(address(eETH), address(token))
+        );
+
+        MockStETH stETH = new MockStETH();
+        MockWstETH wstETH = new MockWstETH(address(stETH));
+        address lido = ProxyTestHelper.deploy(
+            address(new OutrunWstETHSYUpgradeable()),
+            abi.encodeCall(OutrunWstETHSYUpgradeable.initialize, (owner, address(stETH), address(wstETH)))
+        );
+        _assertAdapterMatrix(
+            lido, _tokens(address(wstETH), NATIVE, address(stETH)), _tokens(address(wstETH), address(stETH))
+        );
+
+        _assertAdapterMatrix(_deployL2WstETH(), _tokens(address(token)), _tokens(address(token)));
+
+        MockToken l2WstEth = new MockToken("wstETH", "wstETH", 18);
+        MockL2StETH l2StEth = new MockL2StETH(address(l2WstEth), 2 ether);
+        address l2Wrappable = ProxyTestHelper.deploy(
+            address(new OutrunL2WrappableWstETHSYUpgradeable()),
+            abi.encodeWithSelector(
+                OutrunL2WrappableWstETHSYUpgradeable.initialize.selector,
+                owner,
+                address(l2StEth),
+                address(l2WstEth),
+                address(l2StEth),
+                18
+            )
+        );
+        _assertAdapterMatrix(
+            l2Wrappable, _tokens(address(l2StEth), address(l2WstEth)), _tokens(address(l2StEth), address(l2WstEth))
+        );
+
+        MockToken usde = new MockToken("USDe", "USDe", 18);
+        MockVault sUSDe = new MockVault(address(usde));
+        address ethena = ProxyTestHelper.deploy(
+            address(new OutrunStakedUSDeSYUpgradeable()),
+            abi.encodeCall(OutrunStakedUSDeSYUpgradeable.initialize, (owner, address(usde), address(sUSDe)))
+        );
+        _assertAdapterMatrix(ethena, _tokens(address(sUSDe), address(usde)), _tokens(address(sUSDe)));
+
+        MockToken usds = new MockToken("USDS", "USDS", 18);
+        MockVault sUSDS = new MockVault(address(usds));
+        address sky = ProxyTestHelper.deploy(
+            address(new OutrunStakedUsdsSYUpgradeable()),
+            abi.encodeCall(OutrunStakedUsdsSYUpgradeable.initialize, (owner, address(usds), address(sUSDS)))
+        );
+        _assertAdapterMatrix(sky, _tokens(address(sUSDS), address(usds)), _tokens(address(sUSDS), address(usds)));
+
+        MockToken usdc = new MockToken("USDC", "USDC", 6);
+        MockToken l2Usds = new MockToken("USDS", "USDS", 18);
+        MockToken l2sUSDS = new MockToken("sUSDS", "sUSDS", 18);
+        address skyL2 = ProxyTestHelper.deploy(
+            address(new OutrunL2StakedUsdsSYUpgradeable()),
+            abi.encodeCall(
+                OutrunL2StakedUsdsSYUpgradeable.initialize,
+                (owner, address(usdc), address(l2Usds), address(l2sUSDS), address(new MockPSM3()))
+            )
+        );
+        _assertAdapterMatrix(
+            skyL2,
+            _tokens(address(usdc), address(l2Usds), address(l2sUSDS)),
+            _tokens(address(usdc), address(l2Usds), address(l2sUSDS))
+        );
+
+        _assertAdapterMatrix(_deployLista(), _tokens(NATIVE, address(token)), _tokens(address(token)));
+
+        MockListaStakeManager stakeManager = new MockListaStakeManager();
+        MockYieldProxy yieldProxy = new MockYieldProxy(address(stakeManager));
+        MockToken slis = new MockToken("slisBNB", "slisBNB", 18);
+        MockAsBnbMinter minter = new MockAsBnbMinter(address(token), address(slis), address(yieldProxy));
+        address aster = ProxyTestHelper.deploy(
+            address(new OutrunAsBNBSYUpgradeable()),
+            abi.encodeCall(OutrunAsBNBSYUpgradeable.initialize, (owner, address(token), address(slis), address(minter)))
+        );
+        _assertAdapterMatrix(aster, _tokens(NATIVE, address(slis), address(token)), _tokens(address(token)));
+
+        _assertAdapterMatrix(_deployL2Staked(), _tokens(address(token)), _tokens(address(token)));
+    }
+
     function testL2StakedRedeemTransfersRequestedTokenOut() external {
         MockToken tokenOut = new MockToken("Token Out", "OUT", 18);
         TestOutrunL2StakedTokenSYUpgradeable impl = new TestOutrunL2StakedTokenSYUpgradeable();
@@ -853,6 +951,68 @@ contract SYAdaptersUpgradeableTest is Test {
         assertEq(_asSY(sy).balanceOf(user), 0);
     }
 
+    function _assertAdapterMatrix(address sy, address[] memory expectedTokensIn, address[] memory expectedTokensOut)
+        internal
+    {
+        address[] memory tokensIn = _asSY(sy).getTokensIn();
+        assertEq(tokensIn.length, expectedTokensIn.length);
+        for (uint256 i; i < expectedTokensIn.length; ++i) {
+            assertTrue(_contains(tokensIn, expectedTokensIn[i]));
+            assertTrue(_asSY(sy).isValidTokenIn(expectedTokensIn[i]));
+            assertGt(_asSY(sy).previewDeposit(expectedTokensIn[i], AMOUNT), 0);
+        }
+        for (uint256 i; i < tokensIn.length; ++i) {
+            assertTrue(_contains(expectedTokensIn, tokensIn[i]));
+            assertTrue(_asSY(sy).isValidTokenIn(tokensIn[i]));
+        }
+
+        address[] memory tokensOut = _asSY(sy).getTokensOut();
+        assertEq(tokensOut.length, expectedTokensOut.length);
+        for (uint256 i; i < expectedTokensOut.length; ++i) {
+            assertTrue(_contains(tokensOut, expectedTokensOut[i]));
+            assertTrue(_asSY(sy).isValidTokenOut(expectedTokensOut[i]));
+            assertGt(_asSY(sy).previewRedeem(expectedTokensOut[i], AMOUNT), 0);
+        }
+        for (uint256 i; i < tokensOut.length; ++i) {
+            assertTrue(_contains(expectedTokensOut, tokensOut[i]));
+            assertTrue(_asSY(sy).isValidTokenOut(tokensOut[i]));
+        }
+
+        assertGt(_asSY(sy).exchangeRate(), 0);
+
+        address invalid = address(new MockToken("Invalid", "BAD", 18));
+        vm.expectRevert(abi.encodeWithSelector(IStandardizedYield.SYInvalidTokenIn.selector, invalid));
+        _asSY(sy).deposit(user, invalid, AMOUNT, 0);
+
+        vm.expectRevert(abi.encodeWithSelector(IStandardizedYield.SYInvalidTokenOut.selector, invalid));
+        _asSY(sy).redeem(user, AMOUNT, invalid, 0, false);
+    }
+
+    function _contains(address[] memory tokens, address token_) internal pure returns (bool) {
+        for (uint256 i; i < tokens.length; ++i) {
+            if (tokens[i] == token_) return true;
+        }
+        return false;
+    }
+
+    function _tokens(address token0) internal pure returns (address[] memory tokens) {
+        tokens = new address[](1);
+        tokens[0] = token0;
+    }
+
+    function _tokens(address token0, address token1) internal pure returns (address[] memory tokens) {
+        tokens = new address[](2);
+        tokens[0] = token0;
+        tokens[1] = token1;
+    }
+
+    function _tokens(address token0, address token1, address token2) internal pure returns (address[] memory tokens) {
+        tokens = new address[](3);
+        tokens[0] = token0;
+        tokens[1] = token1;
+        tokens[2] = token2;
+    }
+
     function _assertSY(address sy, string memory name_, string memory symbol_, address ybt) internal {
         assertEq(_asSY(sy).name(), name_);
         assertEq(_asSY(sy).symbol(), symbol_);
@@ -884,13 +1044,17 @@ contract SYAdaptersUpgradeableTest is Test {
     }
 
     function _deployWeETH() internal returns (address) {
+        return _deployWeETHWith(new MockToken("eETH", "eETH", 18));
+    }
+
+    function _deployWeETHWith(MockToken eETH) internal returns (address) {
         OutrunWeETHSYUpgradeable impl = new OutrunWeETHSYUpgradeable();
         MockLiquidityPool pool = new MockLiquidityPool();
         return ProxyTestHelper.deploy(
             address(impl),
             abi.encodeCall(
                 OutrunWeETHSYUpgradeable.initialize,
-                (owner, address(new MockToken("eETH", "eETH", 18)), address(token), address(0xDAD), address(pool))
+                (owner, address(eETH), address(token), address(0xDAD), address(pool))
             )
         );
     }
