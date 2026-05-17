@@ -96,6 +96,19 @@ contract OutrunStakingPositionFuzzTest is Test {
         return SYUtils.assetToSy(rate, assetAmount);
     }
 
+    function _assetToSyUp(uint256 assetAmount, uint256 rate) internal pure returns (uint256) {
+        return SYUtils.assetToSyUp(rate, assetAmount);
+    }
+
+    function _expectedRedeemBurn(uint256 positionUAssetMinted, uint256 syRedeemed, uint256 syStaked)
+        internal
+        pure
+        returns (uint256)
+    {
+        if (syRedeemed == syStaked) return positionUAssetMinted;
+        return Math.mulDiv(positionUAssetMinted, syRedeemed, syStaked, Math.Rounding.Ceil);
+    }
+
     // ============================================
     // 1. Stake + DrawUAsset Fuzz
     // ============================================
@@ -162,7 +175,7 @@ contract OutrunStakingPositionFuzzTest is Test {
 
         // Calculate expected pro-rata burn
         uint256 totalUAssetMinted = _syToAsset(amountInSY, newRate);
-        uint256 expectedBurn = Math.mulDiv(totalUAssetMinted, syRedeemed, amountInSY);
+        uint256 expectedBurn = _expectedRedeemBurn(totalUAssetMinted, syRedeemed, amountInSY);
 
         assertEq(uAssetBurned, expectedBurn, "pro-rata burn should match calculation");
         assertEq(syOut, syRedeemed, "SY out should equal redeemed amount");
@@ -171,6 +184,75 @@ contract OutrunStakingPositionFuzzTest is Test {
         (, uint256 remainingSyStaked, uint256 remainingUAssetMinted,,) = position.positions(positionId);
         assertEq(remainingSyStaked, amountInSY - syRedeemed, "remaining syStaked incorrect");
         assertEq(remainingUAssetMinted, totalUAssetMinted - expectedBurn, "remaining UAssetMinted incorrect");
+    }
+
+    function testRedeem_PartialLowRateRevertsWhenRoundedBurnConsumesAllDebt() public {
+        bytes4 partialCloseError = bytes4(keccak256("PartialRedeemMustLeaveDebt()"));
+
+        sy.setExchangeRate(5e17);
+
+        vm.prank(owner);
+        (uint256 positionId, uint256 minted) = position.stake(2, 30, owner, owner);
+        assertEq(minted, 1, "minted debt should be 1 at low rate");
+
+        vm.warp(block.timestamp + 31 days);
+
+        vm.expectRevert(partialCloseError);
+        position.previewRedeem(positionId, 1, address(sy));
+
+        vm.prank(owner);
+        vm.expectRevert(partialCloseError);
+        position.redeem(positionId, 1, owner, address(sy), 0);
+    }
+
+    function testRedeem_PartialRoundsDebtBurnUpForPreviewAndExecution() public {
+        sy.setExchangeRate(8e17);
+
+        vm.prank(owner);
+        (uint256 positionId, uint256 minted) = position.stake(3, 30, owner, owner);
+        assertEq(minted, 2, "minted debt should be 2 at low rate");
+
+        vm.warp(block.timestamp + 31 days);
+
+        (uint256 previewBurn, uint256 previewSyOut) = position.previewRedeem(positionId, 1, address(sy));
+        assertEq(previewBurn, 1, "preview should round debt burn up");
+        assertEq(previewSyOut, 1, "preview SY out should match redeemed SY");
+
+        vm.prank(owner);
+        (uint256 actualBurn, uint256 actualSyOut) = position.redeem(positionId, 1, owner, address(sy), 0);
+
+        assertEq(actualBurn, 1, "redeem should round debt burn up");
+        assertEq(actualSyOut, 1, "redeem SY out should match redeemed SY");
+
+        (, uint256 remainingSyStaked, uint256 remainingUAssetMinted,,) = position.positions(positionId);
+        assertEq(remainingSyStaked, 2, "remaining SY should be preserved");
+        assertEq(remainingUAssetMinted, 1, "remaining debt should reflect rounded burn");
+    }
+
+    function testRedeem_FullLowRateBurnsExactRemainingDebt() public {
+        sy.setExchangeRate(5e17);
+
+        vm.prank(owner);
+        (uint256 positionId, uint256 minted) = position.stake(2, 30, owner, owner);
+        assertEq(minted, 1, "minted debt should be 1 at low rate");
+
+        vm.warp(block.timestamp + 31 days);
+
+        (uint256 previewBurn, uint256 previewSyOut) = position.previewRedeem(positionId, 2, address(sy));
+        assertEq(previewBurn, minted, "full preview should burn all remaining debt");
+        assertEq(previewSyOut, 2, "full preview SY out should match redeemed SY");
+
+        vm.prank(owner);
+        (uint256 actualBurn, uint256 actualSyOut) = position.redeem(positionId, 2, owner, address(sy), 0);
+
+        assertEq(actualBurn, minted, "full redeem should burn exact remaining debt");
+        assertEq(actualSyOut, 2, "full redeem SY out should match redeemed SY");
+
+        (address positionOwner, uint256 remainingSyStaked, uint256 remainingUAssetMinted,,) =
+            position.positions(positionId);
+        assertEq(positionOwner, address(0), "position should be deleted after full redeem");
+        assertEq(remainingSyStaked, 0, "full redeem should leave no SY");
+        assertEq(remainingUAssetMinted, 0, "full redeem should leave no debt");
     }
 
     // ============================================
@@ -408,6 +490,29 @@ contract OutrunStakingPositionFuzzTest is Test {
     // 7. HarvestWrapYield Fuzz
     // ============================================
 
+    function testHarvestWrapYieldRetainsCeilingDebtCoverageForNonDivisibleRate() public {
+        uint256 amountInSY = 1e18;
+
+        vm.prank(owner);
+        uint256 wrapUAssetMinted = position.wrapStake(amountInSY, owner);
+        assertEq(wrapUAssetMinted, amountInSY, "wrap stake should mint debt at rate 1e18");
+
+        sy.setExchangeRate(3e18);
+
+        vm.prank(owner);
+        position.harvestWrapYield(address(sy), 0);
+
+        uint256 remainingWrapSY = position.syWrapStaking();
+        uint256 expectedRemainingWrapSY = SYUtils.assetToSyUp(3e18, position.wrapUAssetDebt());
+
+        assertEq(remainingWrapSY, expectedRemainingWrapSY, "harvest should retain ceiling debt coverage");
+        assertGe(
+            SYUtils.syToAsset(3e18, remainingWrapSY),
+            position.wrapUAssetDebt(),
+            "remaining wrap SY must still cover wrap debt"
+        );
+    }
+
     function testFuzz_HarvestWrapYield(uint256 amountInSY, uint256 newRate) public {
         amountInSY = _boundAmount(amountInSY);
         newRate = bound(newRate, 1e18, RATE_MAX);
@@ -421,7 +526,7 @@ contract OutrunStakingPositionFuzzTest is Test {
 
         // Calculate expected harvest
         uint256 wrapPoolSY = amountInSY;
-        uint256 wrapDebtInSY = _assetToSy(amountInSY, newRate);
+        uint256 wrapDebtInSY = _assetToSyUp(amountInSY, newRate);
         uint256 expectedHarvest = wrapPoolSY > wrapDebtInSY ? wrapPoolSY - wrapDebtInSY : 0;
 
         // Harvest
@@ -431,10 +536,15 @@ contract OutrunStakingPositionFuzzTest is Test {
         assertEq(harvested, expectedHarvest, "harvested amount incorrect");
         assertEq(sy.balanceOf(revenuePool), expectedHarvest, "revenue pool should receive harvest");
 
-        // After harvest, syWrapStaking >= assetToSy(wrapUAssetDebt, rate) to prevent underflow
+        // After harvest, syWrapStaking must retain ceiling SY coverage for wrap debt.
         uint256 remainingWrapSY = position.syWrapStaking();
-        uint256 remainingDebtSY = _assetToSy(position.wrapUAssetDebt(), newRate);
+        uint256 remainingDebtSY = _assetToSyUp(position.wrapUAssetDebt(), newRate);
         assertGe(remainingWrapSY, remainingDebtSY, "remaining wrap SY should cover debt");
+        assertGe(
+            SYUtils.syToAsset(newRate, remainingWrapSY),
+            position.wrapUAssetDebt(),
+            "remaining wrap SY asset value should cover debt"
+        );
     }
 
     function testFuzz_HarvestWrapYieldReturnsZeroWhenNoYield(uint256 amountInSY, uint256 newRate) public {

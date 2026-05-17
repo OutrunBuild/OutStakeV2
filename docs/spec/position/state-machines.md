@@ -49,8 +49,11 @@
 
 1. 前置状态：position 存在；调用者是 owner；`block.timestamp >= deadline`；合约未 paused。
 2. 输入校验：`syRedeemed` 不能为 0，且不能超过当前 `position.syStaked`。
-3. debt 计算：按仓位内部比例算出 `UAssetBurned`。
-4. debt 清偿：对调用者执行 `uAsset.repay(msg.sender, UAssetBurned)`。
+3. debt 计算：
+   - 若 `syRedeemed == position.syStaked`，则 `UAssetBurned = position.UAssetMinted`
+   - 若 `syRedeemed < position.syStaked`，则 `UAssetBurned = ceil(position.UAssetMinted * syRedeemed / position.syStaked)`
+   - 若 partial redeem 算出的 `UAssetBurned` 会等于或超过 `position.UAssetMinted`，则该路径回退，用户必须改走 full redeem
+4. debt 清偿：position 层先完成上述判定，再对调用者执行 `uAsset.repay(msg.sender, UAssetBurned)`；语义上不依赖下游 `uAsset.repay(0)` 之类的零额 repay。
 5. position 更新：
    - `syTotalStaking` 减少 `syRedeemed`
    - `position.syStaked` 减少 `syRedeemed`
@@ -60,6 +63,8 @@
    - `tokenOut == SY` 时先检查 `syRedeemed >= minTokenOut`，再直接转出 `SY`
    - 否则调用 `SY.redeem(receiver, syRedeemed, tokenOut, minTokenOut, false)` 产出目标 token
 7. 完成状态：position 进入“部分赎回后继续存在”或“已清空删除”。
+
+对应的 `previewRedeem(positionId, syRedeemed, tokenOut)` 必须复用同一条 full / partial 判定：full redeem 预览全部剩余 debt，partial redeem 用 ceiling rounding，且不会返回一个执行期会因“partial consume all debt”而被拒绝的报价。
 
 ## 5. Wrap stake / wrap redeem 生命周期
 
@@ -115,7 +120,7 @@
 
 ## 7. Harvest wrap yield 生命周期
 
-`harvestWrapYield(tokenOut, minTokenOut)` 用于提取 wrap 池中超出债务等价 SY 的超额收益，当前状态机如下：
+`harvestWrapYield(tokenOut, minTokenOut)` 的批准修复语义是：只提取 wrap 池中超过当前 exchangeRate 下 wrap debt 最低覆盖需求的那部分 `SY` 超额收益。对应状态机应为：
 
 1. 前置状态：
    - 调用者必须是 position 合约的 `owner`
@@ -123,7 +128,7 @@
 
 2. 盈余计算：
    - 读取 `wrapPoolSY = syWrapStaking`
-   - 计算 `wrapDebtInSY = assetToSy(wrapUAssetDebt)`（用当前 exchangeRate 换算）
+   - 计算 `wrapDebtInSY = assetToSyUp(wrapUAssetDebt)`（用当前 exchangeRate 向上取整换算，保留足够的 `SY` 覆盖 wrap debt）
    - 若 `wrapPoolSY <= wrapDebtInSY`，则返回 0，状态不变
    - 否则 `harvestAmount = wrapPoolSY - wrapDebtInSY`
 
@@ -137,7 +142,7 @@
    - 否则调用 `SY.redeem(revenuePool, harvestAmount, tokenOut, minTokenOut, false)` 将收益兑换为 tokenOut
 
 5. 后置条件：
-   - wrap 池仍有足够的 SY 覆盖 `wrapUAssetDebt`（即 `syWrapStaking >= assetToSy(wrapUAssetDebt)`）
+   - wrap 池仍有足够的 SY 覆盖 `wrapUAssetDebt`（即 `syWrapStaking >= assetToSyUp(wrapUAssetDebt)`，等价于 `syToAsset(exchangeRate, syWrapStaking) >= wrapUAssetDebt`）
    - `revenuePool` 收到超额收益
    - 用户 `uAsset` 债务不变
 

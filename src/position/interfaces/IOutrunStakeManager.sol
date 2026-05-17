@@ -29,6 +29,7 @@ interface IOutrunStakeManager {
     error ExceedsPositionBalance(uint256 requested, uint256 available);
     error ExceedsWrapPoolBalance(uint256 requested, uint256 available);
     error NothingToDraw();
+    error PartialRedeemMustLeaveDebt();
     error SYTransferFailed();
     error InsufficientTokenOut(uint256 actual, uint256 minExpected);
 
@@ -118,8 +119,9 @@ interface IOutrunStakeManager {
 
     /**
      * @notice Previews a position redemption into SY or another output token.
-     * @dev Quote-only. Debt burn is proportional to `syRedeemed / position.syStaked`. Token output is either
-     * direct SY or the current `SY.previewRedeem` result for `tokenOut`.
+     * @dev Quote-only. Full redeem burns all remaining position debt; partial redeem uses ceiling rounding and
+     * rejects any partial path that would consume all remaining debt. Token output is either direct SY or the
+     * current `SY.previewRedeem` result for `tokenOut`.
      * @param positionId Identifier of the position being redeemed.
      * @param syRedeemed Amount of SY principal to redeem from the position.
      * @param tokenOut Token requested on redemption.
@@ -177,8 +179,9 @@ interface IOutrunStakeManager {
 
     /**
      * @notice Redeems part or all of a position after lock expiry.
-     * @dev Position-owner path. Burns uAsset from the caller via `repay`, reduces position principal/debt
-     * proportionally, and enforces `minTokenOut` on direct SY or downstream SY redemption.
+     * @dev Position-owner path. Burns uAsset from the caller via `repay`. Full redeem burns all remaining
+     * position debt; partial redeem uses ceiling rounding and rejects any partial path that would consume all
+     * remaining debt. Enforces `minTokenOut` on direct SY or downstream SY redemption.
      * @param positionId Identifier of the position to redeem from.
      * @param syRedeemed Amount of SY principal to redeem.
      * @param receiver Address receiving the redemption proceeds.

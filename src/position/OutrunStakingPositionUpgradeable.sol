@@ -158,10 +158,10 @@ contract OutrunStakingPositionUpgradeable is
     {
         Position storage position = _getStorage().positions[positionId];
         if (position.owner == address(0)) revert PositionAccessDenied();
-        if (syRedeemed == 0) revert ZeroInput();
-        if (syRedeemed > position.syStaked) revert ExceedsPositionBalance(syRedeemed, position.syStaked);
+        _validateRedeemAmount(position.syStaked, syRedeemed);
 
-        UAssetBurned = Math.mulDiv(position.UAssetMinted, syRedeemed, position.syStaked);
+        // Partial redeem debt uses ceil so redeemed SY cannot leave rounded debt dust on the remaining position.
+        UAssetBurned = _computeRedeemPositionDebt(position.UAssetMinted, syRedeemed, position.syStaked);
         amountTokenOut = _previewTokenOut(SY(), tokenOut, syRedeemed);
     }
 
@@ -184,7 +184,7 @@ contract OutrunStakingPositionUpgradeable is
         _transferIn(_SY, msg.sender, amountInSY);
 
         uint256 principalValue = _syToAsset(amountInSY);
-        _checkUAssetMintCap(principalValue);
+        _checkUAssetMintCap(_uAsset, principalValue);
 
         OutrunStakingPositionStorage storage $ = _getStorage();
         unchecked {
@@ -223,7 +223,7 @@ contract OutrunStakingPositionUpgradeable is
         position.UAssetMinted += amountInUAsset;
 
         address _uAsset = uAsset();
-        _checkUAssetMintCap(amountInUAsset);
+        _checkUAssetMintCap(_uAsset, amountInUAsset);
         IUniversalAssets(_uAsset).mint(recipient, amountInUAsset);
         emit DrawUAsset(positionId, recipient, amountInUAsset);
     }
@@ -240,7 +240,7 @@ contract OutrunStakingPositionUpgradeable is
         _transferIn(_SY, msg.sender, amountInSY);
 
         uint256 principalValue = _syToAsset(amountInSY);
-        _checkUAssetMintCap(principalValue);
+        _checkUAssetMintCap(_uAsset, principalValue);
 
         OutrunStakingPositionStorage storage $ = _getStorage();
         unchecked {
@@ -285,6 +285,7 @@ contract OutrunStakingPositionUpgradeable is
 
         address _SY = SY();
         address _uAsset = uAsset();
+        // Floor here so wrap redeem never releases more SY than the repaid wrap debt slice accounts for.
         uint256 amountInSY = _assetToSy(amountInUAsset);
         if (amountInSY > $.syWrapStaking) revert ExceedsWrapPoolBalance(amountInSY, $.syWrapStaking);
 
@@ -331,6 +332,7 @@ contract OutrunStakingPositionUpgradeable is
         UAssetBurned = amountInUAsset;
         IUniversalAssets(_uAsset).repay(msg.sender, UAssetBurned);
 
+        // Floor debt->SY, then clamp, so keeper principal never exceeds the redeemed debt slice in SY.
         keeperPrincipalSY = _assetToSy(UAssetBurned);
         uint256 syRedeemed = Math.mulDiv(syStaked, amountInUAsset, positionUAssetMinted);
         if (keeperPrincipalSY > syRedeemed) keeperPrincipalSY = syRedeemed;
@@ -352,7 +354,8 @@ contract OutrunStakingPositionUpgradeable is
     {
         OutrunStakingPositionStorage storage $ = _getStorage();
         uint256 wrapPoolSY = $.syWrapStaking;
-        uint256 wrapDebtInSY = _assetToSy($.wrapUAssetDebt);
+        // Ceil here so harvest leaves enough SY in the wrap pool to keep all remaining debt covered.
+        uint256 wrapDebtInSY = SYUtils.assetToSyUp(IStandardizedYield(SY()).exchangeRate(), $.wrapUAssetDebt);
         if (wrapPoolSY <= wrapDebtInSY) return 0;
 
         uint256 amountInSY = wrapPoolSY - wrapDebtInSY;
@@ -408,8 +411,8 @@ contract OutrunStakingPositionUpgradeable is
         if (amountInSY < minStake_) revert MinStakeInsufficient(minStake_);
     }
 
-    function _checkUAssetMintCap(uint256 amount) internal view {
-        if (IUniversalAssets(uAsset()).checkMintableAmount(address(this)) < amount) {
+    function _checkUAssetMintCap(address _uAsset, uint256 amount) internal view {
+        if (IUniversalAssets(_uAsset).checkMintableAmount(address(this)) < amount) {
             revert UAssetMintingCapReached();
         }
     }
@@ -461,10 +464,9 @@ contract OutrunStakingPositionUpgradeable is
 
         uint256 syStaked = position.syStaked;
         uint256 positionUAssetMinted = position.UAssetMinted;
-        if (syRedeemed == 0) revert ZeroInput();
-        if (syRedeemed > syStaked) revert ExceedsPositionBalance(syRedeemed, syStaked);
+        _validateRedeemAmount(syStaked, syRedeemed);
 
-        UAssetBurned = Math.mulDiv(positionUAssetMinted, syRedeemed, syStaked);
+        UAssetBurned = _computeRedeemPositionDebt(positionUAssetMinted, syRedeemed, syStaked);
     }
 
     // slither-disable-next-line reentrancy-no-eth
@@ -472,6 +474,23 @@ contract OutrunStakingPositionUpgradeable is
         Position storage position = _getStorage().positions[positionId];
         IUniversalAssets(uAsset()).repay(msg.sender, UAssetBurned);
         _applyPositionRedeem(positionId, position, syRedeemed, UAssetBurned);
+    }
+
+    function _validateRedeemAmount(uint256 syStaked, uint256 syRedeemed) internal pure {
+        if (syRedeemed == 0) revert ZeroInput();
+        if (syRedeemed > syStaked) revert ExceedsPositionBalance(syRedeemed, syStaked);
+    }
+
+    function _computeRedeemPositionDebt(uint256 positionUAssetMinted, uint256 syRedeemed, uint256 syStaked)
+        internal
+        pure
+        returns (uint256 UAssetBurned)
+    {
+        if (syRedeemed == syStaked) return positionUAssetMinted;
+
+        // Partial redeem rounds debt up so remaining SY cannot strand unburned debt on the position.
+        UAssetBurned = Math.mulDiv(positionUAssetMinted, syRedeemed, syStaked, Math.Rounding.Ceil);
+        if (UAssetBurned >= positionUAssetMinted) revert PartialRedeemMustLeaveDebt();
     }
 
     function _redeemTokenOut(address _SY, address receiver, address tokenOut, uint256 syRedeemed, uint256 minTokenOut)

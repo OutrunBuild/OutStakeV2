@@ -107,6 +107,8 @@ contract OutrunUniversalAssetsUpgradeable is Initializable, IUniversalAssets, Ou
     }
 
     function repay(address account, uint256 amount) external override {
+        require(account != address(0) && amount != 0, ZeroInput());
+
         MintingStatus storage status = _mintingStatus(msg.sender);
         uint256 amountInMinted = status.amountInMinted;
         require(amountInMinted >= amount, ReachBurnCap());

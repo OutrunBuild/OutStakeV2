@@ -86,10 +86,11 @@ wrap 池当前使用三组聚合账务变量：
 - `exchangeRate * syBalance / 1e18` 对应资产值
 - 如果用户贡献的是价值 X 的资产，则铸出的 SY 或 debt 应通过同一换算关系推导
 
-`OutrunStakingPositionUpgradeable` 当前使用两种方向的换算：
+`OutrunStakingPositionUpgradeable` 当前账务描述涉及两种方向的换算：
 
 - `syToAsset(exchangeRate, syAmount)`：把 `SY` principal 换成资产值，用于 stake、wrap stake、draw 预览
-- `assetToSy(exchangeRate, assetAmount)`：把 `uAsset` debt 换成 `SY`，用于 wrap redeem、keeper redeem、harvest
+- `assetToSy(exchangeRate, assetAmount)`：把 `uAsset` debt 换成 `SY`，用于 wrap redeem、keeper redeem
+- `assetToSyUp(exchangeRate, assetAmount)`：把 `uAsset` debt 向上取整换成 `SY`，用于 `harvestWrapYield` 的最小 retained debt coverage
 
 因此，当前仓库的 position/wrap 账务，都以 `SY` 数量和资产值之间的双向换算为前提。
 
@@ -112,16 +113,18 @@ wrap 池当前使用三组聚合账务变量：
 
 ## 7. `redeem` 的按比例销债
 
-锁仓仓位赎回时，当前 debt 销毁规则是严格按仓位比例计算：
+锁仓仓位赎回时，debt 销毁规则按 full redeem / partial redeem 分叉：
 
 - 用户传入要赎回的 `syRedeemed`
-- 合约按 `UAssetBurned = position.UAssetMinted * syRedeemed / syStaked` 计算应销毁的 `uAsset`
-- 先对 `msg.sender` 调用 `uAsset.repay(msg.sender, UAssetBurned)`
-- 再应用 `_applyPositionRedeem(...)` 扣减 `syStaked` 与 `UAssetMinted`
+- 若 `syRedeemed == syStaked`，则视为 full redeem，必须精确烧掉该 position 剩余的全部 `position.UAssetMinted`
+- 若 `syRedeemed < syStaked`，则视为 partial redeem，`UAssetBurned` 按 `ceil(position.UAssetMinted * syRedeemed / syStaked)` 计算
+- partial redeem 额外有一条边界：若上述 ceiling 结果会等于或超过当前剩余 debt，则该 partial 路径必须回退，用户只能改走 full redeem
+- `previewRedeem(...)` 与执行期 `redeem(...)` 使用同一条 full / partial 判定与拒绝规则；preview 不能返回一个执行期会因“partial consume all debt”而失败的报价
+- position 层先确定 `UAssetBurned` 和允许性，再进入 `uAsset.repay(...)`；正确性不依赖下游出现 `uAsset.repay(0)` 这种零额 repay
 
 如果赎回后 `remainingSY == 0`，position 会被删除；否则保留剩余 principal 与剩余 debt。
 
-这意味着当前 position redeem 不是“先按汇率重估总债，再整体结清”，而是“按当前仓位内部 debt 比例线性切片销债”。
+这意味着 position redeem 仍然是“按当前仓位内部 debt 比例切片销债”，但 partial 路径使用 ceiling rounding，并显式禁止“剩余 SY 仍在、debt 已被全部烧空”的状态。
 
 ## 8. Keeper redeem 分账
 
@@ -143,10 +146,10 @@ wrap 池当前使用三组聚合账务变量：
 
 ## 9. Harvest 账务
 
-`harvestWrapYield(tokenOut, minTokenOut)` 当前只处理 wrap 池超过 debt 对应 principal 的那部分 `SY`：
+`harvestWrapYield(tokenOut, minTokenOut)` 的批准修复语义是：只处理 wrap 池中高于当前 exchangeRate 下 wrap debt 最低覆盖需求的那部分 `SY`：
 
 - 先读取 `wrapPoolSY = syWrapStaking`
-- 再计算 `wrapDebtInSY = assetToSy(wrapUAssetDebt)`
+- 再计算 `wrapDebtInSY = assetToSyUp(wrapUAssetDebt)`
 - 若 `wrapPoolSY <= wrapDebtInSY`，则没有可 harvest 的额外收益
 - 否则 `amountInSY = wrapPoolSY - wrapDebtInSY`
 
@@ -155,6 +158,7 @@ wrap 池当前使用三组聚合账务变量：
 - `syTotalStaking -= amountInSY`
 - `syWrapStaking -= amountInSY`
 - `wrapUAssetDebt` 不变化
+- harvest 后剩余的 `syWrapStaking` 仍满足 `syWrapStaking >= assetToSyUp(wrapUAssetDebt)`，等价于 `syToAsset(exchangeRate, syWrapStaking) >= wrapUAssetDebt`
 - 收益转到 `revenuePool`
 
 因此，harvest 当前抽走的是 wrap 池里“高于 debt 等价 SY 的超额部分”，而不是改变用户未偿 `uAsset` debt。

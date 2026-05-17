@@ -150,6 +150,28 @@ contract OutrunUniversalAssetsUpgradeableTest is Test {
         assertEq(uAsset.totalSupply(), 30e18);
     }
 
+    function testRepayRejectsZeroAmount() external {
+        vm.prank(owner);
+        uAsset.setMintingCap(minter, 100e18);
+
+        vm.prank(minter);
+        uAsset.mint(receiver, 40e18);
+
+        IUniversalAssets.MintingStatus memory statusBefore = uAsset.mintingStatusTable(minter);
+        uint256 balanceBefore = uAsset.balanceOf(receiver);
+        uint256 totalSupplyBefore = uAsset.totalSupply();
+
+        vm.prank(minter);
+        vm.expectRevert(IUniversalAssets.ZeroInput.selector);
+        uAsset.repay(receiver, 0);
+
+        IUniversalAssets.MintingStatus memory statusAfter = uAsset.mintingStatusTable(minter);
+        assertEq(statusAfter.mintingCap, statusBefore.mintingCap);
+        assertEq(statusAfter.amountInMinted, statusBefore.amountInMinted);
+        assertEq(uAsset.balanceOf(receiver), balanceBefore);
+        assertEq(uAsset.totalSupply(), totalSupplyBefore);
+    }
+
     function testOwnerCanTransferMinterDebtWithoutChangingSupplyOrBalances() external {
         vm.prank(owner);
         uAsset.setMintingCap(minter, 100e18);

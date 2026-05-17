@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {MockSY, MockERC20, MockUAsset} from "./helpers/PositionTestMocks.sol";
 import {OutrunStakingPositionUpgradeable} from "../../src/position/OutrunStakingPositionUpgradeable.sol";
 import {IStandardizedYield} from "../../src/yield/interfaces/IStandardizedYield.sol";
@@ -306,7 +307,10 @@ contract PositionHandler is Test {
     // Helper to estimate uAsset burn for redemption
     function _estimateUAssetBurn(uint256 positionId, uint256 syRedeemed) internal view returns (uint256) {
         (, uint256 syStaked, uint256 uAssetMinted,,) = position.positions(positionId);
-        return (uAssetMinted * syRedeemed) / syStaked;
+        if (syRedeemed == syStaked) return uAssetMinted;
+
+        uint256 uAssetBurned = Math.mulDiv(uAssetMinted, syRedeemed, syStaked, Math.Rounding.Ceil);
+        return uAssetBurned >= uAssetMinted ? uAssetMinted : uAssetBurned;
     }
 
     // Helper to remove position from tracking
