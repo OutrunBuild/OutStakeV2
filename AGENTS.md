@@ -36,8 +36,10 @@ Do not override policy or gate evidence with natural-language guesses.
 ## Verification Contract
 
 - gate.sh is the enforcement entrypoint.
-- Completion, readiness, or “pass” claims require fresh output from the selected matching gate profile.
-- For local current work, invoke `gate.sh` with the exact changed-file set. If any Solidity file is involved, also provide diff evidence via `CHANGE_CLASSIFIER_DIFF_FILE` or `GATE_DIFF_BASE`.
+- Completion, readiness, or “pass” claims for tracked or intended-to-commit repository changes require fresh output from the selected matching gate profile.
+- For local current work on tracked or intended-to-commit repository changes, invoke `gate.sh` with the exact changed-file set. If any Solidity file is involved, also provide diff evidence via `CHANGE_CLASSIFIER_DIFF_FILE` or `GATE_DIFF_BASE`.
+- Ignored/local scratch artifacts are outside the repository readiness verdict. Do not pass ignored scratch paths to `gate.sh` as the basis for a repository PASS/BLOCKED verdict. For those artifacts, report only the artifact-specific verification performed, and label repository gate status as not applicable.
+- If an ignored/local artifact is intended to become a formal deliverable, first move it to a policy-classified tracked path or update policy so the path is classified; then run the matching gate before claiming repository readiness.
 - See docs/VERIFICATION.md for profile meanings and command entrypoints.
 
 ## Harness Dispatch Procedure
@@ -86,8 +88,8 @@ Every file that will be modified or created must match a surface pattern in poli
    - User override critical → record residual risk, continue.
    - Reviewer conflict → resolve by conflict_priority order (security-reviewer > gas-reviewer > logic-reviewer).
 7. **Security tests** — If risk_tier=high-risk AND security_test_writer_trigger matches, dispatch `security-test-writer`.
-8. **Verify** — Dispatch `verifier` to run `bash script/harness/gate.sh --profile <profile>` using the selected profile. For local current work, the selected profile defaults to `fast` unless a human explicitly requested `full`, `ci`, release, merge, or release-equivalent verification. Pass the exact changed-file input; when Solidity files are involved, pass diff evidence via `CHANGE_CLASSIFIER_DIFF_FILE` or `GATE_DIFF_BASE`. Report exit code + stdout.
-9. **Conclude** — Report final verdict based on latest gate output. Do not claim completion without fresh gate evidence.
+8. **Verify** — Dispatch `verifier` to run `bash script/harness/gate.sh --profile <profile>` using the selected profile. For local current work on tracked or intended-to-commit repository changes, the selected profile defaults to `fast` unless a human explicitly requested `full`, `ci`, release, merge, or release-equivalent verification. Pass the exact changed-file input; when Solidity files are involved, pass diff evidence via `CHANGE_CLASSIFIER_DIFF_FILE` or `GATE_DIFF_BASE`. Ignored/local scratch artifacts use artifact-specific verification and do not receive a repository gate verdict unless promoted into a classified tracked path. Report exit code + stdout when gate applies.
+9. **Conclude** — Report final verdict based on latest applicable gate output. Do not claim repository completion without fresh gate evidence. For ignored/local scratch artifacts, report a content/artifact verdict separately and state that repository gate is not applicable.
 
 ### Retry routing
 

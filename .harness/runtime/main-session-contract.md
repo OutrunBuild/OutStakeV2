@@ -23,10 +23,12 @@
 - Derive `surface`, `risk_tier`, `writer_role`, and `review_roles` from policy before delegating. Mixed `harness_control` + Solidity change sets are allowed; use the highest `risk_tier` across matched surfaces and the union of `review_roles`.
 - For current local task completion/readiness, default `verification_profile` is `fast` regardless of `risk_tier`. Use `full`, `ci`, release, or merge-equivalent verification only when explicitly requested by a human or when running in CI/release-equivalent context. Do not infer `full` from `high-risk` or `prod-semantic` alone.
 - Use only project agents under `.claude/agents/` or `.codex/agents/` for delegated work.
-- Completion claims require fresh output from the selected matching `gate.sh` profile.
-- For local current work, invoke `gate.sh` with exact changed-file input. If any Solidity file is involved, provide diff evidence without creating persistent repository files:
+- Completion claims for tracked or intended-to-commit repository changes require fresh output from the selected matching `gate.sh` profile.
+- For local current work on tracked or intended-to-commit repository changes, invoke `gate.sh` with exact changed-file input. If any Solidity file is involved, provide diff evidence without creating persistent repository files:
   - Prefer `GATE_DIFF_BASE=<git-ref>` when a stable base ref exists.
   - If a patch file is required, create it with `mktemp` outside the repository, pass its path through `CHANGE_CLASSIFIER_DIFF_FILE`, and remove it after `gate.sh` exits.
   - Do not create, commit, or leave behind repository files named after `CHANGE_CLASSIFIER_DIFF_FILE`, `GATE_DIFF_BASE`, or related diff-evidence artifacts.
+- Ignored/local scratch artifacts are outside repository readiness. Do not use ignored scratch paths as `gate.sh` changed-file input for a repository PASS/BLOCKED verdict. Verify them with artifact-specific checks, report that result separately, and mark repository gate as not applicable.
+- If an ignored/local artifact is intended to become a formal deliverable, first move it into a policy-classified tracked path or update policy so the path is classified; then run the matching gate before claiming repository readiness.
 - If changed files imply multiple writer roles, route each touched surface to its configured writer; only stop as blocked when policy or gate evidence emits a hard block.
 - If required verification evidence is missing, keep the final verdict blocked or fail instead of projecting pass.

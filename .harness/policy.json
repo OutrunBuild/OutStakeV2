@@ -36,6 +36,7 @@
       "^docs/deployment\\.md$",
       "^docs/implementation-map\\.md$",
       "^docs/testing-and-evidence\\.md$",
+      "^docs/review/.*\\.md$",
       "(^|.*/)(spec|specs)/.*\\.(md|mdx)$",
       "^solhint.*\\.config\\.js$",
       "^foundry\\.toml$",
