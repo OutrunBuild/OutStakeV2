@@ -12,6 +12,7 @@ import {IOutrunStakeManager} from "../position/interfaces/IOutrunStakeManager.so
 
 contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
     error InvalidMemeverseLauncher(address launcher);
+    error UnexpectedRemainingAllowance(address token, address spender, uint256 remainingAllowance);
 
     address public memeverseLauncher;
 
@@ -65,7 +66,6 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         uint256 amountInNative = tokenIn == NATIVE ? amountInput : 0;
         _approveExact(tokenIn, SY, amountInput);
         amountInSYOut = IStandardizedYield(SY).deposit{value: amountInNative}(receiver, tokenIn, amountInput, minSyOut);
-        _clearApproval(tokenIn, SY);
     }
 
     function _redeemSy(address SY, address receiver, address tokenOut, uint256 amountInSY, uint256 minTokenOut)
@@ -200,7 +200,6 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
 
         _approveExact(SY, SP, amountInSY);
         UAssetMinted = IOutrunStakeManager(SP).wrapStake(amountInSY, uAssetRecipient);
-        _clearApproval(SY, SP);
         _assertMinUAssetMinted(UAssetMinted, minUAssetMinted);
     }
 
@@ -221,7 +220,6 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
 
         _approveExact(SY, SP, amountInSY);
         UAssetMinted = IOutrunStakeManager(SP).wrapStake(amountInSY, uAssetRecipient);
-        _clearApproval(SY, SP);
         _assertMinUAssetMinted(UAssetMinted, minUAssetMinted);
     }
 
@@ -252,17 +250,20 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         _approveExact(SY, SP, amountInSY);
         (positionId, UAssetMinted) =
             IOutrunStakeManager(SP).stake(amountInSY, lockupDays, positionOwner, uAssetReceiver);
-        _clearApproval(SY, SP);
     }
 
     function _approveExact(address token, address spender, uint256 amount) internal {
         if (token == NATIVE) return;
+        if (amount == type(uint256).max) revert InvalidParam();
         _safeApprove(token, spender, amount);
     }
 
-    function _clearApproval(address token, address spender) internal {
+    function _assertApprovalConsumed(address token, address spender) internal view {
         if (token == NATIVE) return;
-        _safeApprove(token, spender, 0);
+        uint256 remainingAllowance = IERC20(token).allowance(address(this), spender);
+        if (remainingAllowance != 0) {
+            revert UnexpectedRemainingAllowance(token, spender, remainingAllowance);
+        }
     }
 
     function _assertMinUAssetMinted(uint256 UAssetMinted, uint256 minUAssetMinted) internal pure {
@@ -293,7 +294,6 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         _approveExact(uAsset, SP, amountInUAsset);
 
         amountTokenOut = IOutrunStakeManager(SP).wrapRedeem(amountInUAsset, receiver, tokenOut, minTokenOut);
-        _clearApproval(uAsset, SP);
     }
 
     /**
@@ -327,7 +327,7 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         // amountInUAsset is bounded by type(uint128).max immediately before this cast.
         // forge-lint: disable-next-line(unsafe-typecast)
         IMemeverseLauncher(memeverseLauncher).genesis(verseId, uint128(amountInUAsset), genesisUser);
-        _clearApproval(uAsset, memeverseLauncher);
+        _assertApprovalConsumed(uAsset, memeverseLauncher);
     }
 
     /**
@@ -357,7 +357,7 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         // amountInUAsset is bounded by type(uint128).max immediately before this cast.
         // forge-lint: disable-next-line(unsafe-typecast)
         IMemeverseLauncher(memeverseLauncher).genesis(verseId, uint128(amountInUAsset), genesisUser);
-        _clearApproval(uAsset, memeverseLauncher);
+        _assertApprovalConsumed(uAsset, memeverseLauncher);
     }
 
     /**

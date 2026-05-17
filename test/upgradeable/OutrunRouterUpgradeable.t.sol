@@ -11,6 +11,7 @@ import {IStandardizedYield} from "../../src/yield/interfaces/IStandardizedYield.
 import {IUniversalAssets} from "../../src/assets/interfaces/IUniversalAssets.sol";
 import {ProxyTestHelper} from "../upgradeable/helpers/ProxyTestHelper.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IOutrunRouterPrefundless {
     function mintSYFromToken(address SY, address tokenIn, address receiver, uint256 amountInput, uint256 minSyOut)
@@ -32,6 +33,7 @@ contract RouterMockSY is ERC20, IStandardizedYield {
     address internal lastDepositTokenIn;
     uint256 internal lastDepositAmount;
     uint256 internal lastDepositValue;
+    uint256 internal zeroApproveCount;
 
     constructor(address underlying_) ERC20("Mock SY", "mSY") {
         underlying = underlying_;
@@ -44,6 +46,13 @@ contract RouterMockSY is ERC20, IStandardizedYield {
 
     function mintShares(address receiver, uint256 amount) external {
         _mint(receiver, amount);
+    }
+
+    function approve(address spender, uint256 amount) public override(ERC20, IERC20) returns (bool) {
+        if (amount == 0) {
+            zeroApproveCount += 1;
+        }
+        return super.approve(spender, amount);
     }
 
     function deposit(address receiver, address tokenIn, uint256 amountTokenToDeposit, uint256 minSharesOut)
@@ -123,6 +132,14 @@ contract RouterMockSY is ERC20, IStandardizedYield {
         return (lastDepositTokenIn, lastDepositAmount, lastDepositValue);
     }
 
+    function getZeroApproveCount() external view returns (uint256 count) {
+        return zeroApproveCount;
+    }
+
+    function resetZeroApproveCount() external {
+        zeroApproveCount = 0;
+    }
+
     function assetInfo() external view returns (AssetType assetType, address assetAddress, uint8 assetDecimals) {
         assetType = AssetType.TOKEN;
         assetAddress = underlying;
@@ -131,15 +148,33 @@ contract RouterMockSY is ERC20, IStandardizedYield {
 }
 
 contract RouterMockERC20 is ERC20 {
+    uint256 internal zeroApproveCount;
+
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
+
+    function approve(address spender, uint256 amount) public override returns (bool) {
+        if (amount == 0) {
+            zeroApproveCount += 1;
+        }
+        return super.approve(spender, amount);
+    }
 
     function mint(address receiver, uint256 amount) external {
         _mint(receiver, amount);
+    }
+
+    function getZeroApproveCount() external view returns (uint256 count) {
+        return zeroApproveCount;
+    }
+
+    function resetZeroApproveCount() external {
+        zeroApproveCount = 0;
     }
 }
 
 contract RouterMockUAsset is ERC20, IUniversalAssets {
     address public immutable owner;
+    uint256 internal zeroApproveCount;
 
     mapping(address minter => MintingStatus) public mintingStatusTable;
 
@@ -152,6 +187,13 @@ contract RouterMockUAsset is ERC20, IUniversalAssets {
 
     constructor() ERC20("Mock UAsset", "mUAsset") {
         owner = msg.sender;
+    }
+
+    function approve(address spender, uint256 amount) public override returns (bool) {
+        if (amount == 0) {
+            zeroApproveCount += 1;
+        }
+        return super.approve(spender, amount);
     }
 
     function checkMintableAmount(address minter) external view returns (uint256 amountInMintable) {
@@ -197,6 +239,14 @@ contract RouterMockUAsset is ERC20, IUniversalAssets {
         status.amountInMinted -= amount;
         _burn(account, amount);
     }
+
+    function getZeroApproveCount() external view returns (uint256 count) {
+        return zeroApproveCount;
+    }
+
+    function resetZeroApproveCount() external {
+        zeroApproveCount = 0;
+    }
 }
 
 contract RouterMockLauncher {
@@ -223,10 +273,27 @@ contract RouterMockLauncher {
     }
 }
 
+contract RouterMockUnderConsumingLauncher {
+    error RouterGenesisTransferFailed();
+
+    RouterMockUAsset internal immutable uAsset;
+
+    constructor(address uAsset_) {
+        uAsset = RouterMockUAsset(uAsset_);
+    }
+
+    function genesis(uint256, uint128 amountInUAsset, address) external {
+        uint256 consumedAmount = uint256(amountInUAsset) / 2;
+        if (!uAsset.transferFrom(msg.sender, address(this), consumedAmount)) revert RouterGenesisTransferFailed();
+    }
+}
+
 contract OutrunRouterTest is Test {
     bytes4 internal constant NATIVE_AMOUNT_MISMATCH_SELECTOR = bytes4(keccak256("NativeAmountMismatch()"));
     bytes4 internal constant INVALID_MEMEVERSE_LAUNCHER_SELECTOR =
         bytes4(keccak256("InvalidMemeverseLauncher(address)"));
+    bytes4 internal constant UNEXPECTED_REMAINING_ALLOWANCE_SELECTOR =
+        bytes4(keccak256("UnexpectedRemainingAllowance(address,address,uint256)"));
     RouterMockERC20 internal underlying;
     RouterMockSY internal sy;
     RouterMockUAsset internal uAsset;
@@ -382,43 +449,87 @@ contract OutrunRouterTest is Test {
         assertEq(position.syWrapStaking(), 100e18);
     }
 
-    function testRouterClearsTransientApprovalsAfterSuccessfulCalls() external {
+    function testRouterSuccessfulCallsLeaveNoResidualAllowanceWithoutExplicitApprovalClears() external {
         IOutrunRouter.StakeParam memory stakeParam =
             IOutrunRouter.StakeParam({lockupDays: 30, minSyOut: 0, minUAssetMinted: 0, owner: owner, receiver: owner});
+
+        underlying.resetZeroApproveCount();
+        sy.resetZeroApproveCount();
+        uAsset.resetZeroApproveCount();
 
         vm.startPrank(owner);
         router.mintSYFromToken(address(sy), address(underlying), owner, 1e18, 0);
         assertEq(underlying.allowance(address(router), address(sy)), 0);
+        assertEq(underlying.getZeroApproveCount(), 0);
 
         router.stakeFromToken(address(position), address(underlying), 1e18, stakeParam);
         assertEq(underlying.allowance(address(router), address(sy)), 0);
         assertEq(sy.allowance(address(router), address(position)), 0);
+        assertEq(underlying.getZeroApproveCount(), 0);
+        assertEq(sy.getZeroApproveCount(), 0);
 
         router.stakeFromSY(address(position), 1e18, stakeParam);
         assertEq(sy.allowance(address(router), address(position)), 0);
+        assertEq(sy.getZeroApproveCount(), 0);
 
         router.wrapStakeFromToken(address(position), address(underlying), 1e18, 0, owner, 0);
         assertEq(underlying.allowance(address(router), address(sy)), 0);
         assertEq(sy.allowance(address(router), address(position)), 0);
+        assertEq(underlying.getZeroApproveCount(), 0);
+        assertEq(sy.getZeroApproveCount(), 0);
 
         router.wrapStakeFromSY(address(position), 1e18, owner, 0);
         assertEq(sy.allowance(address(router), address(position)), 0);
+        assertEq(sy.getZeroApproveCount(), 0);
 
         router.genesisByToken(address(position), address(underlying), 1e18, 0, 0, 30, 1, owner);
         assertEq(underlying.allowance(address(router), address(sy)), 0);
         assertEq(sy.allowance(address(router), address(position)), 0);
         assertEq(uAsset.allowance(address(router), address(launcher)), 0);
+        assertEq(underlying.getZeroApproveCount(), 0);
+        assertEq(sy.getZeroApproveCount(), 0);
+        assertEq(uAsset.getZeroApproveCount(), 0);
 
         router.genesisBySY(address(position), 1e18, 30, 1, owner, 0);
         assertEq(sy.allowance(address(router), address(position)), 0);
         assertEq(uAsset.allowance(address(router), address(launcher)), 0);
+        assertEq(sy.getZeroApproveCount(), 0);
+        assertEq(uAsset.getZeroApproveCount(), 0);
         vm.stopPrank();
 
         vm.startPrank(owner);
         router.wrapStakeFromSY(address(position), 1e18, owner, 0);
         router.wrapRedeem(address(position), 1e18, owner, address(sy), 0);
         assertEq(uAsset.allowance(address(router), address(position)), 0);
+        assertEq(sy.getZeroApproveCount(), 0);
+        assertEq(uAsset.getZeroApproveCount(), 0);
         vm.stopPrank();
+    }
+
+    function testMintSYFromTokenRevertsWhenApprovalAmountIsUint256Max() external {
+        RouterMockSY freshSy = new RouterMockSY(address(underlying));
+        uint256 maxDepositAmount = type(uint256).max;
+
+        underlying.mint(owner, maxDepositAmount - underlying.balanceOf(owner));
+
+        vm.prank(owner);
+        vm.expectRevert(INVALID_PARAM_SELECTOR);
+        router.mintSYFromToken(address(freshSy), address(underlying), owner, maxDepositAmount, 0);
+    }
+
+    function testGenesisBySYRevertsWhenLauncherUnderConsumesApprovedUAsset() external {
+        RouterMockUnderConsumingLauncher underConsumingLauncher = new RouterMockUnderConsumingLauncher(address(uAsset));
+
+        vm.prank(owner);
+        router.setMemeverseLauncher(address(underConsumingLauncher));
+
+        vm.prank(owner);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                UNEXPECTED_REMAINING_ALLOWANCE_SELECTOR, address(uAsset), address(underConsumingLauncher), 50e18
+            )
+        );
+        router.genesisBySY(address(position), 100e18, 30, 1, owner, 0);
     }
 
     function testPreviewWrapRedeemMatchesStakeManagerPreview() external {
