@@ -463,6 +463,7 @@ contract OutstakeScript is BaseScript {
     }
 
     function _deployOutrunRouter(uint256 nonce) internal {
+        _validateMemeverseLauncher();
         bytes32 salt = keccak256(abi.encodePacked("OutrunRouter", nonce));
         bytes memory creationCode =
             abi.encodePacked(type(OutrunRouter).creationCode, abi.encode(owner, memeverseLauncher));
@@ -487,6 +488,11 @@ contract OutstakeScript is BaseScript {
     }
 
     function _updateRouterLauncher() internal {
+        _validateMemeverseLauncher();
         IOutrunRouter(outrunRouter).setMemeverseLauncher(memeverseLauncher);
+    }
+
+    function _validateMemeverseLauncher() internal view {
+        if (memeverseLauncher == address(0)) revert InvalidAddress();
     }
 }

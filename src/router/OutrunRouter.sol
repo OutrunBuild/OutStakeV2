@@ -11,10 +11,12 @@ import {IERC20, NativeAmountMismatch, TokenHelper} from "../libraries/TokenHelpe
 import {IOutrunStakeManager} from "../position/interfaces/IOutrunStakeManager.sol";
 
 contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
+    error InvalidMemeverseLauncher(address launcher);
+
     address public memeverseLauncher;
 
     constructor(address _owner, address _memeverseLauncher) Ownable(_owner) {
-        memeverseLauncher = _memeverseLauncher;
+        _setMemeverseLauncher(_memeverseLauncher);
     }
 
     /**
@@ -267,6 +269,11 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         require(UAssetMinted >= minUAssetMinted, InsufficientUAssetMinted(UAssetMinted, minUAssetMinted));
     }
 
+    function _setMemeverseLauncher(address _memeverseLauncher) internal {
+        if (_memeverseLauncher.code.length == 0) revert InvalidMemeverseLauncher(_memeverseLauncher);
+        memeverseLauncher = _memeverseLauncher;
+    }
+
     /**
      * @notice Redeems wrapped uAsset into an output token.
      * @dev Burns wrapped uAsset through the stake manager and forwards the redeemed token to `receiver`.
@@ -359,6 +366,6 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
      * @param _memeverseLauncher New launcher contract address.
      */
     function setMemeverseLauncher(address _memeverseLauncher) external onlyOwner {
-        memeverseLauncher = _memeverseLauncher;
+        _setMemeverseLauncher(_memeverseLauncher);
     }
 }

@@ -6,10 +6,13 @@ import {IOAppCore} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOApp
 
 import {OutstakeScript} from "../../script/deploy/OutstakeScript.s.sol";
 import {OutrunDeployer} from "../../script/deploy/deployment/OutrunDeployer.sol";
+import {OutrunRouter} from "../../src/router/OutrunRouter.sol";
 import {OutrunUniversalAssetsUpgradeable} from "../../src/assets/base/OutrunUniversalAssetsUpgradeable.sol";
 import {OutrunOFTUpgradeable} from "../../src/assets/omnichain/OutrunOFTUpgradeable.sol";
 import {OutrunRateLimiterUpgradeable} from "../../src/assets/omnichain/OutrunRateLimiterUpgradeable.sol";
 import {MockLzEndpoint} from "../upgradeable/helpers/OFTTestHelper.sol";
+
+contract ScriptMockLauncher {}
 
 contract OutstakeDeploymentScriptHarness is OutstakeScript {
     uint256 internal rawLimit = 1_000_000 ether;
@@ -34,6 +37,11 @@ contract OutstakeDeploymentScriptHarness is OutstakeScript {
         rawWindow = window;
     }
 
+    function setRouterConfig(address outrunRouter_, address memeverseLauncher_) external {
+        outrunRouter = outrunRouter_;
+        memeverseLauncher = memeverseLauncher_;
+    }
+
     function exposedDeployUETH(uint256 nonce) external {
         _deployUETH(nonce);
     }
@@ -44,6 +52,14 @@ contract OutstakeDeploymentScriptHarness is OutstakeScript {
 
     function exposedDeployUBNB(uint256 nonce) external {
         _deployUBNB(nonce);
+    }
+
+    function exposedDeployOutrunRouter(uint256 nonce) external {
+        _deployOutrunRouter(nonce);
+    }
+
+    function exposedUpdateRouterLauncher() external {
+        _updateRouterLauncher();
     }
 
     function _rawOutboundRateLimitConfig(string memory, string memory)
@@ -151,6 +167,59 @@ contract OutstakeScriptUpgradeableTest is Test {
 
         vm.expectRevert(OutstakeScript.InvalidOmnichainId.selector);
         script.exposedDeployUETH(1);
+    }
+
+    function testDeployOutrunRouterRevertsWhenLauncherIsZero() external {
+        script.setRouterConfig(address(0), address(0));
+
+        vm.expectRevert(OutstakeScript.InvalidAddress.selector);
+        script.exposedDeployOutrunRouter(1);
+    }
+
+    function testDeployOutrunRouterRevertsWhenLauncherHasNoCode() external {
+        script.setRouterConfig(address(0), address(0x1234));
+
+        vm.expectRevert(bytes("INITIALIZATION_FAILED"));
+        script.exposedDeployOutrunRouter(1);
+    }
+
+    function testDeployOutrunRouterAcceptsLauncherContract() external {
+        ScriptMockLauncher launcher = new ScriptMockLauncher();
+        script.setRouterConfig(address(0), address(launcher));
+
+        script.exposedDeployOutrunRouter(1);
+
+        bytes32 salt = keccak256(abi.encodePacked("OutrunRouter", uint256(1)));
+        OutrunRouter deployedRouter = OutrunRouter(outrunDeployer.getDeployed(address(script), salt));
+
+        assertEq(deployedRouter.owner(), owner);
+        assertEq(deployedRouter.memeverseLauncher(), address(launcher));
+    }
+
+    function testUpdateRouterLauncherRevertsWhenLauncherIsZero() external {
+        OutrunRouter router = new OutrunRouter(owner, address(new ScriptMockLauncher()));
+        script.setRouterConfig(address(router), address(0));
+
+        vm.expectRevert(OutstakeScript.InvalidAddress.selector);
+        script.exposedUpdateRouterLauncher();
+    }
+
+    function testUpdateRouterLauncherRevertsWhenLauncherHasNoCode() external {
+        OutrunRouter router = new OutrunRouter(owner, address(new ScriptMockLauncher()));
+        script.setRouterConfig(address(router), address(0x1234));
+
+        vm.expectRevert(abi.encodeWithSelector(OutrunRouter.InvalidMemeverseLauncher.selector, address(0x1234)));
+        script.exposedUpdateRouterLauncher();
+    }
+
+    function testUpdateRouterLauncherAcceptsLauncherContract() external {
+        OutrunRouter router = new OutrunRouter(owner, address(new ScriptMockLauncher()));
+        ScriptMockLauncher launcher = new ScriptMockLauncher();
+        script.setRouterConfig(address(router), address(launcher));
+
+        script.exposedUpdateRouterLauncher();
+
+        assertEq(router.memeverseLauncher(), address(launcher));
     }
 
     function _deployAndAssertUAsset(

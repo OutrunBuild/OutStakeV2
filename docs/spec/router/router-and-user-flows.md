@@ -172,6 +172,12 @@
 - 测试明确证明：`genesisBySY(...)` 后 `syWrapStaking == 0`，`syTotalStaking` 增加，`uAsset` 最终留在 launcher，不留在用户或 router。
 - genesis 入口没有 preview 参数；`genesisByToken(...)` 有 `minSyOut` 和 `minUAssetMinted`，`genesisBySY(...)` 有 `minUAssetMinted`。
 
+### 8.4 launcher 配置校验
+
+- `OutrunRouter` 的 constructor 与 `setMemeverseLauncher(...)` 会在配置期 fail fast，拒绝 `address(0)` 和 `code.length == 0` 的 launcher 地址。
+- genesis 流程可把 `memeverseLauncher` 已通过配置期 code-size 校验视为前置条件。
+- 这属于运行/测试可观测性加固，不改变 launcher 内部仍是外部信任边界这一语义。
+
 ## 9. preview 语义与 slippage 边界
 
 当前 router 暴露的 preview 入口有：
@@ -216,5 +222,5 @@
   - `stakeParam.owner` 是 position owner
   - `stakeParam.receiver` 是 uAsset 接收地址，当 `receiver == address(0)` 时回退到 `owner`
 - genesis 当前不是”wrap 后再 launch”，而是”先建 locked position，再把 stake 产出的 `uAsset` 交给 launcher”。
-- wrap 池按 principal debt 记账，不会因为汇率上涨自动给用户补发更多 `uAsset`；多出来的价值体现在更少的 `SY` 可对应同样 debt，以及 `harvestWrapYield(...)` 可收走的超额部分。
+- wrap 池按 principal debt 记账，不会因为汇率上涨自动给用户补发更多 `uAsset`；批准的 harvest rounding fix 要求 `harvestWrapYield(...)` 只能收走高于 `assetToSyUp(wrapUAssetDebt)` 的那部分 `SY`，因此保留当前 exchangeRate 下覆盖 wrap debt 所需的最小 `SY`，多出来的价值体现在剩余超额部分。
 - 任何 token / native 与 tokenOut 是否可用，最终都取决于具体 `SY` 实现的 `isValidTokenIn` / `isValidTokenOut`。

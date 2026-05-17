@@ -225,6 +225,8 @@ contract RouterMockLauncher {
 
 contract OutrunRouterTest is Test {
     bytes4 internal constant NATIVE_AMOUNT_MISMATCH_SELECTOR = bytes4(keccak256("NativeAmountMismatch()"));
+    bytes4 internal constant INVALID_MEMEVERSE_LAUNCHER_SELECTOR =
+        bytes4(keccak256("InvalidMemeverseLauncher(address)"));
     RouterMockERC20 internal underlying;
     RouterMockSY internal sy;
     RouterMockUAsset internal uAsset;
@@ -269,6 +271,41 @@ contract OutrunRouterTest is Test {
 
         vm.prank(owner);
         uAsset.approve(address(router), type(uint256).max);
+    }
+
+    function testConstructorRevertsWhenMemeverseLauncherIsZero() external {
+        vm.expectRevert(abi.encodeWithSelector(INVALID_MEMEVERSE_LAUNCHER_SELECTOR, address(0)));
+        new OutrunRouter(owner, address(0));
+    }
+
+    function testConstructorRevertsWhenMemeverseLauncherHasNoCode() external {
+        address eoaLauncher = address(0x1234);
+
+        vm.expectRevert(abi.encodeWithSelector(INVALID_MEMEVERSE_LAUNCHER_SELECTOR, eoaLauncher));
+        new OutrunRouter(owner, eoaLauncher);
+    }
+
+    function testSetMemeverseLauncherRevertsWhenZero() external {
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(INVALID_MEMEVERSE_LAUNCHER_SELECTOR, address(0)));
+        router.setMemeverseLauncher(address(0));
+    }
+
+    function testSetMemeverseLauncherRevertsWhenNoCode() external {
+        address eoaLauncher = address(0x1234);
+
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(INVALID_MEMEVERSE_LAUNCHER_SELECTOR, eoaLauncher));
+        router.setMemeverseLauncher(eoaLauncher);
+    }
+
+    function testSetMemeverseLauncherAcceptsContract() external {
+        RouterMockLauncher newLauncher = new RouterMockLauncher(address(uAsset));
+
+        vm.prank(owner);
+        router.setMemeverseLauncher(address(newLauncher));
+
+        assertEq(router.memeverseLauncher(), address(newLauncher));
     }
 
     function testMintSYFromTokenPullsCallerFundsAndKeepsRouterPrefund() external {

@@ -12,6 +12,8 @@ import {MockLzEndpoint} from "./helpers/OFTTestHelper.sol";
 import {ProxyTestHelper} from "./helpers/ProxyTestHelper.sol";
 import {PositionMockOracle, PositionMockToken} from "./OutrunStakingPositionUpgradeable.t.sol";
 
+contract RouterProxyMockLauncher {}
+
 contract RouterProxyIntegrationTest is Test {
     address internal owner = address(0xA11CE);
     address internal user = address(0xB0B);
@@ -58,7 +60,7 @@ contract RouterProxyIntegrationTest is Test {
         vm.prank(owner);
         uAsset.setMintingCap(address(position), type(uint256).max);
 
-        router = new OutrunRouter(owner, address(0));
+        router = new OutrunRouter(owner, address(new RouterProxyMockLauncher()));
         token.mint(user, 100e18);
     }
 
