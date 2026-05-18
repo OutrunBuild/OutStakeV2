@@ -6,6 +6,7 @@ import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/Pau
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import {IOutrunStakeManager} from "./interfaces/IOutrunStakeManager.sol";
 import {IStandardizedYield} from "../yield/interfaces/IStandardizedYield.sol";
@@ -33,6 +34,8 @@ contract OutrunStakingPositionUpgradeable is
         address revenuePool;
         address keeper;
         mapping(uint256 positionId => Position) positions;
+        uint8 canonicalAssetDecimals;
+        uint8 uAssetDecimals;
     }
 
     // keccak256(abi.encode(uint256(keccak256("outrun.storage.OutrunStakingPosition")) - 1)) & ~bytes32(uint256(0xff))
@@ -63,8 +66,12 @@ contract OutrunStakingPositionUpgradeable is
         __UUPSUpgradeable_init();
 
         OutrunStakingPositionStorage storage $ = _getStorage();
+        (,, uint8 canonicalAssetDecimals) = IStandardizedYield(sy_).assetInfo();
         $.SY = sy_;
         $.uAsset = uAsset_;
+        // Conversion math assumes SY assetInfo() and uAsset decimals are immutable after initialization.
+        $.canonicalAssetDecimals = canonicalAssetDecimals;
+        $.uAssetDecimals = IERC20Metadata(uAsset_).decimals();
         $.minStake = minStake_;
         $.revenuePool = revenuePool_;
         $.keeper = keeper_;
@@ -355,7 +362,7 @@ contract OutrunStakingPositionUpgradeable is
         OutrunStakingPositionStorage storage $ = _getStorage();
         uint256 wrapPoolSY = $.syWrapStaking;
         // Ceil here so harvest leaves enough SY in the wrap pool to keep all remaining debt covered.
-        uint256 wrapDebtInSY = SYUtils.assetToSyUp(IStandardizedYield(SY()).exchangeRate(), $.wrapUAssetDebt);
+        uint256 wrapDebtInSY = _assetToSyUp($.wrapUAssetDebt);
         if (wrapPoolSY <= wrapDebtInSY) return 0;
 
         uint256 amountInSY = wrapPoolSY - wrapDebtInSY;
@@ -417,12 +424,51 @@ contract OutrunStakingPositionUpgradeable is
         }
     }
 
+    // `canonicalAssetValue` follows `SY.assetInfo().assetDecimals`.
+    // `uAssetDebtUnits` follows `uAsset.decimals()`.
+    // These helpers first convert via `SY.exchangeRate()` and then rescale across the two decimal domains.
     function _syToAsset(uint256 amountInSY) internal view returns (uint256) {
-        return SYUtils.syToAsset(IStandardizedYield(SY()).exchangeRate(), amountInSY);
+        address _SY = SY();
+        uint256 canonicalAssetValue = SYUtils.syToAsset(IStandardizedYield(_SY).exchangeRate(), amountInSY);
+        return _scaleCanonicalAssetToUAsset(canonicalAssetValue);
     }
 
     function _assetToSy(uint256 amountInAsset) internal view returns (uint256) {
-        return SYUtils.assetToSy(IStandardizedYield(SY()).exchangeRate(), amountInAsset);
+        address _SY = SY();
+        uint256 canonicalAssetValue = _scaleUAssetToCanonicalAsset(amountInAsset, Math.Rounding.Floor);
+        return SYUtils.assetToSy(IStandardizedYield(_SY).exchangeRate(), canonicalAssetValue);
+    }
+
+    function _assetToSyUp(uint256 amountInAsset) internal view returns (uint256) {
+        address _SY = SY();
+        uint256 canonicalAssetValue = _scaleUAssetToCanonicalAsset(amountInAsset, Math.Rounding.Ceil);
+        return SYUtils.assetToSyUp(IStandardizedYield(_SY).exchangeRate(), canonicalAssetValue);
+    }
+
+    function _scaleCanonicalAssetToUAsset(uint256 amount) internal view returns (uint256) {
+        (uint8 canonicalAssetDecimals, uint8 uAssetDecimals) = _cachedAssetDecimals();
+        if (uAssetDecimals >= canonicalAssetDecimals) {
+            return amount * 10 ** (uAssetDecimals - canonicalAssetDecimals);
+        }
+        return amount / 10 ** (canonicalAssetDecimals - uAssetDecimals);
+    }
+
+    function _scaleUAssetToCanonicalAsset(uint256 amount, Math.Rounding rounding) internal view returns (uint256) {
+        (uint8 canonicalAssetDecimals, uint8 uAssetDecimals) = _cachedAssetDecimals();
+        if (canonicalAssetDecimals >= uAssetDecimals) {
+            return amount * 10 ** (canonicalAssetDecimals - uAssetDecimals);
+        }
+
+        uint256 factor = 10 ** (uAssetDecimals - canonicalAssetDecimals);
+        if (rounding == Math.Rounding.Ceil && amount != 0) {
+            return (amount - 1) / factor + 1;
+        }
+        return amount / factor;
+    }
+
+    function _cachedAssetDecimals() internal view returns (uint8 canonicalAssetDecimals, uint8 uAssetDecimals) {
+        OutrunStakingPositionStorage storage $ = _getStorage();
+        return ($.canonicalAssetDecimals, $.uAssetDecimals);
     }
 
     function _applyPositionRedeem(

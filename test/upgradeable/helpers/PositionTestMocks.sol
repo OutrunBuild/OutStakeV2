@@ -2,20 +2,34 @@
 pragma solidity ^0.8.28;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IStandardizedYield} from "../../../src/yield/interfaces/IStandardizedYield.sol";
 import {IUniversalAssets} from "../../../src/assets/interfaces/IUniversalAssets.sol";
 
 contract MockSY is ERC20, IStandardizedYield {
     address internal immutable underlying;
     uint256 internal rate;
+    uint8 internal syDecimals;
+    uint8 internal canonicalAssetDecimals;
 
     constructor(address underlying_) ERC20("Mock SY", "mSY") {
         underlying = underlying_;
         rate = 1e18;
+        syDecimals = 18;
+        canonicalAssetDecimals = 18;
     }
 
     function setExchangeRate(uint256 newRate) external {
         rate = newRate;
+    }
+
+    function setDecimals(uint8 syDecimals_, uint8 canonicalAssetDecimals_) external {
+        syDecimals = syDecimals_;
+        canonicalAssetDecimals = canonicalAssetDecimals_;
+    }
+
+    function decimals() public view override(ERC20, IERC20Metadata) returns (uint8) {
+        return syDecimals;
     }
 
     function mintShares(address receiver, uint256 amount) external {
@@ -89,12 +103,24 @@ contract MockSY is ERC20, IStandardizedYield {
     function assetInfo() external view returns (AssetType assetType, address assetAddress, uint8 assetDecimals) {
         assetType = AssetType.TOKEN;
         assetAddress = underlying;
-        assetDecimals = 18;
+        assetDecimals = canonicalAssetDecimals;
     }
 }
 
 contract MockERC20 is ERC20 {
-    constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
+    uint8 internal tokenDecimals;
+
+    constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {
+        tokenDecimals = 18;
+    }
+
+    function setDecimals(uint8 tokenDecimals_) external {
+        tokenDecimals = tokenDecimals_;
+    }
+
+    function decimals() public view override returns (uint8) {
+        return tokenDecimals;
+    }
 
     function mint(address receiver, uint256 amount) external {
         _mint(receiver, amount);

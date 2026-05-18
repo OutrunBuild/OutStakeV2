@@ -81,10 +81,11 @@ interface IStandardizedYield is IERC20Metadata {
     ) external returns (uint256 amountTokenOut);
 
     /**
-     * @notice exchangeRate * syBalance / 1e18 must return the asset balance of the account
-     * @dev Returns asset per SY, scaled by 1e18. Position accounting consumes this through SYUtils conversion
-     * helpers for stake, draw, wrap redeem, keeper redeem, and harvest calculations.
-     * @return res The current asset-per-SY exchange rate scaled by 1e18.
+     * @notice `exchangeRate * syBalance / 1e18` must return the canonical asset balance of the account.
+     * @dev Returns canonical asset per SY, scaled by 1e18. The returned asset balance is in
+     * `assetInfo().assetDecimals`, not `uAsset.decimals()`. Position accounting consumes this through SYUtils
+     * conversion helpers for stake, draw, wrap redeem, keeper redeem, and harvest calculations.
+     * @return res The current canonical-asset-per-SY exchange rate scaled by 1e18.
      */
     function exchangeRate() external view returns (uint256 res);
 

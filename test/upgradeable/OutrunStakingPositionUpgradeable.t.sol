@@ -10,6 +10,7 @@ import {OutrunL2StakedTokenSYUpgradeable} from "../../src/yield/OutrunL2StakedTo
 import {OutrunStakingPositionUpgradeable} from "../../src/position/OutrunStakingPositionUpgradeable.sol";
 import {MockLzEndpoint} from "./helpers/OFTTestHelper.sol";
 import {ProxyTestHelper} from "./helpers/ProxyTestHelper.sol";
+import {MockSY, MockERC20, MockUAsset} from "./helpers/PositionTestMocks.sol";
 import {MockPositionUUPSV2} from "./mocks/MockUUPSVersion.sol";
 
 contract PositionMockToken is ERC20 {
@@ -36,6 +37,11 @@ contract OutrunStakingPositionUpgradeableTest is Test {
     OutrunL2StakedTokenSYUpgradeable internal sy;
     OutrunUniversalAssetsUpgradeable internal uAsset;
     OutrunStakingPositionUpgradeable internal position;
+
+    MockERC20 internal mixedUnderlying;
+    MockSY internal mixedSy;
+    MockUAsset internal mixedUAsset;
+    OutrunStakingPositionUpgradeable internal mixedPosition;
 
     function setUp() external {
         token = new PositionMockToken();
@@ -177,5 +183,135 @@ contract OutrunStakingPositionUpgradeableTest is Test {
         assertEq(sy.balanceOf(user), 90e18);
         assertEq(sy.balanceOf(address(position)), 10e18);
         assertEq(uAsset.balanceOf(user), 10e18);
+    }
+
+    function testMixedDecimalsStakeMintsUAssetInEighteenDecimals() external {
+        _setupMixedDecimalsPosition();
+
+        assertEq(mixedPosition.previewStake(1e6), 1e18);
+
+        vm.prank(user);
+        (uint256 positionId, uint256 minted) = mixedPosition.stake(1e6, 30, user, user);
+
+        (, uint256 syStaked, uint256 uAssetMinted,,) = mixedPosition.positions(positionId);
+        assertEq(minted, 1e18);
+        assertEq(syStaked, 1e6);
+        assertEq(uAssetMinted, 1e18);
+        assertEq(mixedUAsset.balanceOf(user), 1e18);
+    }
+
+    function testMixedDecimalsPreviewsStakeAndWrapStakeInUAssetUnits() external {
+        _setupMixedDecimalsPosition();
+
+        assertEq(mixedPosition.previewStake(1e6), 1e18);
+        assertEq(mixedPosition.previewWrapStake(1e6), 1e18);
+    }
+
+    function testMixedDecimalsDrawUAssetUsesEighteenDecimalsAfterRateIncrease() external {
+        _setupMixedDecimalsPosition();
+
+        vm.prank(user);
+        (uint256 positionId,) = mixedPosition.stake(1e6, 30, user, user);
+
+        mixedSy.setExchangeRate(15e17);
+
+        assertEq(mixedPosition.previewDrawUAsset(positionId), 5e17);
+
+        vm.prank(user);
+        uint256 drawn = mixedPosition.drawUAsset(positionId, user);
+
+        (, uint256 syStaked, uint256 uAssetMinted,,) = mixedPosition.positions(positionId);
+        assertEq(drawn, 5e17);
+        assertEq(syStaked, 1e6);
+        assertEq(uAssetMinted, 15e17);
+        assertEq(mixedUAsset.balanceOf(user), 15e17);
+    }
+
+    function testMixedDecimalsWrapRedeemConvertsEighteenDecimalsUAssetToSixDecimalsSY() external {
+        _setupMixedDecimalsPosition();
+
+        vm.prank(user);
+        uint256 minted = mixedPosition.wrapStake(1e6, user);
+
+        assertEq(minted, 1e18);
+        assertEq(mixedPosition.previewWrapRedeem(1e18, address(mixedSy)), 1e6);
+
+        vm.prank(user);
+        mixedUAsset.approve(address(mixedPosition), 1e18);
+
+        vm.prank(user);
+        uint256 amountOut = mixedPosition.wrapRedeem(1e18, user, address(mixedSy), 1e6);
+
+        assertEq(amountOut, 1e6);
+        assertEq(mixedSy.balanceOf(user), 10e6);
+        assertEq(mixedUAsset.balanceOf(user), 0);
+        assertEq(mixedPosition.syWrapStaking(), 0);
+        assertEq(mixedPosition.wrapUAssetDebt(), 0);
+    }
+
+    function testMixedDecimalsKeepRedeemSplitsKeeperPrincipalAndOwnerExcessInSYUnits() external {
+        _setupMixedDecimalsPosition();
+
+        vm.prank(user);
+        (uint256 positionId,) = mixedPosition.stake(1e6, 30, user, keeper);
+
+        mixedSy.setExchangeRate(2e18);
+        vm.warp(block.timestamp + 31 days);
+
+        vm.startPrank(keeper);
+        mixedUAsset.approve(address(mixedPosition), type(uint256).max);
+        (uint256 burned, uint256 keeperPrincipalSY, uint256 ownerExcessSY) =
+            mixedPosition.keepRedeem(positionId, 1e18, keeper);
+        vm.stopPrank();
+
+        assertEq(burned, 1e18);
+        assertEq(keeperPrincipalSY, 5e5);
+        assertEq(ownerExcessSY, 5e5);
+        assertEq(mixedSy.balanceOf(keeper), 5e5);
+        assertEq(mixedSy.balanceOf(user), 9_500000);
+    }
+
+    function testMixedDecimalsHarvestWrapYieldHarvestsOnlyExcessWithUpRounding() external {
+        _setupMixedDecimalsPosition();
+
+        vm.prank(user);
+        uint256 minted = mixedPosition.wrapStake(1_000001, user);
+        assertEq(minted, 1000001e12);
+
+        mixedSy.setExchangeRate(3e18);
+
+        vm.prank(owner);
+        uint256 harvested = mixedPosition.harvestWrapYield(address(mixedSy), 0);
+
+        uint256 expectedDebtInSY = 333334;
+        uint256 expectedHarvest = 666667;
+        assertEq(harvested, expectedHarvest);
+        assertEq(mixedPosition.syWrapStaking(), expectedDebtInSY);
+        assertEq(mixedPosition.wrapUAssetDebt(), minted);
+        assertEq(mixedSy.balanceOf(revenuePool), expectedHarvest);
+    }
+
+    function _setupMixedDecimalsPosition() internal {
+        mixedUnderlying = new MockERC20("Mock USDC", "mUSDC");
+        mixedUnderlying.setDecimals(6);
+        mixedSy = new MockSY(address(mixedUnderlying));
+        mixedSy.setDecimals(6, 6);
+        mixedUAsset = new MockUAsset();
+
+        mixedPosition = OutrunStakingPositionUpgradeable(
+            ProxyTestHelper.deploy(
+                address(new OutrunStakingPositionUpgradeable()),
+                abi.encodeCall(
+                    OutrunStakingPositionUpgradeable.initialize,
+                    (owner, 1, revenuePool, address(mixedSy), address(mixedUAsset), keeper)
+                )
+            )
+        );
+
+        mixedUAsset.setMintingCap(address(mixedPosition), type(uint256).max);
+        mixedSy.mintShares(user, 10e6);
+
+        vm.prank(user);
+        mixedSy.approve(address(mixedPosition), type(uint256).max);
     }
 }
