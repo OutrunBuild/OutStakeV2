@@ -80,4 +80,4 @@ jobs:
           HARNESS_CHANGED_FILES: ${{ steps.changed-files.outputs.file_list }}
           RUN_RECORD_PATH: ${{ runner.temp }}/outstakev2-gate-ci.json
           CHANGE_CLASSIFIER_DIFF_FILE: ${{ steps.changed-files.outputs.diff_file }}
-        run: npm run gate:ci
+        run: npm run gate:ci -- --changed-files "$HARNESS_CHANGED_FILES"

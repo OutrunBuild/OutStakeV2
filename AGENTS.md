@@ -24,79 +24,56 @@ Do not override policy or gate evidence with natural-language guesses.
 ## Main-Session Rules
 
 - main-orchestrator stays in the primary session and is never a project agent file.
-- Derive surface, risk_tier, writer_role, and review_roles from policy before delegating. Mixed harness_control + Solidity change sets are allowed; use the highest risk_tier across matched surfaces and the union of review_roles.
-- For current local task completion/readiness, default verification_profile is `fast` regardless of risk_tier. Use `full`, `ci`, release, or merge-equivalent verification only when explicitly requested by a human or when running in CI/release-equivalent context. Do not infer `full` from high-risk or prod-semantic risk_tier alone.
-- Current Solidity contracts are still pre-deployment development artifacts. Unless a human explicitly asks about deployed production compatibility or says a deployed production contract must be preserved, do not add or raise residual risk about upgrade/backward-compatibility machinery, storage-layout preservation workarounds, legacy selector fallbacks, migration paths, deployment-order constraints, or external-integrator recompilation/interface compatibility during normal review of current work.
-- review_roles remain reviewer-only; do not place verifier inside review_roles.
+- Derive `change_class`, `surface_sensitivity`, `orchestration_profile`, `selected_writer_roles`, and `selected_review_roles` from policy/gate evidence before delegating.
+- Current local task completion defaults to `gate:fast`. Use `full`, `ci`, release, or merge-equivalent verification only when explicitly requested or running in that context.
+- Current Solidity contracts are pre-deployment development artifacts unless a human explicitly says deployed compatibility must be preserved.
+- Review roles remain reviewer-only; do not place verifier inside review roles.
 - Project agent files under .claude/agents/ and .codex/agents/ are execution files. They do not define policy or verdict rules.
 - Do not create a parallel control plane outside policy, gate, and project agent files.
-- Spec document modifications require explicit human confirmation before proceeding. Do not modify files matching spec patterns without user approval.
-- Deleting untracked files from the current git working tree requires explicit human confirmation before proceeding.
+- Deleting untracked files from the current git working tree requires explicit human confirmation.
 
 ## Verification Contract
 
 - gate.sh is the enforcement entrypoint.
-- Completion, readiness, or “pass” claims for tracked or intended-to-commit repository changes require fresh output from the selected matching gate profile.
-- For local current work on tracked or intended-to-commit repository changes, invoke `gate.sh` with the exact changed-file set. If any Solidity file is involved, also provide diff evidence via `CHANGE_CLASSIFIER_DIFF_FILE` or `GATE_DIFF_BASE`.
-- Ignored/local scratch artifacts are outside the repository readiness verdict. Do not pass ignored scratch paths to `gate.sh` as the basis for a repository PASS/BLOCKED verdict. For those artifacts, report only the artifact-specific verification performed, and label repository gate status as not applicable.
-- If an ignored/local artifact is intended to become a formal deliverable, first move it to a policy-classified tracked path or update policy so the path is classified; then run the matching gate before claiming repository readiness.
+- Completion, readiness, or pass claims require fresh output from the selected matching gate profile.
+- For local current work, invoke `gate.sh` with the exact changed-file set. If any Solidity file is involved, also provide diff evidence via `CHANGE_CLASSIFIER_DIFF_FILE` or `GATE_DIFF_BASE`.
+- Ignored/local scratch artifacts are outside the repository readiness verdict unless promoted into a policy-classified tracked path.
 - See docs/VERIFICATION.md for profile meanings and command entrypoints.
 
 ## Harness Dispatch Procedure
 
-When `.harness/policy.json` exists AND the task involves writing or modifying code, follow this procedure:
+When `.harness/policy.json` exists and the task modifies repository files, follow this procedure.
 
 ### Mandatory Pre-condition
 
-Even when the user gives a direct instruction to modify files, you MUST follow this dispatch procedure. Do not modify files directly in the main session. Every code modification must go through classify → dispatch → review → verify.
+Run `bash script/harness/gate.sh --classify-only --changed-files <path>` before editing. Do not use stale mental classification.
 
 ### Surface Completeness
 
-Every file that will be modified or created must match a surface pattern in policy.json. If a target file does not match any surface, the surface configuration is incomplete — stop and add the missing pattern to policy.json before proceeding. New files are classified by their intended path against existing surface patterns.
+Every file that will be modified or created must match a surface pattern in policy.json. Unknown paths are blocked until policy is updated.
 
 ### Flow
 
-1. **Classify** — Read `.harness/policy.json`. Determine surface, risk_tier, writer_role, review_roles, verification_profile.
-2. **Explore** (optional) — If surface/risk unclear, inspect the related contracts, imports/inheritance, existing tests under `test/`, and mapped specs under `docs/spec/`, then re-classify from that evidence.
-3. **Spec Readiness Gate** — When risk_tier is prod-semantic or high-risk:
-   - Identify which doc_mapping rules match the changed files (via test_mapping paths).
-   - Collect `check_docs` from matching rules.
-   - If the change touches ≥ `cross_cutting_trigger_threshold` rules, also collect `cross_cutting_docs`.
-   - Only check the collected docs — never scan all docs under `docs/`.
-   - Exclude any path matching `doc_exclusions` (e.g. `docs/superpowers/`).
-   - If any collected doc is missing or outdated:
-     - Block code implementation.
-     - Dispatch `process-implementer` to update documentation first.
-     - Documentation updates must pass full review cycle with `spec-reviewer` (see remediation_policy).
-     - Only after documentation review passes does the flow proceed to step 4.
-  - Any spec document change (new, missing, or updated) must be presented to the user for explicit human confirmation before implementation proceeds.
-  - non-semantic and test-semantic changes skip this gate entirely.
-4. **Implement** — Dispatch the appropriate writer:
-   - surface=solidity → `solidity-implementer`
-   - surface=harness_control → `process-implementer`
-   - Mixed harness_control + Solidity → dispatch each touched surface to its configured writer; keep spec readiness before implementation, and require explicit human confirmation for any spec document change before implementation proceeds.
-5. **Review** (parallel) — Dispatch reviewers by risk_tier:
-   - non-semantic → skip review
-   - test-semantic → `logic-reviewer`
-   - prod-semantic → `logic-reviewer` + `gas-reviewer` + `security-reviewer`
-   - high-risk → `logic-reviewer` + `gas-reviewer` + `security-reviewer`
-   - If review_triggers match (spec file changes) → also dispatch `spec-reviewer`.
-6. **Remediation cycle** — max 5 rounds (from remediation_policy.max_cycles):
-   - All findings info/minor → continue to step 7.
-   - Severity ≥ major → forward reviewer's raw output to the appropriate writer → re-review.
-   - Severity = critical → block, present findings to user for decision.
-   - User override critical → record residual risk, continue.
-   - Reviewer conflict → resolve by conflict_priority order (security-reviewer > gas-reviewer > logic-reviewer).
-7. **Verify** — Dispatch `verifier` to run `bash script/harness/gate.sh --profile <profile>` using the selected profile. For local current work on tracked or intended-to-commit repository changes, the selected profile defaults to `fast` unless a human explicitly requested `full`, `ci`, release, merge, or release-equivalent verification. Pass the exact changed-file input; when Solidity files are involved, pass diff evidence via `CHANGE_CLASSIFIER_DIFF_FILE` or `GATE_DIFF_BASE`. Ignored/local scratch artifacts use artifact-specific verification and do not receive a repository gate verdict unless promoted into a classified tracked path. Report exit code + stdout when gate applies.
-8. **Conclude** — Report final verdict based on latest applicable gate output. Do not claim repository completion without fresh gate evidence. For ignored/local scratch artifacts, report a content/artifact verdict separately and state that repository gate is not applicable.
+1. **Classify** - run `gate.sh --classify-only` with exact changed files and Solidity diff evidence when needed.
+2. **Docs/spec readiness** - if spec docs or spec-readiness updates are required, dispatch `process-implementer`, require `spec-reviewer`, then obtain human confirmation before code implementation.
+3. **Direct** - main session may edit; no writer/reviewer dispatch; run `gate:fast`.
+4. **Direct-review** - main session may edit; dispatch `selected_review_roles`; run `gate:fast` after review.
+5. **Delegated** - dispatch `selected_writer_roles`; dispatch `selected_review_roles` from `delegated_review_rules`; main session runs `gate:fast` after integration.
+6. **Full-review** - dispatch `selected_writer_roles`; dispatch reviewers from `full_review_matrix[change_class]`; main session runs `gate:fast` after integration.
+7. **Full-subagent** - dispatch writer, reviewers, and verifier; verifier runs the selected gate profile and reports output.
+8. **Blocked** - stop before editing.
 
-### Retry routing
+Production Solidity semantic changes without structural escalation require a Risk Analysis Record before selecting `direct-review`. If analysis is incomplete or uncertain, use at least `full-review`.
 
-- surface=solidity_prod/test → route back to `solidity-implementer`
-- surface=harness_control → route back to `process-implementer`
-- spec readiness gate failure → route to `process-implementer` for doc update
+README.md editorial-only direct changes require a Doc Editorial Attestation. README workflow, gate, verification, policy, command, CI, or repository-truth semantics are `delegated`.
 
-### When NOT to trigger harness
+## Retry Routing
+
+- surface=solidity_prod/test -> route back to `solidity-implementer`
+- surface=harness_control -> route back to `process-implementer`
+- spec readiness gate failure -> route to `process-implementer` for doc update
+
+## When Not To Trigger Harness
 
 - User asks a question without requesting code changes
 - User requests exploration only
@@ -108,20 +85,6 @@ Every file that will be modified or created must match a surface pattern in poli
 - docs/TRACEABILITY.md lists control files and artifact locations.
 - Other repository docs are context only unless policy or gate evidence explicitly points to them.
 
-## Upgrade Boundaries
+## Escalation Boundaries
 
-Escalate instead of deciding locally when a change would:
-
-- alter product semantics, fund flow, permission semantics, security assumptions, or upgrade behavior
-- change the acceptance threshold for residual risk
-- cross the current task scope into unrelated restructuring or product changes
-
-## Repo Focus
-
-High-sensitivity areas in this repo:
-
-- accounting consistency
-- debt, repay, and mint-cap semantics
-- staking, wrap, and redeem paths
-- router fund flow and call boundaries
-- external protocol and exchange-rate dependency boundaries
+Escalate instead of deciding locally when a change would alter product semantics, fund flow, permission semantics, security assumptions, upgrade behavior, or acceptance thresholds for residual risk.
