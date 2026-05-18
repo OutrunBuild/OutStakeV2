@@ -32,3 +32,4 @@
 - If an ignored/local artifact is intended to become a formal deliverable, first move it into a policy-classified tracked path or update policy so the path is classified; then run the matching gate before claiming repository readiness.
 - If changed files imply multiple writer roles, route each touched surface to its configured writer; only stop as blocked when policy or gate evidence emits a hard block.
 - If required verification evidence is missing, keep the final verdict blocked or fail instead of projecting pass.
+- If Solidity surface or risk is unclear, inspect the related contracts, imports/inheritance, existing tests, and mapped spec documents before classifying. Do not rely on a separate explorer agent for this step.

@@ -27,7 +27,7 @@ Do not override policy or gate evidence with natural-language guesses.
 - Derive surface, risk_tier, writer_role, and review_roles from policy before delegating. Mixed harness_control + Solidity change sets are allowed; use the highest risk_tier across matched surfaces and the union of review_roles.
 - For current local task completion/readiness, default verification_profile is `fast` regardless of risk_tier. Use `full`, `ci`, release, or merge-equivalent verification only when explicitly requested by a human or when running in CI/release-equivalent context. Do not infer `full` from high-risk or prod-semantic risk_tier alone.
 - Current Solidity contracts are still pre-deployment development artifacts. Unless a human explicitly asks about deployed production compatibility or says a deployed production contract must be preserved, do not add or raise residual risk about upgrade/backward-compatibility machinery, storage-layout preservation workarounds, legacy selector fallbacks, migration paths, deployment-order constraints, or external-integrator recompilation/interface compatibility during normal review of current work.
-- review_roles remain reviewer-only; do not place verifier or security-test-writer inside review_roles.
+- review_roles remain reviewer-only; do not place verifier inside review_roles.
 - Project agent files under .claude/agents/ and .codex/agents/ are execution files. They do not define policy or verdict rules.
 - Do not create a parallel control plane outside policy, gate, and project agent files.
 - Spec document modifications require explicit human confirmation before proceeding. Do not modify files matching spec patterns without user approval.
@@ -57,7 +57,7 @@ Every file that will be modified or created must match a surface pattern in poli
 ### Flow
 
 1. **Classify** — Read `.harness/policy.json`. Determine surface, risk_tier, writer_role, review_roles, verification_profile.
-2. **Explore** (optional) — If surface/risk unclear, dispatch `solidity-explorer`. Use structured findings to re-classify.
+2. **Explore** (optional) — If surface/risk unclear, inspect the related contracts, imports/inheritance, existing tests under `test/`, and mapped specs under `docs/spec/`, then re-classify from that evidence.
 3. **Spec Readiness Gate** — When risk_tier is prod-semantic or high-risk:
    - Identify which doc_mapping rules match the changed files (via test_mapping paths).
    - Collect `check_docs` from matching rules.
@@ -87,16 +87,14 @@ Every file that will be modified or created must match a surface pattern in poli
    - Severity = critical → block, present findings to user for decision.
    - User override critical → record residual risk, continue.
    - Reviewer conflict → resolve by conflict_priority order (security-reviewer > gas-reviewer > logic-reviewer).
-7. **Security tests** — If risk_tier=high-risk AND security_test_writer_trigger matches, dispatch `security-test-writer`.
-8. **Verify** — Dispatch `verifier` to run `bash script/harness/gate.sh --profile <profile>` using the selected profile. For local current work on tracked or intended-to-commit repository changes, the selected profile defaults to `fast` unless a human explicitly requested `full`, `ci`, release, merge, or release-equivalent verification. Pass the exact changed-file input; when Solidity files are involved, pass diff evidence via `CHANGE_CLASSIFIER_DIFF_FILE` or `GATE_DIFF_BASE`. Ignored/local scratch artifacts use artifact-specific verification and do not receive a repository gate verdict unless promoted into a classified tracked path. Report exit code + stdout when gate applies.
-9. **Conclude** — Report final verdict based on latest applicable gate output. Do not claim repository completion without fresh gate evidence. For ignored/local scratch artifacts, report a content/artifact verdict separately and state that repository gate is not applicable.
+7. **Verify** — Dispatch `verifier` to run `bash script/harness/gate.sh --profile <profile>` using the selected profile. For local current work on tracked or intended-to-commit repository changes, the selected profile defaults to `fast` unless a human explicitly requested `full`, `ci`, release, merge, or release-equivalent verification. Pass the exact changed-file input; when Solidity files are involved, pass diff evidence via `CHANGE_CLASSIFIER_DIFF_FILE` or `GATE_DIFF_BASE`. Ignored/local scratch artifacts use artifact-specific verification and do not receive a repository gate verdict unless promoted into a classified tracked path. Report exit code + stdout when gate applies.
+8. **Conclude** — Report final verdict based on latest applicable gate output. Do not claim repository completion without fresh gate evidence. For ignored/local scratch artifacts, report a content/artifact verdict separately and state that repository gate is not applicable.
 
 ### Retry routing
 
 - surface=solidity_prod/test → route back to `solidity-implementer`
 - surface=harness_control → route back to `process-implementer`
 - spec readiness gate failure → route to `process-implementer` for doc update
-- security test fixes → route back to `security-test-writer`
 
 ### When NOT to trigger harness
 
