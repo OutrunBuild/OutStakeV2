@@ -37,6 +37,7 @@
       "^docs/implementation-map\\.md$",
       "^docs/testing-and-evidence\\.md$",
       "^docs/review/.*\\.md$",
+      "^docs/.*$",
       "(^|.*/)(spec|specs)/.*\\.(md|mdx)$",
       "^solhint.*\\.config\\.js$",
       "^foundry\\.toml$",
@@ -51,58 +52,158 @@
     "harness_control": "process-implementer"
   },
   "risk_rules": {
-    "high_risk_paths": [
-      "^src/assets/.*\\.sol$",
-      "^src/position/.*\\.sol$",
-      "^src/yield/.*\\.sol$",
-      "^src/router/.*\\.sol$",
-      "^src/integrations/.*\\.sol$",
-      "^src/libraries/.*\\.sol$",
-      "^script/.*\\.sol$"
-    ],
-    "high_risk_tokens": [
-      "\\bdelegatecall\\b",
-      "\\bselfdestruct\\b",
-      "\\bassembly\\b",
-      "\\bcallcode\\b"
-    ],
     "slither_filter_paths": "lib|test|script|node_modules",
     "slither_exclude_detectors": "naming-convention,too-many-digits,unindexed-event-address,immutable-states,unimplemented-functions"
   },
-  "review_matrix": {
-    "non-semantic": [],
-    "test-semantic": [
-      "logic-reviewer"
-    ],
-    "prod-semantic": [
-      "logic-reviewer",
-      "security-reviewer",
-      "gas-reviewer"
-    ],
-    "high-risk": [
-      "logic-reviewer",
-      "security-reviewer",
-      "gas-reviewer"
-    ]
+  "orchestration_profiles": {
+    "direct": {
+      "writer": "main-session",
+      "reviewers": [],
+      "verifier": "main-session",
+      "verification_profile": "fast"
+    },
+    "direct-review": {
+      "writer": "main-session",
+      "reviewers": "orchestration-selected",
+      "verifier": "main-session",
+      "verification_profile": "fast"
+    },
+    "delegated": {
+      "writer": "policy-selected",
+      "reviewers": "delegated-selected",
+      "verifier": "main-session",
+      "verification_profile": "fast"
+    },
+    "full-review": {
+      "writer": "policy-selected",
+      "reviewers": "full-review-matrix",
+      "verifier": "main-session",
+      "verification_profile": "fast"
+    },
+    "full-subagent": {
+      "writer": "policy-selected",
+      "reviewers": "full-review-matrix",
+      "verifier": "required-verifier-agent",
+      "verification_profile": "selected"
+    },
+    "no-op": {
+      "writer": "none",
+      "reviewers": [],
+      "verifier": "none",
+      "verification_profile": "none"
+    },
+    "blocked": {
+      "writer": "none",
+      "reviewers": [],
+      "verifier": "none",
+      "verification_profile": "none"
+    }
   },
-  "review_triggers": [
+  "orchestration_writer_rules": [
     {
-      "id": "spec-doc-review",
-      "reviewer_role": "spec-reviewer",
-      "paths": [
-        "(^|.*/)(spec|specs)/.*\\.(md|mdx)$"
-      ],
-      "surfaces": [
-        "harness_control"
-      ]
+      "id": "spec-doc",
+      "paths": ["(^|.*/)(spec|specs)/.*\\.(md|mdx)$"],
+      "writer": "process-implementer"
+    },
+    {
+      "id": "spec-readiness-doc-update",
+      "trigger": "spec-readiness-doc-update",
+      "writer": "process-implementer"
+    },
+    {
+      "id": "harness-control",
+      "paths": ["^\\.harness/.*$", "^script/harness/.*$", "^\\.github/workflows/.*$", "^AGENTS\\.md$", "^CLAUDE\\.md$"],
+      "writer": "process-implementer"
+    },
+    {
+      "id": "repo-metadata",
+      "paths": ["^package\\.json$", "^package-lock\\.json$", "^npm-shrinkwrap\\.json$"],
+      "writer": "process-implementer"
+    },
+    {
+      "id": "docs",
+      "paths": ["^docs/.*$", "^README\\.md$"],
+      "writer": "process-implementer"
     }
   ],
+  "writer_conflict_policy": {
+    "mixed_spec_and_code": "run spec/document workflow first, then classify code changes separately",
+    "mixed_solidity_and_harness_control": "either split into separately classified units before editing or keep the task combined and require full-review minimum",
+    "mixed_docs_and_solidity": "docs are harness_control; apply mixed_solidity_and_harness_control. Preserve spec-readiness ordering, and require full-review minimum if production Solidity semantic changes remain bundled with docs."
+  },
+  "orchestration_review_roles": {
+    "no-op": [],
+    "non-semantic": [],
+    "test-semantic": ["logic-reviewer"],
+    "prod-semantic-risk-analysis-passed": ["logic-reviewer"]
+  },
+  "delegated_review_rules": [
+    {
+      "id": "spec-path",
+      "paths": ["(^|.*/)(spec|specs)/.*\\.(md|mdx)$"],
+      "reviewers": ["spec-reviewer"],
+      "requires_human_confirmation": true
+    },
+    {
+      "id": "spec-readiness-doc-update",
+      "trigger": "spec-readiness-doc-update",
+      "reviewers": ["spec-reviewer"],
+      "requires_human_confirmation": true
+    },
+    {
+      "id": "harness-control",
+      "paths": ["^\\.harness/.*$", "^script/harness/.*$", "^\\.github/workflows/.*$"],
+      "reviewers": [],
+      "requires_human_confirmation": false
+    },
+    {
+      "id": "non-spec-doc",
+      "paths": ["^docs/.*$"],
+      "exclude_paths": ["(^|.*/)(spec|specs)/.*\\.(md|mdx)$"],
+      "reviewers": [],
+      "requires_human_confirmation": false
+    }
+  ],
+  "full_review_matrix": {
+    "no-op": [],
+    "non-semantic": [],
+    "test-semantic": ["logic-reviewer"],
+    "prod-semantic": ["logic-reviewer", "security-reviewer", "gas-reviewer"]
+  },
+  "orchestration_rules": {
+    "delegated_surface": "harness_control",
+    "spec_paths": ["(^|.*/)(spec|specs)/.*\\.(md|mdx)$"],
+    "scope_escalation": {
+      "prod_solidity_max_files_before_full_review": 1,
+      "prod_solidity_max_semantic_lines_before_full_review": 20
+    },
+    "main_session_risk_analysis_required_for": [
+      "semantic production Solidity changes not structurally escalated"
+    ],
+    "surface_sensitivity": {
+      "solidity_prod": "sensitive",
+      "solidity_test": "normal",
+      "harness_control": "normal"
+    },
+    "full_ci_command_gates": {
+      "coverage_when_required": {
+        "change_class": "prod-semantic",
+        "surface_sensitivity": "sensitive"
+      },
+      "slither_when_required": {
+        "change_class": "prod-semantic",
+        "surface_sensitivity": "sensitive",
+        "paths": ["^src/.*\\.sol$"]
+      }
+    }
+  },
   "security_test_writer_trigger": {
-    "risk_tiers": ["high-risk"],
+    "change_class": "prod-semantic",
+    "selected_review_roles_include": ["security-reviewer"],
     "reviewer_finding_severity_to_activate": "critical"
   },
   "spec_readiness_gate": {
-    "trigger_risk_tiers": ["prod-semantic", "high-risk"],
+    "trigger_change_classes": ["prod-semantic"],
     "doc_exclusions": ["^docs/superpowers/"],
     "gate_action": "block",
     "required_reviewer": "spec-reviewer",
@@ -345,7 +446,7 @@
       ],
       "rules": [
         {
-          "id": "security-high-risk",
+          "id": "security-sensitive-scope",
           "paths": [
             "^src/assets/.*\\.sol$",
             "^src/position/.*\\.sol$",

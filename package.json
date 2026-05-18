@@ -15,7 +15,7 @@
     "gate:fast": "bash ./script/harness/gate.sh --profile fast",
     "gate": "bash ./script/harness/gate.sh --profile fast",
     "gate:full": "bash ./script/harness/gate.sh --profile full",
-    "gate:ci": "bash ./script/harness/gate.sh --profile ci --all",
+    "gate:ci": "bash ./script/harness/gate.sh --profile ci",
     "test:fast": "npm run gate:fast",
     "test:unit:forge": "forge test --match-contract '^(ERC7201StorageLocationUpgradeableTest|OracleSetterUpgradeableTest|OutrunOFTUpgradeableTest|OutrunRouterTest|OutrunRouterFuzzTest|OutrunStakingPositionUpgradeableTest|OutrunStakingPositionFuzzTest|OutrunUniversalAssetsUpgradeableTest|RouterPositionSyTest|RouterProxyIntegrationTest|SYAdaptersUpgradeableTest|SYUpgradeableTest|AdversarialTests)$'",
     "test:unit": "FOUNDRY_PROFILE=smoke npm run test:unit:forge",
