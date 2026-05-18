@@ -2,7 +2,7 @@
 
 ## 1. 文档目的
 
-本文档说明 `OutStakeV2` 当前实现中的核心账务规则，包括 `uAsset` minter-cap、position debt、wrap 池、汇率换算、赎回按比例销债、keeper redeem 分账与 wrap yield harvest。
+本文档说明 `OutStakeV2` 当前实现中的核心账务规则，并明确 mixed-decimals 双段换算的本次修复目标/修复后语义，包括 `uAsset` minter-cap、position debt、wrap 池、汇率换算、赎回按比例销债、keeper redeem 分账与 wrap yield harvest。
 
 ## 1.1 Upgradeable accounting readiness
 
@@ -47,11 +47,11 @@
 锁仓仓位的初始 debt 规则是：
 
 - 用户 stake `amountInSY`
-- 合约用 `SY.exchangeRate()` 通过 `SYUtils.syToAsset(...)` 算出 `principalValue`
+- 本次修复目标/修复后语义：先计算 `canonicalAssetValue = SY -> canonical asset`，再计算 `principalValue = canonical asset -> uAsset`
 - `principalValue` 同时成为初始 `UAssetMinted`
 - position 内写入该值，并调用 `uAsset.mint(...)`
 
-这里的关键点是：position debt 不是按固定 1:1 写入，而是按当前 `exchangeRate()` 折算后的资产值写入。
+这里的关键点是：position debt 不是按固定 1:1 写入，而是按当前 `exchangeRate()` 折算后的 canonical asset value，再归一化成 `uAsset` 记账单位后写入。
 
 ## 4. Wrap 池账务
 
@@ -65,17 +65,17 @@ wrap 池当前使用三组聚合账务变量：
 
 - 增加 `syTotalStaking`
 - 增加 `syWrapStaking`
-- 按当前 `exchangeRate()` 折算出 principal value
+- 本次修复目标/修复后语义：先计算 `canonicalAssetValue = SY -> canonical asset`，再计算 `principalValue = canonical asset -> uAsset`
 - 用 principal value 增加 `wrapUAssetDebt`
 - 铸造等额 `uAsset`
 
 `wrapRedeem` 时：
 
-- 先检查 `amountInUAsset <= wrapUAssetDebt`
-- 再把 `amountInUAsset` 用 `assetToSy` 换算成 `amountInSY`
+- 先检查 `uAssetDebtUnits = amountInUAsset` 且 `uAssetDebtUnits <= wrapUAssetDebt`
+- 本次修复目标/修复后语义：先计算 `canonicalAssetValue = uAsset -> canonical asset`，再计算 `amountInSY = canonical asset -> SY`
 - 减少 `syTotalStaking`
 - 减少 `syWrapStaking`
-- 减少 `wrapUAssetDebt`
+- 减少 `wrapUAssetDebt` 中对应的 `uAssetDebtUnits`
 
 当前测试已经说明 wrap 池按 principal accounting 运行，不会因为汇率上涨而自动增加用户的 `uAsset` debt。
 
@@ -85,23 +85,52 @@ wrap 池当前使用三组聚合账务变量：
 
 - `exchangeRate * syBalance / 1e18` 对应资产值
 - 如果用户贡献的是价值 X 的资产，则铸出的 SY 或 debt 应通过同一换算关系推导
+- position / wrap debt 的统一语义是：先 `SY -> canonical asset`，再 `canonical asset -> uAsset`；需要从 debt 反推 `SY` 时，则先 `uAsset -> canonical asset`，再 `canonical asset -> SY`
+- `canonical asset` 在这里是 `exchangeRate()` 定义的价值单位；`canonicalAssetDecimals` 取自 `SY.assetInfo().assetDecimals`，`uAssetDecimals` 取自 `uAsset.decimals()`
+- 以下 mixed-decimals 双段换算是本次修复目标/修复后语义，不把它表述为当前代码已完成行为；具体单位模型与四个基础公式以 [docs/spec/common-foundations.md](/home/azkrale/Web3Project/OutStakeV2/docs/spec/common-foundations.md) 为准
 
-`OutrunStakingPositionUpgradeable` 当前账务描述涉及两种方向的换算：
+`OutrunStakingPositionUpgradeable` 的相关账务应按四个基础方向换算：
 
-- `syToAsset(exchangeRate, syAmount)`：把 `SY` principal 换成资产值，用于 stake、wrap stake、draw 预览
-- `assetToSy(exchangeRate, assetAmount)`：把 `uAsset` debt 换成 `SY`，用于 wrap redeem、keeper redeem
-- `assetToSyUp(exchangeRate, assetAmount)`：把 `uAsset` debt 向上取整换成 `SY`，用于 `harvestWrapYield` 的最小 retained debt coverage
+- `SY -> canonical asset`：`canonicalAssetValue = syToAsset(exchangeRate, syAmount)`，必要时使用向上版本
+- `canonical asset -> uAsset`：把 `canonicalAssetValue` 归一化为 `uAssetDebtUnits`
+- `uAsset -> canonical asset`：把 `uAssetDebtUnits` 反归一化为 `canonicalAssetValue`
+- `canonical asset -> SY`：`syAmount = assetToSy(exchangeRate, canonicalAssetValue)`，必要时使用向上版本
 
-因此，当前仓库的 position/wrap 账务，都以 `SY` 数量和资产值之间的双向换算为前提。
+rounding matrix：
+
+- mint / stake / wrap stake / `previewStake(amountInSY)` / `previewWrapStake(amountInSY)`：
+  - `SY -> canonical asset` 用 down
+  - `canonical asset -> uAsset` 用 down
+- draw：
+  - `SY -> canonical asset` 用 down
+  - `canonical asset -> uAsset` 用 down
+- wrap redeem：
+  - `uAsset -> canonical asset` 用 down
+  - `canonical asset -> SY` 用 down
+- keeper redeem：
+  - `uAsset -> canonical asset` 用 down
+  - `canonical asset -> SY` 用 down
+- `previewRedeem(positionId, syRedeemed, tokenOut)`：
+  - full redeem 直接返回全部剩余 `position.UAssetMinted`
+  - partial redeem 对 `position.UAssetMinted * syRedeemed / syStaked` 用 up
+  - 若 partial 结果会耗尽剩余 debt，则 preview 必须拒绝该报价
+- `previewWrapRedeem(amountInUAsset, tokenOut)`：
+  - `uAsset -> canonical asset` 用 down
+  - `canonical asset -> SY` 用 down
+- harvest coverage：
+  - `uAsset -> canonical asset` 用 up
+  - `canonical asset -> SY` 用 up
+
+因此，position/wrap 账务都以 `SY` 数量和资产值之间的双向换算为前提，但 mixed-decimals 双段归一化按上表作为本次修复目标落文。
 
 ## 6. Draw 账务
 
 `drawUAsset(positionId, recipient)` 当前的账务规则是：
 
-- 先用当前 `exchangeRate()` 计算 position 的 `currentValue`
+- 本次修复目标/修复后语义：先计算 `canonicalAssetValue = SY -> canonical asset`，再计算 `currentValueInUAsset = canonical asset -> uAsset`
 - 再读取已有 `position.UAssetMinted`
-- 若 `currentValue <= minted`，则可追加铸造额为 0
-- 否则只允许铸造差额 `currentValue - minted`
+- 若 `currentValueInUAsset <= minted`，则可追加铸造额为 0
+- 否则只允许铸造差额 `currentValueInUAsset - minted`
 
 成功后：
 
@@ -126,14 +155,16 @@ wrap 池当前使用三组聚合账务变量：
 
 这意味着 position redeem 仍然是“按当前仓位内部 debt 比例切片销债”，但 partial 路径使用 ceiling rounding，并显式禁止“剩余 SY 仍在、debt 已被全部烧空”的状态。
 
+这里被销毁的 `position.UAssetMinted` 始终是前述 `SY -> canonical asset -> uAsset` 归一化后记下来的 debt 单位；执行路径不要求在每次 partial redeem 时重新按汇率定价，但该 debt 单位的语义基准保持不变。
+
 ## 8. Keeper redeem 分账
 
 `keepRedeem(positionId, amountInUAsset, receiver)` 的账务路径与普通 redeem 不同，当前规则是：
 
-- keeper 提供并烧掉自己持有的 `amountInUAsset`
-- 先按 `keeperPrincipalSY = assetToSy(amountInUAsset)` 算出 keeper 理论本金
-- 再按 `syRedeemed = syStaked * amountInUAsset / positionUAssetMinted` 算出本次实际抽出的仓位 `SY`
-- 若理论本金大于实际可抽出的 `syRedeemed`，则 keeper 只能拿到 `syRedeemed`
+- keeper 提供并烧掉自己持有的 `uAssetDebtUnits = amountInUAsset`
+- 本次修复目标/修复后语义：先计算 `canonicalAssetValue = uAsset -> canonical asset`，再计算 `keeperPrincipalSY = canonical asset -> SY`
+- 再按显式 down rounding 公式 `syRedeemed = roundDownDiv(syStaked * uAssetDebtUnits, positionUAssetMinted)` 算出本次实际抽出的仓位 `SY`
+- 若 `keeperPrincipalSY > syRedeemed`，则必须 clamp 为 `keeperPrincipalSY = syRedeemed`
 - 剩余 `ownerExcessSY = syRedeemed - keeperPrincipalSY`
 
 成功后：
@@ -149,7 +180,7 @@ wrap 池当前使用三组聚合账务变量：
 `harvestWrapYield(tokenOut, minTokenOut)` 的批准修复语义是：只处理 wrap 池中高于当前 exchangeRate 下 wrap debt 最低覆盖需求的那部分 `SY`：
 
 - 先读取 `wrapPoolSY = syWrapStaking`
-- 再计算 `wrapDebtInSY = assetToSyUp(wrapUAssetDebt)`
+- 本次修复目标/修复后语义：先按 up 版本计算 `wrapDebtInCanonicalAsset = uAsset -> canonical asset`，再按 up 版本计算 `wrapDebtInSY = canonical asset -> SY`
 - 若 `wrapPoolSY <= wrapDebtInSY`，则没有可 harvest 的额外收益
 - 否则 `amountInSY = wrapPoolSY - wrapDebtInSY`
 
@@ -158,7 +189,7 @@ wrap 池当前使用三组聚合账务变量：
 - `syTotalStaking -= amountInSY`
 - `syWrapStaking -= amountInSY`
 - `wrapUAssetDebt` 不变化
-- harvest 后剩余的 `syWrapStaking` 仍满足 `syWrapStaking >= assetToSyUp(wrapUAssetDebt)`，等价于 `syToAsset(exchangeRate, syWrapStaking) >= wrapUAssetDebt`
+- harvest 后剩余的 `syWrapStaking` 仍满足 `syWrapStaking >= wrapDebtInSY`
 - 收益转到 `revenuePool`
 
 因此，harvest 当前抽走的是 wrap 池里“高于 debt 等价 SY 的超额部分”，而不是改变用户未偿 `uAsset` debt。

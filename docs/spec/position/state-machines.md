@@ -2,7 +2,7 @@
 
 ## 1. 文档目的
 
-本文档把 `OutStakeV2` 当前用户可见主流程整理成状态机表达，帮助读者理解各个入口如何改变 position、wrap 池、`uAsset` debt 与 pause 状态。本文只描述当前本地代码里已经存在的流程，并记录当前 upgradeable-only implementation 的状态机边界。
+本文档把 `OutStakeV2` 当前用户可见主流程整理成状态机表达，帮助读者理解各个入口如何改变 position、wrap 池、`uAsset` debt 与 pause 状态。本文只描述当前本地代码里已经存在的流程，并记录当前 upgradeable-only implementation 的状态机边界；涉及 mixed-decimals 双段换算与 harvest coverage rounding 的条目，以下明确标成“本次修复目标/修复后语义”，不把它写成当前代码已完成行为。
 
 ## 1.1 Upgradeable readiness
 
@@ -22,7 +22,7 @@
 1. 调用前状态：用户持有 `SY`，或先经 router 把 token 转成 `SY`。
 2. 入口校验：`positionOwner` 与 `uAssetReceiver` 不能为零地址，`amountInSY` 需满足 `minStake`，合约不能处于 paused。
 3. 资产进入：`SY` 被转入 `OutrunStakingPositionUpgradeable`。
-4. principal 定价：用当前 `exchangeRate()` 把 `amountInSY` 折算成 `principalValue`。
+4. principal 定价（本次修复目标/修复后语义）：先计算 `canonicalAssetValue = SY -> canonical asset`，再计算 `principalValue = canonical asset -> uAsset`；其中 `canonicalAssetDecimals = SY.assetInfo().assetDecimals`，`uAssetDecimals = uAsset.decimals()`。
 5. debt 上限校验：检查当前 `uAsset` 给该 position 合约地址留下的 mintable cap 是否足够。
 6. 状态写入：增加 `syTotalStaking`，生成新的 `positionId`，写入 position。
 7. 债务铸造：调用 `uAsset.mint(uAssetReceiver, UAssetMinted)`。
@@ -33,8 +33,8 @@
 `drawUAsset(positionId, recipient)` 只作用于已存在 position，当前状态机如下：
 
 1. 前置状态：position 存在，调用者必须是 position owner，合约不能 paused。
-2. 估值阶段：按当前 `exchangeRate()` 计算仓位价值。
-3. 可追加额度计算：若当前价值不高于已铸 debt，则流程回退；否则差额即 `amountInUAsset`。
+2. 估值阶段（本次修复目标/修复后语义）：先计算 `canonicalAssetValue = SY -> canonical asset`，再计算 `currentValueInUAsset = canonical asset -> uAsset`。
+3. 可追加额度计算：若 `currentValueInUAsset` 不高于已铸 debt，则流程回退；否则差额即 `amountInUAsset`。
 4. 状态更新：增加 `position.UAssetMinted`。
 5. cap 校验与铸造：检查 `uAsset` mint cap，随后铸造新的 `uAsset` 到 `recipient`。
 6. 完成状态：position 仍是活跃仓位，但未偿 debt 增大。
@@ -64,7 +64,7 @@
    - 否则调用 `SY.redeem(receiver, syRedeemed, tokenOut, minTokenOut, false)` 产出目标 token
 7. 完成状态：position 进入“部分赎回后继续存在”或“已清空删除”。
 
-对应的 `previewRedeem(positionId, syRedeemed, tokenOut)` 必须复用同一条 full / partial 判定：full redeem 预览全部剩余 debt，partial redeem 用 ceiling rounding，且不会返回一个执行期会因“partial consume all debt”而被拒绝的报价。
+对应的 `previewRedeem(positionId, syRedeemed, tokenOut)` 必须复用同一条 full / partial 判定：full redeem 预览全部剩余 debt，partial redeem 用 ceiling rounding，且不会返回一个执行期会因“partial consume all debt”而被拒绝的报价。这里的 debt 报价语义保持为已归一化的 `uAssetDebtUnits`；若需要反推价值或 `SY` 覆盖量，则顺序是 `uAssetDebtUnits -> canonicalAssetValue -> SY`。
 
 ## 5. Wrap stake / wrap redeem 生命周期
 
@@ -74,7 +74,7 @@
 
 1. 前置状态：合约未 paused；输入数量和 recipient 有效。
 2. 资产进入：`SY` 转入 position 合约。
-3. principal 定价：把 `amountInSY` 按当前 `exchangeRate()` 折算成 principal value。
+3. principal 定价（本次修复目标/修复后语义）：先计算 `canonicalAssetValue = SY -> canonical asset`，再计算 `principalValue = canonical asset -> uAsset`。
 4. cap 校验：检查当前 `uAsset` mint cap。
 5. 聚合账务更新：
    - `syTotalStaking += amountInSY`
@@ -86,14 +86,14 @@
 
 `wrapRedeem(amountInUAsset, receiver, tokenOut, minTokenOut)` 当前状态机如下：
 
-1. 前置状态：合约未 paused；输入合法；`amountInUAsset <= wrapUAssetDebt`。
-2. 份额换算：把 `amountInUAsset` 换算成 `amountInSY`。
+1. 前置状态：合约未 paused；输入合法；记 `uAssetDebtUnits = amountInUAsset`，且 `uAssetDebtUnits <= wrapUAssetDebt`。
+2. 份额换算（本次修复目标/修复后语义）：先计算 `canonicalAssetValue = uAsset -> canonical asset`，再计算 `amountInSY = canonical asset -> SY`。
 3. wrap 池余额校验：若 `amountInSY > syWrapStaking` 则回退。
-4. debt 清偿：对调用者执行 `uAsset.repay(msg.sender, amountInUAsset)`。
+4. debt 清偿：对调用者执行 `uAsset.repay(msg.sender, uAssetDebtUnits)`。
 5. 聚合账务更新：
    - `syTotalStaking -= amountInSY`
    - `syWrapStaking -= amountInSY`
-   - `wrapUAssetDebt -= amountInUAsset`
+   - `wrapUAssetDebt -= uAssetDebtUnits`
 6. 资产输出：
    - `tokenOut == SY` 时先检查 `amountInSY >= minTokenOut`，再直接输出 `SY`
    - 否则通过 `SY.redeem(receiver, amountInSY, tokenOut, minTokenOut, false)` 输出目标 token
@@ -105,11 +105,12 @@
 `keepRedeem(positionId, amountInUAsset, receiver)` 当前对应一个特权状态机：
 
 1. 前置状态：调用者必须是 `keeper`；position 存在；position 已到期；合约未 paused。
-2. 输入校验：`amountInUAsset` 不能为 0，且不能高于 `position.UAssetMinted`。
+2. 输入校验：记 `uAssetDebtUnits = amountInUAsset`；`uAssetDebtUnits` 不能为 0，且不能高于 `position.UAssetMinted`。
 3. debt 清偿：keeper 先烧掉自己提供的 `uAsset`。
 4. `SY` 分解：
-   - 计算 keeper 对应本金 `keeperPrincipalSY`
-   - 计算本次从仓位释放的 `syRedeemed`
+   - 先按 `uAssetDebtUnits -> canonicalAssetValue -> SY` 的反向顺序计算 keeper 对应本金 `keeperPrincipalSY`
+   - 按显式 down rounding 公式计算本次从仓位释放的 `syRedeemed = roundDownDiv(syStaked * uAssetDebtUnits, positionUAssetMinted)`
+   - 若 `keeperPrincipalSY > syRedeemed`，则必须 clamp 为 `keeperPrincipalSY = syRedeemed`
    - 计算 owner 可拿回的 `ownerExcessSY`
 5. position 更新：与普通 redeem 一样减少 `syTotalStaking`、position principal 和 position debt。
 6. 分账输出：
@@ -128,7 +129,7 @@
 
 2. 盈余计算：
    - 读取 `wrapPoolSY = syWrapStaking`
-   - 计算 `wrapDebtInSY = assetToSyUp(wrapUAssetDebt)`（用当前 exchangeRate 向上取整换算，保留足够的 `SY` 覆盖 wrap debt）
+   - 先按 up 版本计算 `wrapDebtInCanonicalAsset = uAsset -> canonical asset`，再按 up 版本计算 `wrapDebtInSY = canonical asset -> SY`，保留足够的 `SY` 覆盖 wrap debt
    - 若 `wrapPoolSY <= wrapDebtInSY`，则返回 0，状态不变
    - 否则 `harvestAmount = wrapPoolSY - wrapDebtInSY`
 
@@ -142,7 +143,7 @@
    - 否则调用 `SY.redeem(revenuePool, harvestAmount, tokenOut, minTokenOut, false)` 将收益兑换为 tokenOut
 
 5. 后置条件：
-   - wrap 池仍有足够的 SY 覆盖 `wrapUAssetDebt`（即 `syWrapStaking >= assetToSyUp(wrapUAssetDebt)`，等价于 `syToAsset(exchangeRate, syWrapStaking) >= wrapUAssetDebt`）
+   - wrap 池仍有足够的 SY 覆盖 `wrapUAssetDebt`（即 `syWrapStaking >= wrapDebtInSY`）
    - `revenuePool` 收到超额收益
    - 用户 `uAsset` 债务不变
 
