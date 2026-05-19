@@ -179,9 +179,36 @@ list_worktree_changed_files() {
     } | awk '{ sub(/\r$/, ""); if ($0 != "") print $0 }' | awk '!seen[$0]++'
 }
 
+patch_paths_from_patch_file() {
+    local patch_file="$1"
+    PATCH_FILE="$patch_file" node <<'EOF'
+const fs = require('fs');
+
+const patchPath = process.env.PATCH_FILE;
+const patch = patchPath && fs.existsSync(patchPath) ? fs.readFileSync(patchPath, 'utf8') : '';
+const paths = new Set();
+
+for (const rawLine of patch.split(/\r?\n/)) {
+  if (!rawLine.startsWith('diff --git ')) continue;
+  const match = /^diff --git a\/(.+?) b\/(.+)$/.exec(rawLine);
+  if (!match) continue;
+  paths.add(match[2]);
+}
+
+for (const path of paths) {
+  process.stdout.write(`M\t${path}\n`);
+}
+EOF
+}
+
 collect_spec_readiness_diff_scope_paths() {
     if [ -n "${GATE_DIFF_BASE:-}" ]; then
         git diff --name-status "${GATE_DIFF_BASE}" "${GATE_DIFF_HEAD:-HEAD}" || return 1
+        return 0
+    fi
+
+    if [ -n "${CHANGE_CLASSIFIER_DIFF_FILE:-}" ] && [ -r "${CHANGE_CLASSIFIER_DIFF_FILE}" ]; then
+        patch_paths_from_patch_file "${CHANGE_CLASSIFIER_DIFF_FILE}" || return 1
         return 0
     fi
 
@@ -1428,17 +1455,17 @@ if [ "$change_class" = "prod-semantic" ]; then
     spec_readiness_writer_roles_json="$(jq -c '.writer_roles' <<<"$spec_readiness_data_json")"
     spec_readiness_review_roles_json="$(jq -c '.review_roles' <<<"$spec_readiness_data_json")"
     spec_readiness_satisfied_by_diff_scope=false
-    code_only_spec_readiness_candidate=false
-    if array_contains "solidity_prod" "${selected_surfaces[@]}" && ! array_contains "harness_control" "${selected_surfaces[@]}"; then
-        code_only_spec_readiness_candidate=true
+    diff_scope_spec_readiness_candidate=false
+    if array_contains "solidity_prod" "${selected_surfaces[@]}"; then
+        diff_scope_spec_readiness_candidate=true
         for selected_surface in "${selected_surfaces[@]}"; do
             case "$selected_surface" in
-                solidity_prod|solidity_test) ;;
-                *) code_only_spec_readiness_candidate=false ;;
+                solidity_prod|solidity_test|harness_control) ;;
+                *) diff_scope_spec_readiness_candidate=false ;;
             esac
         done
     fi
-    if [ "$code_only_spec_readiness_candidate" = true ] \
+    if [ "$diff_scope_spec_readiness_candidate" = true ] \
         && [ "$(jq 'length' <<<"$spec_readiness_required_docs_json")" -gt 0 ] \
         && required_docs_present_in_spec_diff_scope "$spec_readiness_required_docs_json"; then
         spec_readiness_satisfied_by_diff_scope=true

@@ -63,6 +63,146 @@ run_default_classify_in_scratch_repo() {
     printf '%s\n' "$record"
 }
 
+run_mixed_spec_readiness_classify_in_scratch_repo() {
+    local name="$1"
+    local include_required_docs="$2"
+    local repo="$tmp_dir/$name.repo"
+    local record="$tmp_dir/$name.record.json"
+    local changed="$tmp_dir/$name.changed"
+    local diff="$tmp_dir/$name.diff"
+
+    mkdir -p \
+        "$repo/script/harness" \
+        "$repo/.harness" \
+        "$repo/src/position" \
+        "$repo/docs/spec/position" \
+        "$repo/docs/spec/router" \
+        "$repo/docs"
+    cp script/harness/gate.sh "$repo/script/harness/gate.sh"
+    cp -R .harness/policy.json .harness/schemas "$repo/.harness/"
+
+    cat >"$repo/src/position/OutrunStakingPositionUpgradeable.sol" <<'EOF'
+pragma solidity ^0.8.0;
+contract OutrunStakingPositionUpgradeable {
+    function amount() external pure returns (uint256) {
+        return 1;
+    }
+}
+EOF
+
+    cat >"$repo/docs/spec/position/state-machines.md" <<'EOF'
+# state-machines
+EOF
+    cat >"$repo/docs/spec/position/accounting.md" <<'EOF'
+# accounting
+EOF
+    cat >"$repo/docs/spec/router/router-and-user-flows.md" <<'EOF'
+# router-and-user-flows
+EOF
+    cat >"$repo/docs/foo.md" <<'EOF'
+# foo
+EOF
+
+    (
+        cd "$repo"
+        git init -q
+        git config user.email test@example.invalid
+        git config user.name "Harness Test"
+        git add .
+        git commit -q -m baseline
+
+        cat >src/position/OutrunStakingPositionUpgradeable.sol <<'EOF'
+pragma solidity ^0.8.0;
+contract OutrunStakingPositionUpgradeable {
+    function amount() external pure returns (uint256) {
+        return 2;
+    }
+}
+EOF
+
+        if [ "$include_required_docs" = "true" ]; then
+            printf '%s\n' \
+                "src/position/OutrunStakingPositionUpgradeable.sol" \
+                "docs/spec/position/state-machines.md" \
+                "docs/spec/position/accounting.md" \
+                "docs/spec/router/router-and-user-flows.md" >"$changed"
+
+            printf 'updated\n' >>docs/spec/position/state-machines.md
+            printf 'updated\n' >>docs/spec/position/accounting.md
+            printf 'updated\n' >>docs/spec/router/router-and-user-flows.md
+
+            cat >"$diff" <<'EOF'
+diff --git a/src/position/OutrunStakingPositionUpgradeable.sol b/src/position/OutrunStakingPositionUpgradeable.sol
+--- a/src/position/OutrunStakingPositionUpgradeable.sol
++++ b/src/position/OutrunStakingPositionUpgradeable.sol
+@@ -2,5 +2,5 @@ pragma solidity ^0.8.0;
+ contract OutrunStakingPositionUpgradeable {
+     function amount() external pure returns (uint256) {
+-        return 1;
++        return 2;
+     }
+ }
+diff --git a/docs/spec/position/state-machines.md b/docs/spec/position/state-machines.md
+--- a/docs/spec/position/state-machines.md
++++ b/docs/spec/position/state-machines.md
+@@ -1 +1,2 @@
+ # state-machines
++updated
+diff --git a/docs/spec/position/accounting.md b/docs/spec/position/accounting.md
+--- a/docs/spec/position/accounting.md
++++ b/docs/spec/position/accounting.md
+@@ -1 +1,2 @@
+ # accounting
++updated
+diff --git a/docs/spec/router/router-and-user-flows.md b/docs/spec/router/router-and-user-flows.md
+--- a/docs/spec/router/router-and-user-flows.md
++++ b/docs/spec/router/router-and-user-flows.md
+@@ -1 +1,2 @@
+ # router-and-user-flows
++updated
+EOF
+        else
+            printf '%s\n' \
+                "src/position/OutrunStakingPositionUpgradeable.sol" \
+                "docs/foo.md" >"$changed"
+
+            printf 'updated\n' >>docs/foo.md
+
+            cat >"$diff" <<'EOF'
+diff --git a/src/position/OutrunStakingPositionUpgradeable.sol b/src/position/OutrunStakingPositionUpgradeable.sol
+--- a/src/position/OutrunStakingPositionUpgradeable.sol
++++ b/src/position/OutrunStakingPositionUpgradeable.sol
+@@ -2,5 +2,5 @@ pragma solidity ^0.8.0;
+ contract OutrunStakingPositionUpgradeable {
+     function amount() external pure returns (uint256) {
+-        return 1;
++        return 2;
+     }
+ }
+EOF
+        fi
+
+        set +e
+        RUN_RECORD_PATH="$record" CHANGE_CLASSIFIER_DIFF_FILE="$diff" \
+            bash script/harness/gate.sh --classify-only --changed-files "$changed" >/dev/null
+        status=$?
+        set -e
+
+        if [ "$include_required_docs" = "true" ] && [ "$status" -ne 0 ]; then
+            echo "expected classify status 0 for $name, got $status" >&2
+            exit 1
+        fi
+
+        if [ "$include_required_docs" != "true" ] && [ "$status" -ne 1 ]; then
+            echo "expected classify status 1 for $name, got $status" >&2
+            exit 1
+        fi
+    )
+
+    jq -e . "$record" >/dev/null
+    printf '%s\n' "$record"
+}
+
 write_changed_files() {
     local name="$1"
     shift
@@ -205,6 +345,38 @@ jq -e '
   (.blocking_findings[] | select(.rule_id == "spec-readiness-doc-update"))
 ' "$mixed_record" >/dev/null
 assert_no_removed_fields "$mixed_record"
+
+mixed_missing_docs_record="$(run_mixed_spec_readiness_classify_in_scratch_repo mixed-missing-docs false)"
+jq -e '
+  .orchestration_profile == "blocked" and
+  .final_verdict == "blocked" and
+  .structural_escalation == true and
+  (.orchestration_reasons | index("mixed_solidity_and_harness_control") != null) and
+  (.orchestration_reasons | index("spec-readiness-doc-update") != null) and
+  (.blocking_findings[] | select(.rule_id == "spec-readiness-doc-update"))
+' "$mixed_missing_docs_record" >/dev/null
+assert_no_removed_fields "$mixed_missing_docs_record"
+
+mixed_full_docs_record="$(run_mixed_spec_readiness_classify_in_scratch_repo mixed-full-docs true)"
+jq -e '
+  .orchestration_profile == "full-review" and
+  .final_verdict == "classified" and
+  .structural_escalation == true and
+  .requires_main_risk_analysis == false and
+  (.selected_writer_roles | sort) == ["process-implementer", "solidity-implementer"] and
+  (.selected_review_roles | sort) == ["gas-reviewer", "logic-reviewer", "security-reviewer"] and
+  .selected_review_roles_source == "full_review_matrix[prod-semantic]" and
+  (.orchestration_reasons | index("mixed_solidity_and_harness_control") != null) and
+  (.orchestration_reasons | index("spec-readiness-doc-update") != null) and
+  (.orchestration_reasons | index("spec-readiness-satisfied-by-diff-scope") != null) and
+  ([.blocking_findings[]?.rule_id] | index("spec-readiness-doc-update")) == null and
+  (.spec_readiness_required_docs | sort) == [
+    "docs/spec/position/accounting.md",
+    "docs/spec/position/state-machines.md",
+    "docs/spec/router/router-and-user-flows.md"
+  ]
+' "$mixed_full_docs_record" >/dev/null
+assert_no_removed_fields "$mixed_full_docs_record"
 
 default_record="$(run_default_classify_in_scratch_repo default README.md)"
 jq -e '
