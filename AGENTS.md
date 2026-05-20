@@ -47,6 +47,16 @@ Do not override policy or gate evidence with natural-language guesses.
 - Do not create a parallel control plane outside policy, gate, and project agent files.
 - Deleting untracked files from the current git working tree requires explicit human confirmation.
 
+## High-Priority Beginner-Readable Code
+
+- This section is high-priority. Optimize for code a beginner or non-programmer can read top to bottom.
+- Favor beginner-readable names over protocol jargon, abbreviations, or internal shorthand.
+- If a specialized term must stay, explain it at first use in a short local comment.
+- Add short implementation comments for non-obvious business logic, invariants, or cross-step reasoning. NatSpec alone is not enough.
+- Many tiny single-use helpers often reduce readability because readers must jump around.
+- Extract a helper only when it clearly improves readability, naming, reuse, or testability.
+- Inline trivial single-use logic unless extraction clearly improves readability, naming, reuse, or testability.
+
 ## Context Scope
 
 - Use the minimum repository context needed to classify, route, edit, review, and verify the task.
