@@ -99,6 +99,7 @@ contract OutrunStakingPositionUpgradeable is
         }
     }
 
+    // solhint-disable-next-line unwrapped-modifier-logic
     modifier onlyPositionOwner(uint256 positionId) {
         Position storage position = _getStorage().positions[positionId];
         // Only the recorded owner can act on this position.
