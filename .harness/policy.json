@@ -28,15 +28,6 @@
       "^\\.claude/settings\\.json$",
       "^\\.claude/agents/.*$",
       "^\\.codex/agents/.*$",
-      "^docs/ARCHITECTURE\\.md$",
-      "^docs/TRACEABILITY\\.md$",
-      "^docs/VERIFICATION\\.md$",
-      "^docs/GLOSSARY\\.md$",
-      "^docs/SECURITY_AND_APPROVALS\\.md$",
-      "^docs/deployment\\.md$",
-      "^docs/implementation-map\\.md$",
-      "^docs/testing-and-evidence\\.md$",
-      "^docs/review/.*\\.md$",
       "^docs/.*$",
       "(^|.*/)(spec|specs)/.*\\.(md|mdx)$",
       "^solhint.*\\.config\\.js$",
@@ -55,82 +46,6 @@
     "slither_filter_paths": "lib|test|script|node_modules",
     "slither_exclude_detectors": "naming-convention,too-many-digits,unindexed-event-address,immutable-states,unimplemented-functions"
   },
-  "orchestration_profiles": {
-    "direct": {
-      "writer": "main-session",
-      "reviewers": [],
-      "verifier": "main-session",
-      "verification_profile": "fast"
-    },
-    "direct-review": {
-      "writer": "main-session",
-      "reviewers": "orchestration-selected",
-      "verifier": "main-session",
-      "verification_profile": "fast"
-    },
-    "delegated": {
-      "writer": "policy-selected",
-      "reviewers": "delegated-selected",
-      "verifier": "main-session",
-      "verification_profile": "fast"
-    },
-    "full-review": {
-      "writer": "policy-selected",
-      "reviewers": "full-review-matrix",
-      "verifier": "main-session",
-      "verification_profile": "fast"
-    },
-    "full-subagent": {
-      "writer": "policy-selected",
-      "reviewers": "full-review-matrix",
-      "verifier": "required-verifier-agent",
-      "verification_profile": "selected"
-    },
-    "no-op": {
-      "writer": "none",
-      "reviewers": [],
-      "verifier": "none",
-      "verification_profile": "none"
-    },
-    "blocked": {
-      "writer": "none",
-      "reviewers": [],
-      "verifier": "none",
-      "verification_profile": "none"
-    }
-  },
-  "orchestration_writer_rules": [
-    {
-      "id": "spec-doc",
-      "paths": ["(^|.*/)(spec|specs)/.*\\.(md|mdx)$"],
-      "writer": "process-implementer"
-    },
-    {
-      "id": "spec-readiness-doc-update",
-      "trigger": "spec-readiness-doc-update",
-      "writer": "process-implementer"
-    },
-    {
-      "id": "harness-control",
-      "paths": ["^\\.harness/.*$", "^script/harness/.*$", "^\\.github/workflows/.*$", "^AGENTS\\.md$", "^CLAUDE\\.md$"],
-      "writer": "process-implementer"
-    },
-    {
-      "id": "repo-metadata",
-      "paths": ["^package\\.json$", "^package-lock\\.json$", "^npm-shrinkwrap\\.json$"],
-      "writer": "process-implementer"
-    },
-    {
-      "id": "docs",
-      "paths": ["^docs/.*$", "^README\\.md$"],
-      "writer": "process-implementer"
-    }
-  ],
-  "writer_conflict_policy": {
-    "mixed_spec_and_code": "run spec/document workflow first, then classify code changes separately",
-    "mixed_solidity_and_harness_control": "either split into separately classified units before editing or keep the task combined and require full-review minimum",
-    "mixed_docs_and_solidity": "docs are harness_control; apply mixed_solidity_and_harness_control. Preserve spec-readiness ordering, and require full-review minimum if production Solidity semantic changes remain bundled with docs."
-  },
   "orchestration_review_roles": {
     "no-op": [],
     "non-semantic": [],
@@ -138,18 +53,6 @@
     "prod-semantic-risk-analysis-passed": ["logic-reviewer"]
   },
   "delegated_review_rules": [
-    {
-      "id": "spec-path",
-      "paths": ["(^|.*/)(spec|specs)/.*\\.(md|mdx)$"],
-      "reviewers": ["spec-reviewer"],
-      "requires_human_confirmation": true
-    },
-    {
-      "id": "spec-readiness-doc-update",
-      "trigger": "spec-readiness-doc-update",
-      "reviewers": ["spec-reviewer"],
-      "requires_human_confirmation": true
-    },
     {
       "id": "harness-control",
       "paths": ["^\\.harness/.*$", "^script/harness/.*$", "^\\.github/workflows/.*$"],
@@ -171,157 +74,15 @@
     "prod-semantic": ["logic-reviewer", "security-reviewer", "gas-reviewer"]
   },
   "orchestration_rules": {
-    "delegated_surface": "harness_control",
     "spec_paths": ["(^|.*/)(spec|specs)/.*\\.(md|mdx)$"],
     "scope_escalation": {
       "prod_solidity_max_files_before_full_review": 1,
       "prod_solidity_max_semantic_lines_before_full_review": 20
     },
-    "main_session_risk_analysis_required_for": [
-      "semantic production Solidity changes not structurally escalated"
-    ],
     "surface_sensitivity": {
       "solidity_prod": "sensitive",
       "solidity_test": "normal",
       "harness_control": "normal"
-    },
-    "full_ci_command_gates": {
-      "coverage_when_required": {
-        "change_class": "prod-semantic",
-        "surface_sensitivity": "sensitive"
-      },
-      "slither_when_required": {
-        "change_class": "prod-semantic",
-        "surface_sensitivity": "sensitive",
-        "paths": ["^src/.*\\.sol$"]
-      }
-    }
-  },
-  "security_test_writer_trigger": {
-    "change_class": "prod-semantic",
-    "selected_review_roles_include": ["security-reviewer"],
-    "reviewer_finding_severity_to_activate": "critical"
-  },
-  "spec_readiness_gate": {
-    "trigger_change_classes": ["prod-semantic"],
-    "doc_exclusions": ["^docs/superpowers/"],
-    "gate_action": "block",
-    "required_reviewer": "spec-reviewer",
-    "no_spec_change_attestation": {
-      "env_var": "NO_SPEC_CHANGE_ATTESTATION_FILE",
-      "required_kind": "no-spec-change-attestation",
-      "required_change_class": "prod-semantic",
-      "required_assertions": {
-        "refactor_only": true,
-        "product_semantics_unchanged": true,
-        "permissions_unchanged": true,
-        "fund_flow_unchanged": true,
-        "state_machine_unchanged": true,
-        "storage_layout_unchanged": true,
-        "abi_unchanged": true,
-        "mapped_specs_remain_valid": true,
-        "business_spec_update_required": false
-      }
-    },
-    "cross_cutting_trigger_threshold": 2,
-    "cross_cutting_docs": [
-      "docs/ARCHITECTURE.md",
-      "docs/spec/access-control.md",
-      "docs/spec/common-foundations.md",
-      "docs/spec/protocol.md",
-      "docs/GLOSSARY.md"
-    ],
-    "doc_mapping": {
-      "assets": {
-        "rules": [
-          {
-            "id": "assets-core",
-            "check_docs": [
-              "docs/spec/common-foundations.md",
-              "docs/spec/protocol.md"
-            ]
-          }
-        ]
-      },
-      "position": {
-        "rules": [
-          {
-            "id": "position-core",
-            "check_docs": [
-              "docs/spec/position/state-machines.md",
-              "docs/spec/position/accounting.md",
-              "docs/spec/router/router-and-user-flows.md"
-            ]
-          }
-        ]
-      },
-      "router": {
-        "rules": [
-          {
-            "id": "router-core",
-            "check_docs": [
-              "docs/spec/router/router-and-user-flows.md",
-              "docs/spec/position/state-machines.md"
-            ]
-          }
-        ]
-      },
-      "yield": {
-        "rules": [
-          {
-            "id": "yield-core",
-            "check_docs": [
-              "docs/spec/yield/yield-adapters.md",
-              "docs/spec/yield/oracles-and-integrations.md",
-              "docs/spec/router/router-and-user-flows.md"
-            ]
-          }
-        ]
-      }
-    }
-  },
-  "remediation_policy": {
-    "max_cycles": 5,
-    "conflict_priority": ["security-reviewer", "gas-reviewer", "logic-reviewer"],
-    "escalation": "user"
-  },
-  "verification_profiles": {
-    "fast": {
-      "required_commands": [
-        "fmt_changed_solidity",
-        "lint_changed_solidity",
-        "forge_build",
-        "targeted_tests",
-        "bash_syntax_changed_shell",
-        "node_syntax_changed_js",
-        "npm_ci_when_package_changes"
-      ]
-    },
-    "full": {
-      "required_commands": [
-        "fmt_changed_solidity",
-        "lint_changed_solidity",
-        "forge_build",
-        "forge_test_full",
-        "coverage_when_required",
-        "slither_when_required",
-        "bash_syntax_changed_shell",
-        "node_syntax_changed_js",
-        "npm_ci_when_package_changes"
-      ]
-    },
-    "ci": {
-      "required_commands": [
-        "fmt_changed_solidity",
-        "lint_changed_solidity",
-        "forge_build",
-        "forge_test_full",
-        "coverage_when_required",
-        "slither_when_required",
-        "bash_syntax_changed_shell",
-        "node_syntax_changed_js",
-        "npm_ci_when_package_changes"
-      ]
     }
   },
   "hard_blocks": [],
@@ -479,6 +240,45 @@
             "test/upgradeable/AdversarialTestsUpgradeable.t.sol"
           ]
         }
+      ]
+    }
+  },
+  "verification_profiles": {
+    "ci": {
+      "required_commands": [
+        "fmt_changed_solidity",
+        "lint_changed_solidity",
+        "forge_build",
+        "forge_test_full",
+        "coverage_when_required",
+        "slither_when_required",
+        "bash_syntax_changed_shell",
+        "node_syntax_changed_js",
+        "npm_ci_when_package_changes"
+      ]
+    },
+    "fast": {
+      "required_commands": [
+        "fmt_changed_solidity",
+        "lint_changed_solidity",
+        "forge_build",
+        "targeted_tests",
+        "bash_syntax_changed_shell",
+        "node_syntax_changed_js",
+        "npm_ci_when_package_changes"
+      ]
+    },
+    "full": {
+      "required_commands": [
+        "fmt_changed_solidity",
+        "lint_changed_solidity",
+        "forge_build",
+        "forge_test_full",
+        "coverage_when_required",
+        "slither_when_required",
+        "bash_syntax_changed_shell",
+        "node_syntax_changed_js",
+        "npm_ci_when_package_changes"
       ]
     }
   }

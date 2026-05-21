@@ -63,256 +63,6 @@ run_default_classify_in_scratch_repo() {
     printf '%s\n' "$record"
 }
 
-run_mixed_spec_readiness_classify_in_scratch_repo() {
-    local name="$1"
-    local include_required_docs="$2"
-    local repo="$tmp_dir/$name.repo"
-    local record="$tmp_dir/$name.record.json"
-    local changed="$tmp_dir/$name.changed"
-    local diff="$tmp_dir/$name.diff"
-
-    mkdir -p \
-        "$repo/script/harness" \
-        "$repo/.harness" \
-        "$repo/src/position" \
-        "$repo/docs/spec/position" \
-        "$repo/docs/spec/router" \
-        "$repo/docs"
-    cp script/harness/gate.sh "$repo/script/harness/gate.sh"
-    cp -R .harness/policy.json .harness/schemas "$repo/.harness/"
-
-    cat >"$repo/src/position/OutrunStakingPositionUpgradeable.sol" <<'EOF'
-pragma solidity ^0.8.0;
-contract OutrunStakingPositionUpgradeable {
-    function amount() external pure returns (uint256) {
-        return 1;
-    }
-}
-EOF
-
-    cat >"$repo/docs/spec/position/state-machines.md" <<'EOF'
-# state-machines
-EOF
-    cat >"$repo/docs/spec/position/accounting.md" <<'EOF'
-# accounting
-EOF
-    cat >"$repo/docs/spec/router/router-and-user-flows.md" <<'EOF'
-# router-and-user-flows
-EOF
-    cat >"$repo/docs/foo.md" <<'EOF'
-# foo
-EOF
-
-    (
-        cd "$repo"
-        git init -q
-        git config user.email test@example.invalid
-        git config user.name "Harness Test"
-        git add .
-        git commit -q -m baseline
-
-        cat >src/position/OutrunStakingPositionUpgradeable.sol <<'EOF'
-pragma solidity ^0.8.0;
-contract OutrunStakingPositionUpgradeable {
-    function amount() external pure returns (uint256) {
-        return 2;
-    }
-}
-EOF
-
-        if [ "$include_required_docs" = "true" ]; then
-            printf '%s\n' \
-                "src/position/OutrunStakingPositionUpgradeable.sol" \
-                "docs/spec/position/state-machines.md" \
-                "docs/spec/position/accounting.md" \
-                "docs/spec/router/router-and-user-flows.md" >"$changed"
-
-            printf 'updated\n' >>docs/spec/position/state-machines.md
-            printf 'updated\n' >>docs/spec/position/accounting.md
-            printf 'updated\n' >>docs/spec/router/router-and-user-flows.md
-
-            cat >"$diff" <<'EOF'
-diff --git a/src/position/OutrunStakingPositionUpgradeable.sol b/src/position/OutrunStakingPositionUpgradeable.sol
---- a/src/position/OutrunStakingPositionUpgradeable.sol
-+++ b/src/position/OutrunStakingPositionUpgradeable.sol
-@@ -2,5 +2,5 @@ pragma solidity ^0.8.0;
- contract OutrunStakingPositionUpgradeable {
-     function amount() external pure returns (uint256) {
--        return 1;
-+        return 2;
-     }
- }
-diff --git a/docs/spec/position/state-machines.md b/docs/spec/position/state-machines.md
---- a/docs/spec/position/state-machines.md
-+++ b/docs/spec/position/state-machines.md
-@@ -1 +1,2 @@
- # state-machines
-+updated
-diff --git a/docs/spec/position/accounting.md b/docs/spec/position/accounting.md
---- a/docs/spec/position/accounting.md
-+++ b/docs/spec/position/accounting.md
-@@ -1 +1,2 @@
- # accounting
-+updated
-diff --git a/docs/spec/router/router-and-user-flows.md b/docs/spec/router/router-and-user-flows.md
---- a/docs/spec/router/router-and-user-flows.md
-+++ b/docs/spec/router/router-and-user-flows.md
-@@ -1 +1,2 @@
- # router-and-user-flows
-+updated
-EOF
-        else
-            printf '%s\n' \
-                "src/position/OutrunStakingPositionUpgradeable.sol" \
-                "docs/foo.md" >"$changed"
-
-            printf 'updated\n' >>docs/foo.md
-
-            cat >"$diff" <<'EOF'
-diff --git a/src/position/OutrunStakingPositionUpgradeable.sol b/src/position/OutrunStakingPositionUpgradeable.sol
---- a/src/position/OutrunStakingPositionUpgradeable.sol
-+++ b/src/position/OutrunStakingPositionUpgradeable.sol
-@@ -2,5 +2,5 @@ pragma solidity ^0.8.0;
- contract OutrunStakingPositionUpgradeable {
-     function amount() external pure returns (uint256) {
--        return 1;
-+        return 2;
-     }
- }
-EOF
-        fi
-
-        set +e
-        RUN_RECORD_PATH="$record" CHANGE_CLASSIFIER_DIFF_FILE="$diff" \
-            bash script/harness/gate.sh --classify-only --changed-files "$changed" >/dev/null
-        status=$?
-        set -e
-
-        if [ "$include_required_docs" = "true" ] && [ "$status" -ne 0 ]; then
-            echo "expected classify status 0 for $name, got $status" >&2
-            exit 1
-        fi
-
-        if [ "$include_required_docs" != "true" ] && [ "$status" -ne 1 ]; then
-            echo "expected classify status 1 for $name, got $status" >&2
-            exit 1
-        fi
-    )
-
-    jq -e . "$record" >/dev/null
-    printf '%s\n' "$record"
-}
-
-run_no_spec_change_attestation_classify_in_scratch_repo() {
-    local name="$1"
-    local include_unclassified_path="$2"
-    local repo="$tmp_dir/$name.repo"
-    local record="$tmp_dir/$name.record.json"
-    local changed="$tmp_dir/$name.changed"
-    local diff="$tmp_dir/$name.diff"
-    local attestation="$tmp_dir/$name.no-spec-change.json"
-
-    mkdir -p \
-        "$repo/script/harness" \
-        "$repo/.harness" \
-        "$repo/src/position"
-    cp script/harness/gate.sh "$repo/script/harness/gate.sh"
-    cp -R .harness/policy.json .harness/schemas "$repo/.harness/"
-
-    cat >"$repo/src/position/OutrunStakingPositionUpgradeable.sol" <<'EOF'
-pragma solidity ^0.8.0;
-contract OutrunStakingPositionUpgradeable {
-    function amount() external pure returns (uint256) {
-        return 1;
-    }
-}
-EOF
-
-    (
-        cd "$repo"
-        git init -q
-        git config user.email test@example.invalid
-        git config user.name "Harness Test"
-        git add .
-        git commit -q -m baseline
-
-        cat >src/position/OutrunStakingPositionUpgradeable.sol <<'EOF'
-pragma solidity ^0.8.0;
-contract OutrunStakingPositionUpgradeable {
-    function amount() external pure returns (uint256) {
-        return 2;
-    }
-}
-EOF
-
-        cat >"$attestation" <<'EOF'
-{
-  "kind": "no-spec-change-attestation",
-  "change_class": "prod-semantic",
-  "summary": "Inline a single-use helper without changing product behavior.",
-  "solidity_paths": [
-    "src/position/OutrunStakingPositionUpgradeable.sol"
-  ],
-  "specs_reviewed": [
-    "docs/spec/position/state-machines.md",
-    "docs/spec/position/accounting.md",
-    "docs/spec/router/router-and-user-flows.md"
-  ],
-  "assertions": {
-    "refactor_only": true,
-    "product_semantics_unchanged": true,
-    "permissions_unchanged": true,
-    "fund_flow_unchanged": true,
-    "state_machine_unchanged": true,
-    "storage_layout_unchanged": true,
-    "abi_unchanged": true,
-    "mapped_specs_remain_valid": true,
-    "business_spec_update_required": false
-  }
-}
-EOF
-
-        printf '%s\n' "src/position/OutrunStakingPositionUpgradeable.sol" >"$changed"
-        if [ "$include_unclassified_path" = "true" ]; then
-            printf '%s\n' "notes.txt" >>"$changed"
-            printf 'note\n' >notes.txt
-        fi
-
-        cat >"$diff" <<'EOF'
-diff --git a/src/position/OutrunStakingPositionUpgradeable.sol b/src/position/OutrunStakingPositionUpgradeable.sol
---- a/src/position/OutrunStakingPositionUpgradeable.sol
-+++ b/src/position/OutrunStakingPositionUpgradeable.sol
-@@ -2,5 +2,5 @@ pragma solidity ^0.8.0;
- contract OutrunStakingPositionUpgradeable {
-     function amount() external pure returns (uint256) {
--        return 1;
-+        return 2;
-     }
- }
-EOF
-
-        set +e
-        RUN_RECORD_PATH="$record" CHANGE_CLASSIFIER_DIFF_FILE="$diff" \
-            NO_SPEC_CHANGE_ATTESTATION_FILE="$attestation" \
-            bash script/harness/gate.sh --classify-only --changed-files "$changed" >/dev/null
-        status=$?
-        set -e
-
-        if [ "$include_unclassified_path" = "true" ] && [ "$status" -ne 1 ]; then
-            echo "expected classify status 1 for $name, got $status" >&2
-            exit 1
-        fi
-
-        if [ "$include_unclassified_path" != "true" ] && [ "$status" -ne 0 ]; then
-            echo "expected classify status 0 for $name, got $status" >&2
-            exit 1
-        fi
-    )
-
-    jq -e . "$record" >/dev/null
-    printf '%s\n' "$record"
-}
-
 write_changed_files() {
     local name="$1"
     shift
@@ -338,6 +88,91 @@ EOF
     printf '%s\n' "$file"
 }
 
+run_ci_entrypoint_capture() {
+    local name="$1"
+    local event_name="$2"
+    local base_sha="$3"
+    local head_sha="$4"
+    local fake_bin="$tmp_dir/$name.bin"
+    local capture_dir="$tmp_dir/$name.capture"
+    local runner_temp="$tmp_dir/$name.runner"
+
+    mkdir -p "$fake_bin" "$capture_dir" "$runner_temp"
+
+    cat >"$fake_bin/npm" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+capture_dir="${HARNESS_CAPTURE_DIR:?}"
+printf '%s\n' "$@" >"$capture_dir/argv"
+printf '%s' "${CHANGE_CLASSIFIER_DIFF_FILE:-}" >"$capture_dir/diff_path"
+
+changed_files_path=""
+prev_arg=""
+for arg in "$@"; do
+    if [ "$prev_arg" = "--changed-files" ]; then
+        changed_files_path="$arg"
+        break
+    fi
+    prev_arg="$arg"
+done
+
+printf '%s' "$changed_files_path" >"$capture_dir/changed_files_path"
+
+if [ -n "$changed_files_path" ] && [ -f "$changed_files_path" ]; then
+    cp "$changed_files_path" "$capture_dir/changed_files"
+fi
+
+if [ -n "${CHANGE_CLASSIFIER_DIFF_FILE:-}" ] && [ -f "${CHANGE_CLASSIFIER_DIFF_FILE}" ]; then
+    cp "${CHANGE_CLASSIFIER_DIFF_FILE}" "$capture_dir/diff_file"
+fi
+EOF
+    chmod +x "$fake_bin/npm"
+
+    HARNESS_CAPTURE_DIR="$capture_dir" \
+    HARNESS_EVENT_NAME="$event_name" \
+    HARNESS_EVENT_BASE_SHA="$base_sha" \
+    HARNESS_EVENT_HEAD_SHA="$head_sha" \
+    RUNNER_TEMP="$runner_temp" \
+    PATH="$fake_bin:$PATH" \
+    bash script/harness/ci-gate-entrypoint.sh
+
+    printf '%s\n' "$capture_dir"
+}
+
+assert_ci_workflow_expressions() {
+    python3 - <<'PY'
+import yaml
+
+with open(".github/workflows/test.yml", "r", encoding="utf-8") as fh:
+    workflow = yaml.safe_load(fh)
+
+steps = workflow["jobs"]["check"]["steps"]
+run_gate_step = next(step for step in steps if step.get("name") == "Run gate:ci")
+env = run_gate_step["env"]
+
+assert env["HARNESS_EVENT_NAME"] == "${{ github.event_name }}"
+assert env["HARNESS_EVENT_BASE_SHA"] == "${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}"
+assert env["HARNESS_EVENT_HEAD_SHA"] == "${{ github.sha }}"
+assert env["RUN_RECORD_PATH"] == "${{ runner.temp }}/outstakev2-gate-ci.json"
+assert run_gate_step["run"] == "bash script/harness/ci-gate-entrypoint.sh"
+PY
+}
+
+run_pre_edit_check() {
+    local file_path="$1"
+    printf '{"file_path":"%s"}' "$file_path" | bash script/harness/pre-edit-check.sh
+}
+
+assert_pre_edit_check_guidance() {
+    local output="$1"
+
+    grep -Fq "classify-only with the exact changed-file set" <<<"$output"
+    grep -Fq "Follow emitted orchestration_profile and phase fields" <<<"$output"
+    grep -Fq "Main session may edit direct/direct-review" <<<"$output"
+    grep -Fq "delegated/full-review/full-subagent must use configured writers/reviewers" <<<"$output"
+}
+
 assert_no_removed_fields() {
     local record="$1"
     jq -e '
@@ -347,7 +182,16 @@ assert_no_removed_fields() {
       (has("high_risk_tokens") | not) and
       (has("high_risk_reasons") | not) and
       (has("review_matrix") | not) and
-      (has("review_triggers") | not)
+      (has("review_triggers") | not) and
+      (has("doc_writer_roles") | not) and
+      (has("selected_writer_roles") | not) and
+      (has("writer_role") | not) and
+      (has("selected_review_roles") | not) and
+      (has("selected_review_roles_source") | not) and
+      (has("pre_code_review_roles") | not) and
+      (has("pre_code_review_roles_source") | not) and
+      (has("post_code_review_roles") | not) and
+      (has("post_code_review_roles_source") | not)
     ' "$record" >/dev/null
 }
 
@@ -356,9 +200,10 @@ docs_record="$(run_classify docs "$docs_changed")"
 jq -e '
   .change_class == "non-semantic" and
   .orchestration_profile == "delegated" and
-  .selected_writer_roles == ["process-implementer"] and
-  .selected_review_roles == [] and
-  .selected_review_roles_source == "delegated_review_rules"
+  .harness_writer_roles == ["process-implementer"] and
+  .spec_review_required == false and
+  .code_writer_roles == [] and
+  .code_review_roles == []
 ' "$docs_record" >/dev/null
 assert_no_removed_fields "$docs_record"
 
@@ -369,7 +214,10 @@ jq -e '
   .orchestration_profile == "delegated" and
   .candidate_orchestration_profile == "direct" and
   .requires_doc_editorial_attestation == true and
-  .selected_writer_roles == ["process-implementer"]
+  .harness_writer_roles == ["process-implementer"] and
+  .spec_review_required == false and
+  .code_writer_roles == [] and
+  .code_review_roles == []
 ' "$readme_record" >/dev/null
 assert_no_removed_fields "$readme_record"
 
@@ -377,8 +225,10 @@ spec_changed="$(write_changed_files spec docs/spec/position/foo.md)"
 spec_record="$(run_classify spec "$spec_changed")"
 jq -e '
   .orchestration_profile == "delegated" and
-  .selected_writer_roles == ["process-implementer"] and
-  .selected_review_roles == ["spec-reviewer"] and
+  .harness_writer_roles == ["process-implementer"] and
+  .spec_review_required == true and
+  .code_writer_roles == [] and
+  .code_review_roles == [] and
   .requires_human_confirmation == true
 ' "$spec_record" >/dev/null
 assert_no_removed_fields "$spec_record"
@@ -389,139 +239,61 @@ test_record="$(run_classify testsol "$test_changed" "$test_diff")"
 jq -e '
   .change_class == "test-semantic" and
   .orchestration_profile == "direct-review" and
-  .selected_writer_roles == ["solidity-implementer"] and
-  .selected_review_roles == ["logic-reviewer"]
+  .harness_writer_roles == [] and
+  .spec_review_required == false and
+  .code_writer_roles == ["solidity-implementer"] and
+  .code_review_roles == ["logic-reviewer"]
 ' "$test_record" >/dev/null
 assert_no_removed_fields "$test_record"
 
 src_changed="$(write_changed_files srcsol src/position/OutrunStakingPositionUpgradeable.sol)"
 src_diff="$(write_diff srcsol src/position/OutrunStakingPositionUpgradeable.sol 'uint256 oldAmount = amount;' 'uint256 newAmount = amount + 1;')"
-src_record="$(run_classify srcsol "$src_changed" "$src_diff" 1)"
+src_record="$(run_classify srcsol "$src_changed" "$src_diff")"
 jq -e '
   .change_class == "prod-semantic" and
-  .surface_sensitivity == "sensitive" and
-  .semantic_escalation == null and
-  .requires_main_risk_analysis == true and
-  .default_orchestration_profile == "full-review" and
-  .candidate_orchestration_profile == "direct-review" and
-  .orchestration_profile == "blocked" and
-  .final_verdict == "blocked" and
-  .selected_writer_roles == ["process-implementer"] and
-  .selected_review_roles == ["spec-reviewer"] and
-  .selected_review_roles_source == "spec_readiness_gate" and
-  .coverage_required_full_ci == true and
-  .slither_required_full_ci == true
-' "$src_record" >/dev/null
-jq -e '
-  .repo == "OutStakeV2" and
-  .orchestration_decision_state == "pending-main-session-risk-analysis" and
-  .risk_analysis_record_required == true and
-  .risk_analysis_record == null and
-  .doc_editorial_attestation == null and
-  .spec_readiness_writer_roles == ["process-implementer"] and
-  .spec_readiness_review_roles == ["spec-reviewer"] and
-  .requires_human_confirmation == true and
-  .spec_readiness_satisfied_by_no_spec_change_attestation == false and
-  .no_spec_change_attestation.reason == "env-var-unset" and
-  (.orchestration_reasons | index("spec-readiness-doc-update") != null) and
-  (.blocking_findings[] | select(.rule_id == "spec-readiness-doc-update")) and
-  (.spec_readiness_required_docs | index("docs/spec/position/state-machines.md") != null)
+  .orchestration_profile == "full-review" and
+  .harness_writer_roles == [] and
+  .spec_review_required == false and
+  .code_writer_roles == ["solidity-implementer"] and
+  (.code_review_roles | sort) == ["gas-reviewer", "logic-reviewer", "security-reviewer"]
 ' "$src_record" >/dev/null
 assert_no_removed_fields "$src_record"
 
-script_changed="$(write_changed_files scriptsol script/deploy/OutstakeScript.s.sol)"
-script_diff="$(write_diff scriptsol script/deploy/OutstakeScript.s.sol 'uint256 oldAmount = amount;' 'uint256 newAmount = amount + 1;')"
-script_record="$(run_classify scriptsol "$script_changed" "$script_diff")"
+mixed_changed="$(write_changed_files mixed src/position/OutrunStakingPositionUpgradeable.sol docs/spec/position/state-machines.md)"
+mixed_record="$(run_classify mixed "$mixed_changed" "$src_diff")"
 jq -e '
   .change_class == "prod-semantic" and
-  .surface_sensitivity == "sensitive" and
-  .requires_main_risk_analysis == true and
-  .candidate_orchestration_profile == "direct-review" and
-  .selected_writer_roles == ["solidity-implementer"] and
-  .coverage_required_full_ci == true and
-  .slither_required_full_ci == false
-' "$script_record" >/dev/null
-assert_no_removed_fields "$script_record"
-
-mixed_changed="$(write_changed_files mixed docs/foo.md src/position/OutrunStakingPositionUpgradeable.sol)"
-mixed_record="$(run_classify mixed "$mixed_changed" "$src_diff" 1)"
-jq -e '
-  .orchestration_profile == "blocked" and
-  .final_verdict == "blocked" and
-  .structural_escalation == true and
-  (.orchestration_reasons | index("mixed_solidity_and_harness_control") != null) and
-  (.orchestration_reasons | index("spec-readiness-doc-update") != null) and
-  .selected_writer_roles == ["process-implementer"] and
-  .selected_review_roles == ["spec-reviewer"] and
-  .selected_review_roles_source == "spec_readiness_gate" and
-  (.blocking_findings[] | select(.rule_id == "spec-readiness-doc-update"))
+  .orchestration_profile == "full-review" and
+  .harness_writer_roles == ["process-implementer"] and
+  .spec_review_required == true and
+  .code_writer_roles == ["solidity-implementer"] and
+  (.code_review_roles | sort) == ["gas-reviewer", "logic-reviewer", "security-reviewer"] and
+  .requires_human_confirmation == true
 ' "$mixed_record" >/dev/null
 assert_no_removed_fields "$mixed_record"
 
-mixed_missing_docs_record="$(run_mixed_spec_readiness_classify_in_scratch_repo mixed-missing-docs false)"
-jq -e '
-  .orchestration_profile == "blocked" and
-  .final_verdict == "blocked" and
-  .structural_escalation == true and
-  (.orchestration_reasons | index("mixed_solidity_and_harness_control") != null) and
-  (.orchestration_reasons | index("spec-readiness-doc-update") != null) and
-  (.blocking_findings[] | select(.rule_id == "spec-readiness-doc-update"))
-' "$mixed_missing_docs_record" >/dev/null
-assert_no_removed_fields "$mixed_missing_docs_record"
-
-mixed_full_docs_record="$(run_mixed_spec_readiness_classify_in_scratch_repo mixed-full-docs true)"
-jq -e '
-  .orchestration_profile == "full-review" and
-  .final_verdict == "classified" and
-  .structural_escalation == true and
-  .requires_main_risk_analysis == false and
-  (.selected_writer_roles | sort) == ["process-implementer", "solidity-implementer"] and
-  (.selected_review_roles | sort) == ["gas-reviewer", "logic-reviewer", "security-reviewer"] and
-  .selected_review_roles_source == "full_review_matrix[prod-semantic]" and
-  (.orchestration_reasons | index("mixed_solidity_and_harness_control") != null) and
-  (.orchestration_reasons | index("spec-readiness-doc-update") != null) and
-  (.orchestration_reasons | index("spec-readiness-satisfied-by-diff-scope") != null) and
-  ([.blocking_findings[]?.rule_id] | index("spec-readiness-doc-update")) == null and
-  (.spec_readiness_required_docs | sort) == [
-    "docs/spec/position/accounting.md",
-    "docs/spec/position/state-machines.md",
-    "docs/spec/router/router-and-user-flows.md"
-  ]
-' "$mixed_full_docs_record" >/dev/null
-assert_no_removed_fields "$mixed_full_docs_record"
-
-no_spec_change_record="$(run_no_spec_change_attestation_classify_in_scratch_repo no-spec-change false)"
+mixed_non_spec_changed="$(write_changed_files mixednonspec src/position/OutrunStakingPositionUpgradeable.sol docs/TRACEABILITY.md)"
+mixed_non_spec_record="$(run_classify mixednonspec "$mixed_non_spec_changed" "$src_diff")"
 jq -e '
   .change_class == "prod-semantic" and
   .orchestration_profile == "full-review" and
-  .final_verdict == "classified" and
-  .requires_main_risk_analysis == true and
-  .risk_analysis_record_required == true and
-  .spec_readiness_satisfied_by_diff_scope == false and
-  .spec_readiness_satisfied_by_no_spec_change_attestation == true and
-  .no_spec_change_attestation.valid == true and
-  (.no_spec_change_attestation.attestation_path | test("/no-spec-change\\.no-spec-change\\.json$")) and
-  .no_spec_change_attestation.env_var == "NO_SPEC_CHANGE_ATTESTATION_FILE" and
-  .selected_writer_roles == ["solidity-implementer"] and
-  (.selected_review_roles | sort) == ["gas-reviewer", "logic-reviewer", "security-reviewer"] and
-  .selected_review_roles_source == "full_review_matrix[prod-semantic]" and
-  (.orchestration_reasons | index("spec-readiness-doc-update") != null) and
-  (.orchestration_reasons | index("spec-readiness-satisfied-by-no-spec-change-attestation") != null) and
-  ([.blocking_findings[]?.rule_id] | index("spec-readiness-doc-update")) == null
-' "$no_spec_change_record" >/dev/null
-assert_no_removed_fields "$no_spec_change_record"
+  .harness_writer_roles == ["process-implementer"] and
+  .spec_review_required == false and
+  .code_writer_roles == ["solidity-implementer"] and
+  (.code_review_roles | sort) == ["gas-reviewer", "logic-reviewer", "security-reviewer"] and
+  .requires_human_confirmation == false
+' "$mixed_non_spec_record" >/dev/null
+assert_no_removed_fields "$mixed_non_spec_record"
 
-no_spec_change_other_block_record="$(run_no_spec_change_attestation_classify_in_scratch_repo no-spec-change-other-block true)"
+pure_unknown_changed="$(write_changed_files pureunknown notes.txt)"
+pure_unknown_record="$(run_classify pureunknown "$pure_unknown_changed" "" 1)"
 jq -e '
-  .change_class == "prod-semantic" and
+  .change_class == "no-op" and
   .orchestration_profile == "blocked" and
   .final_verdict == "blocked" and
-  .spec_readiness_satisfied_by_no_spec_change_attestation == true and
-  .no_spec_change_attestation.valid == true and
-  (.blocking_findings[] | select(.rule_id == "unclassified-paths")) and
-  ([.blocking_findings[]?.rule_id] | index("spec-readiness-doc-update")) == null
-' "$no_spec_change_other_block_record" >/dev/null
-assert_no_removed_fields "$no_spec_change_other_block_record"
+  (.blocking_findings[] | select(.rule_id == "unclassified-paths"))
+' "$pure_unknown_record" >/dev/null
+assert_no_removed_fields "$pure_unknown_record"
 
 default_record="$(run_default_classify_in_scratch_repo default README.md)"
 jq -e '
@@ -530,5 +302,40 @@ jq -e '
   .orchestration_profile == "delegated"
 ' "$default_record" >/dev/null
 assert_no_removed_fields "$default_record"
+
+assert_ci_workflow_expressions
+
+current_head="$(git rev-parse HEAD)"
+empty_tree="4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+zero_base_capture="$(run_ci_entrypoint_capture zero-base workflow_dispatch "" "$current_head")"
+grep -qx -- "run" "$zero_base_capture/argv"
+grep -qx -- "gate:ci" "$zero_base_capture/argv"
+grep -qx -- "--" "$zero_base_capture/argv"
+grep -qx -- "--all" "$zero_base_capture/argv"
+if grep -qx -- "--changed-files" "$zero_base_capture/argv"; then
+    echo "zero-base CI path should not pass --changed-files" >&2
+    exit 1
+fi
+[ ! -s "$zero_base_capture/diff_path" ]
+[ ! -f "$zero_base_capture/changed_files" ]
+
+diff_capture="$(run_ci_entrypoint_capture diff-based push "$empty_tree" "$current_head")"
+grep -qx -- "run" "$diff_capture/argv"
+grep -qx -- "gate:ci" "$diff_capture/argv"
+grep -qx -- "--" "$diff_capture/argv"
+grep -qx -- "--changed-files" "$diff_capture/argv"
+[ -s "$diff_capture/changed_files_path" ]
+[ -s "$diff_capture/diff_path" ]
+[ -s "$diff_capture/changed_files" ]
+[ -s "$diff_capture/diff_file" ]
+diff -u <(git diff --name-only "$empty_tree" "$current_head") "$diff_capture/changed_files"
+
+pre_edit_output="$(run_pre_edit_check "$repo_root/script/harness/test-orchestration.sh")"
+assert_pre_edit_check_guidance "$pre_edit_output"
+if grep -Fq "Do NOT edit files directly in the main session" <<<"$pre_edit_output"; then
+    echo "pre-edit-check still forbids main session direct/direct-review edits" >&2
+    exit 1
+fi
 
 echo "orchestration tests passed"

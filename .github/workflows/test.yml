@@ -41,43 +41,15 @@ jobs:
         run: npm ci
 
       - name: Install Slither
-        run: python3 -m pip install slither-analyzer==0.11.5
+        run: python3 -m pip install slither-analyzer==0.11.5 jsonschema
 
       - name: Show Forge version
         run: forge --version
 
-      - name: Collect changed files
-        id: changed-files
-        shell: bash
-        run: |
-          set -euo pipefail
-          output="${RUNNER_TEMP}/changed-files.txt"
-          diff_output="${RUNNER_TEMP}/changed-files.diff"
-          zero_sha="0000000000000000000000000000000000000000"
-          empty_tree="4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            base="${{ github.event.pull_request.base.sha }}"
-            head="${{ github.sha }}"
-          else
-            base="${{ github.event.before }}"
-            head="${{ github.sha }}"
-          fi
-
-          if [ -z "$base" ] || [ "$base" = "$zero_sha" ]; then
-            git ls-files > "$output"
-            git diff --unified=0 "$empty_tree" "$head" > "$diff_output"
-          else
-            git diff --name-only "$base" "$head" > "$output"
-            git diff --unified=0 "$base" "$head" > "$diff_output"
-          fi
-
-          echo "file_list=$output" >> "$GITHUB_OUTPUT"
-          echo "diff_file=$diff_output" >> "$GITHUB_OUTPUT"
-
       - name: Run gate:ci
         env:
-          HARNESS_CHANGED_FILES: ${{ steps.changed-files.outputs.file_list }}
+          HARNESS_EVENT_NAME: ${{ github.event_name }}
+          HARNESS_EVENT_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HARNESS_EVENT_HEAD_SHA: ${{ github.sha }}
           RUN_RECORD_PATH: ${{ runner.temp }}/outstakev2-gate-ci.json
-          CHANGE_CLASSIFIER_DIFF_FILE: ${{ steps.changed-files.outputs.diff_file }}
-        run: npm run gate:ci -- --changed-files "$HARNESS_CHANGED_FILES"
+        run: bash script/harness/ci-gate-entrypoint.sh

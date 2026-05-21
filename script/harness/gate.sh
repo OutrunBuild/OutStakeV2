@@ -39,10 +39,10 @@ emit_gate_summary() {
     local verdict="$1"
     local class="$2"
     local orchestration="$3"
-    local writer="$4"
+    local dispatch="$4"
 
-    printf '[gate] profile=%s verdict=%s change_class=%s orchestration_profile=%s writer=%s\n' \
-        "$profile" "$verdict" "$class" "$orchestration" "$writer"
+    printf '[gate] profile=%s verdict=%s change_class=%s orchestration_profile=%s dispatch=%s\n' \
+        "$profile" "$verdict" "$class" "$orchestration" "$dispatch"
 }
 
 emit_blocking_findings() {
@@ -56,7 +56,7 @@ emit_text_record() {
     local verdict="$2"
     local class="$3"
     local orchestration="$4"
-    local writer="$5"
+    local dispatch="$5"
 
     if [ "$quiet" -eq 1 ] && [ "$verdict" != "fail" ] && [ "$verdict" != "blocked" ]; then
         return
@@ -64,18 +64,18 @@ emit_text_record() {
 
     case "$log_level" in
         debug)
-            emit_gate_summary "$verdict" "$class" "$orchestration" "$writer"
+            emit_gate_summary "$verdict" "$class" "$orchestration" "$dispatch"
             printf '%s\n' "$record_json"
             ;;
         info)
-            emit_gate_summary "$verdict" "$class" "$orchestration" "$writer"
+            emit_gate_summary "$verdict" "$class" "$orchestration" "$dispatch"
             if [ "$verdict" = "fail" ] || [ "$verdict" = "blocked" ]; then
                 emit_blocking_findings "$record_json"
             fi
             ;;
         warn|error)
             if [ "$verdict" = "fail" ] || [ "$verdict" = "blocked" ]; then
-                emit_gate_summary "$verdict" "$class" "$orchestration" "$writer"
+                emit_gate_summary "$verdict" "$class" "$orchestration" "$dispatch"
                 emit_blocking_findings "$record_json"
             fi
             ;;
@@ -90,7 +90,7 @@ emit_gate_record() {
     local verdict="$2"
     local class="$3"
     local orchestration="$4"
-    local writer="$5"
+    local dispatch="$5"
     local format
 
     format="$(resolved_output_format)"
@@ -100,7 +100,7 @@ emit_gate_record() {
             printf '%s\n' "$record_json"
             ;;
         text)
-            emit_text_record "$record_json" "$verdict" "$class" "$orchestration" "$writer"
+            emit_text_record "$record_json" "$verdict" "$class" "$orchestration" "$dispatch"
             ;;
         *)
             die "unsupported output format: $format"
@@ -171,210 +171,32 @@ array_contains() {
     return 1
 }
 
+build_dispatch_summary() {
+    local harness_writer_roles_json="$1"
+    local spec_review_required_json="$2"
+    local code_writer_roles_json="$3"
+    local code_review_roles_json="$4"
+
+    jq -r -n \
+        --argjson harness "$harness_writer_roles_json" \
+        --argjson spec "$spec_review_required_json" \
+        --argjson code "$code_writer_roles_json" \
+        --argjson review "$code_review_roles_json" '
+        def fmt_roles($items):
+          if ($items | length) == 0 then "none" else ($items | join(",")) end;
+        "harness=" + fmt_roles($harness)
+        + ";spec-review=" + (if $spec then "required" else "none" end)
+        + ";code=" + fmt_roles($code)
+        + ";code-review=" + fmt_roles($review)
+        '
+}
+
 list_worktree_changed_files() {
     {
         git diff --cached --name-only --diff-filter=ACMRD
         git diff --name-only --diff-filter=ACMRD
         git ls-files --others --exclude-standard
     } | awk '{ sub(/\r$/, ""); if ($0 != "") print $0 }' | awk '!seen[$0]++'
-}
-
-patch_paths_from_patch_file() {
-    local patch_file="$1"
-    PATCH_FILE="$patch_file" node <<'EOF'
-const fs = require('fs');
-
-const patchPath = process.env.PATCH_FILE;
-const patch = patchPath && fs.existsSync(patchPath) ? fs.readFileSync(patchPath, 'utf8') : '';
-const paths = new Set();
-
-for (const rawLine of patch.split(/\r?\n/)) {
-  if (!rawLine.startsWith('diff --git ')) continue;
-  const match = /^diff --git a\/(.+?) b\/(.+)$/.exec(rawLine);
-  if (!match) continue;
-  paths.add(match[2]);
-}
-
-for (const path of paths) {
-  process.stdout.write(`M\t${path}\n`);
-}
-EOF
-}
-
-collect_spec_readiness_diff_scope_paths() {
-    if [ -n "${GATE_DIFF_BASE:-}" ]; then
-        git diff --name-status "${GATE_DIFF_BASE}" "${GATE_DIFF_HEAD:-HEAD}" || return 1
-        return 0
-    fi
-
-    if [ -n "${CHANGE_CLASSIFIER_DIFF_FILE:-}" ] && [ -r "${CHANGE_CLASSIFIER_DIFF_FILE}" ]; then
-        patch_paths_from_patch_file "${CHANGE_CLASSIFIER_DIFF_FILE}" || return 1
-        return 0
-    fi
-
-    {
-        git diff --name-status || return 1
-        git diff --cached --name-status || return 1
-    } | awk 'NF'
-}
-
-retained_paths_from_name_status() {
-    NAME_STATUS_OUTPUT="${1-}" node <<'EOF'
-const lines = (process.env.NAME_STATUS_OUTPUT || '').split(/\r?\n/).filter(Boolean);
-const retained = new Set();
-
-for (const line of lines) {
-  const parts = line.split('\t');
-  const status = parts[0] || '';
-  if (!status) continue;
-
-  const code = status[0];
-  if (code === 'D') continue;
-
-  let path = '';
-  if (code === 'R' || code === 'C') {
-    path = parts[2] || '';
-  } else {
-    path = parts[1] || '';
-  }
-
-  if (path) retained.add(path);
-}
-
-for (const path of retained) {
-  process.stdout.write(`${path}\n`);
-}
-EOF
-}
-
-required_docs_present_in_spec_diff_scope() {
-    local required_docs_json="$1"
-    [ "$(jq 'length' <<<"$required_docs_json")" -gt 0 ] || return 1
-
-    local diff_scope_output
-    diff_scope_output="$(collect_spec_readiness_diff_scope_paths)" || return 1
-
-    local retained_paths
-    retained_paths="$(retained_paths_from_name_status "$diff_scope_output")" || return 1
-    REQUIRED_DOCS_JSON="$required_docs_json" DIFF_SCOPE_OUTPUT="$retained_paths" node <<'EOF'
-const requiredDocs = JSON.parse(process.env.REQUIRED_DOCS_JSON || '[]');
-const paths = new Set((process.env.DIFF_SCOPE_OUTPUT || '').split(/\r?\n/).filter(Boolean));
-const missing = requiredDocs.filter((doc) => !paths.has(doc));
-process.exit(missing.length === 0 ? 0 : 1);
-EOF
-}
-
-evaluate_no_spec_change_attestation() {
-    local required_docs_json="$1"
-    local prod_files_json="$2"
-    local attestation_policy_json
-    attestation_policy_json="$(jq -c '.spec_readiness_gate.no_spec_change_attestation // null' "$policy_file")"
-
-    if [ "$attestation_policy_json" = "null" ]; then
-        printf '%s\n' '{"valid":false,"reason":"policy-disabled","attestation_path":null}'
-        return 0
-    fi
-
-    local attestation_env_var
-    attestation_env_var="$(jq -r '.env_var // empty' <<<"$attestation_policy_json")"
-    if [ -z "$attestation_env_var" ]; then
-        printf '%s\n' '{"valid":false,"reason":"policy-invalid","attestation_path":null}'
-        return 0
-    fi
-
-    NO_SPEC_CHANGE_POLICY_JSON="$attestation_policy_json" \
-    NO_SPEC_CHANGE_ATTESTATION_FILE_VAR="$attestation_env_var" \
-    NO_SPEC_CHANGE_ATTESTATION_FILE_VALUE="${!attestation_env_var-}" \
-    REQUIRED_DOCS_JSON="$required_docs_json" \
-    PROD_FILES_JSON="$prod_files_json" node <<'EOF'
-const fs = require('fs');
-
-const policy = JSON.parse(process.env.NO_SPEC_CHANGE_POLICY_JSON || 'null');
-const attestationEnvVar = process.env.NO_SPEC_CHANGE_ATTESTATION_FILE_VAR || '';
-const attestationPath = process.env.NO_SPEC_CHANGE_ATTESTATION_FILE_VALUE || '';
-const requiredDocs = JSON.parse(process.env.REQUIRED_DOCS_JSON || '[]');
-const prodFiles = JSON.parse(process.env.PROD_FILES_JSON || '[]');
-
-const fail = (reason, attestationPath = null) => ({
-  valid: false,
-  reason,
-  attestation_path: attestationPath,
-  env_var: attestationEnvVar || null,
-});
-
-if (!policy || typeof policy.env_var !== 'string' || policy.env_var.length === 0) {
-  process.stdout.write(JSON.stringify(fail('policy-invalid')));
-  process.exit(0);
-}
-
-if (policy.env_var !== attestationEnvVar) {
-  process.stdout.write(JSON.stringify(fail('policy-env-var-mismatch', attestationPath || null)));
-  process.exit(0);
-}
-
-if (attestationPath.trim() === '') {
-  process.stdout.write(JSON.stringify(fail('env-var-unset')));
-  process.exit(0);
-}
-
-if (!fs.existsSync(attestationPath)) {
-  process.stdout.write(JSON.stringify(fail('file-missing', attestationPath)));
-  process.exit(0);
-}
-
-let attestation;
-try {
-  attestation = JSON.parse(fs.readFileSync(attestationPath, 'utf8'));
-} catch (error) {
-  process.stdout.write(JSON.stringify(fail('json-invalid', attestationPath)));
-  process.exit(0);
-}
-
-let failureReason = null;
-if (!attestation || typeof attestation !== 'object' || Array.isArray(attestation)) {
-  failureReason = 'shape-invalid';
-} else if (attestation.kind !== policy.required_kind) {
-  failureReason = 'kind-mismatch';
-} else if (attestation.change_class !== policy.required_change_class) {
-  failureReason = 'change-class-mismatch';
-} else if (typeof attestation.summary !== 'string' || attestation.summary.trim() === '') {
-  failureReason = 'summary-missing';
-} else if (!Array.isArray(attestation.solidity_paths)) {
-  failureReason = 'solidity-paths-missing';
-} else if (prodFiles.some((file) => !attestation.solidity_paths.includes(file))) {
-  failureReason = 'solidity-paths-mismatch';
-} else if (!Array.isArray(attestation.specs_reviewed)) {
-  failureReason = 'specs-reviewed-missing';
-} else if (requiredDocs.some((doc) => !attestation.specs_reviewed.includes(doc))) {
-  failureReason = 'required-docs-mismatch';
-} else if (!attestation.assertions || typeof attestation.assertions !== 'object' || Array.isArray(attestation.assertions)) {
-  failureReason = 'assertions-missing';
-} else {
-  for (const [key, expected] of Object.entries(policy.required_assertions || {})) {
-    if (attestation.assertions[key] !== expected) {
-      failureReason = `assertion-mismatch:${key}`;
-      break;
-    }
-  }
-}
-
-if (failureReason) {
-  process.stdout.write(JSON.stringify(fail(failureReason, attestationPath)));
-  process.exit(0);
-}
-
-process.stdout.write(JSON.stringify({
-  valid: true,
-  reason: 'valid',
-  attestation_path: attestationPath,
-  env_var: attestationEnvVar,
-  kind: attestation.kind,
-  change_class: attestation.change_class,
-  summary: attestation.summary,
-  solidity_paths: attestation.solidity_paths,
-  specs_reviewed: attestation.specs_reviewed
-}));
-EOF
 }
 
 append_finding() {
@@ -1125,7 +947,7 @@ for changed_file in "${changed_files[@]}"; do
 done
 fi
 
-if [ "${#selected_surfaces[@]}" -eq 0 ]; then
+if [ "${#changed_files[@]}" -eq 0 ]; then
     changed_files_json="$(json_array_from_values "${changed_files[@]}")"
     no_op_record_json="$(jq -cn \
         --arg repo "$(jq -r '.repo' "$policy_file")" \
@@ -1142,15 +964,11 @@ if [ "${#selected_surfaces[@]}" -eq 0 ]; then
           surface_sensitivity: "none",
           orchestration_profile: "no-op",
           verification_profile: $profile,
-          selected_writer_roles: [],
-          writer_role: "none",
-          selected_review_roles: [],
-          selected_review_roles_source: "none",
+          harness_writer_roles: [],
+          spec_review_required: false,
+          code_writer_roles: [],
+          code_review_roles: [],
           orchestration_reasons: ["change_class=no-op", "surface_sensitivity=none"],
-          spec_readiness_triggers: [],
-          spec_readiness_required_docs: [],
-          spec_readiness_writer_roles: [],
-          spec_readiness_review_roles: [],
           blocking_findings: [],
           residual_risks: [],
           final_verdict: "no-op",
@@ -1160,7 +978,7 @@ if [ "${#selected_surfaces[@]}" -eq 0 ]; then
     if [ -n "${RUN_RECORD_PATH:-}" ]; then
         printf '%s\n' "$no_op_record_json" >"$RUN_RECORD_PATH"
     fi
-    emit_gate_record "$no_op_record_json" "no-op" "no-op" "no-op" "none"
+    emit_gate_record "$no_op_record_json" "no-op" "no-op" "no-op" "harness=none;spec-review=none;code=none;code-review=none"
     if [ "$quiet" -eq 0 ] && [ "$(resolved_output_format)" = "text" ] && [ "$log_level" = "info" ]; then
         echo "[gate] no changed files matched any surface pattern"
     fi
@@ -1175,13 +993,23 @@ for classification_solidity_file in "${solidity_prod_files[@]}" "${solidity_test
     append_unique classification_solidity_files "$classification_solidity_file"
 done
 
-declare -a selected_writer_roles=()
+declare -a harness_writer_roles=()
+declare -a code_writer_roles=()
 for selected_surface in "${selected_surfaces[@]}"; do
     selected_surface_writer_role="$(jq -r --arg surface "$selected_surface" '.write_roles[$surface]' "$policy_file")"
     if [ "$selected_surface_writer_role" != "null" ] && [ -n "$selected_surface_writer_role" ]; then
-        append_unique selected_writer_roles "$selected_surface_writer_role"
+        case "$selected_surface" in
+            harness_control)
+                append_unique harness_writer_roles "$selected_surface_writer_role"
+                ;;
+            solidity_prod|solidity_test)
+                append_unique code_writer_roles "$selected_surface_writer_role"
+                ;;
+        esac
     fi
 done
+
+dispatch_writer_roles=("${harness_writer_roles[@]}" "${code_writer_roles[@]}")
 
 mkdir -p "$repo_root/.harness/tmp"
 patch_file="$(mktemp "$repo_root/.harness/tmp/gate.XXXXXX")"
@@ -1230,10 +1058,6 @@ blocking_findings_json='[]'
 residual_risks_json='[]'
 hard_blocked=0
 verification_failed=0
-
-if [ "${#selected_writer_roles[@]}" -gt 1 ]; then
-    append_finding residual_risks_json "verifier" "multiple writer roles present: ${selected_writer_roles[*]}" "writer-role-mixed" "info"
-fi
 
 while IFS= read -r hard_block_rule; do
     [ -n "$hard_block_rule" ] || continue
@@ -1293,7 +1117,7 @@ while IFS= read -r hard_block_rule; do
     if jq -e '.writer_roles? != null' >/dev/null <<<"$hard_block_rule"; then
         mapfile -t hard_block_writer_roles < <(jq -r '.writer_roles[]' <<<"$hard_block_rule")
         for hard_block_writer_role in "${hard_block_writer_roles[@]}"; do
-            if array_contains "$hard_block_writer_role" "${selected_writer_roles[@]}"; then
+            if array_contains "$hard_block_writer_role" "${dispatch_writer_roles[@]}"; then
                 hard_blocked=1
                 rule_matched=1
                 append_finding blocking_findings_json "main-orchestrator" "$hard_block_rule_message: $hard_block_writer_role" "$hard_block_rule_id" "error"
@@ -1445,13 +1269,6 @@ if [ "$all_mode" -eq 0 ] && [ "${#unmatched_files[@]}" -gt 0 ]; then
     append_finding blocking_findings_json "main-orchestrator" "changed files do not match configured policy surfaces: ${unmatched_files[*]}" "unclassified-paths" "error"
 fi
 
-writer_role="none"
-if [ "${#selected_writer_roles[@]}" -eq 1 ]; then
-    writer_role="${selected_writer_roles[0]}"
-elif [ "${#selected_writer_roles[@]}" -gt 1 ]; then
-    writer_role="mixed"
-fi
-
 surface_sensitivity="none"
 if [[ " ${selected_surfaces[*]:-} " == *" solidity_prod "* ]]; then
     surface_sensitivity="$(jq -r '.orchestration_rules.surface_sensitivity.solidity_prod // "sensitive"' "$policy_file")"
@@ -1467,21 +1284,16 @@ requires_human_confirmation=false
 semantic_escalation_json='null'
 default_orchestration_profile=""
 candidate_orchestration_profile=""
-selected_review_roles_source="none"
 coverage_required_full_ci=false
 slither_required_full_ci=false
 orchestration_decision_state="final"
 risk_analysis_record_required=false
-spec_readiness_triggers_json='[]'
-spec_readiness_required_docs_json='[]'
-spec_readiness_writer_roles_json='[]'
-spec_readiness_review_roles_json='[]'
-no_spec_change_attestation_json='null'
-spec_readiness_satisfied_by_diff_scope=false
-spec_readiness_satisfied_by_no_spec_change_attestation=false
-spec_readiness_blocked=false
-declare -a selected_review_roles=()
 declare -a orchestration_reasons=()
+spec_review_required=false
+declare -a code_review_roles=()
+harness_writer_roles_json='[]'
+code_writer_roles_json='[]'
+code_review_roles_json='[]'
 
 append_unique orchestration_reasons "change_class=$change_class"
 append_unique orchestration_reasons "surface_sensitivity=$surface_sensitivity"
@@ -1489,6 +1301,17 @@ append_unique orchestration_reasons "surface_sensitivity=$surface_sensitivity"
 if [ "${#changed_files[@]}" -eq 1 ] && [ "${changed_files[0]}" = "README.md" ]; then
     requires_doc_editorial_attestation=true
     candidate_orchestration_profile="direct"
+fi
+
+mapfile -t spec_paths < <(jq -r '.orchestration_rules.spec_paths[]? // empty' "$policy_file")
+if [ "${#spec_paths[@]}" -gt 0 ]; then
+    for changed_file in "${changed_files[@]}"; do
+        if match_path_against_patterns "$changed_file" "${spec_paths[@]}"; then
+            spec_review_required=true
+            requires_human_confirmation=true
+            break
+        fi
+    done
 fi
 
 if [ "$change_class" = "prod-semantic" ] && [ "$surface_sensitivity" = "sensitive" ]; then
@@ -1515,108 +1338,10 @@ if [ "$change_class" = "prod-semantic" ]; then
     fi
 fi
 
-if [ "$change_class" = "prod-semantic" ]; then
-    spec_readiness_data_json="$(
-        jq -cn \
-            --argjson prod_files "$solidity_prod_json" \
-            --argjson selected_surfaces "$(json_array_from_values "${selected_surfaces[@]}")" \
-            --slurpfile policy "$policy_file" '
-            def path_matches($path; $patterns):
-              any($patterns[]?; . as $pattern | ($path | test($pattern)));
-
-            ($policy[0].test_mapping // {}) as $test_mapping
-            | ($policy[0].spec_readiness_gate // {}) as $gate
-            | (
-                [
-                  $test_mapping
-                  | to_entries[]
-                  | .value.rules[]?
-                  | (.paths // []) as $rule_paths
-                  | select(any($prod_files[]?; . as $prod_file | path_matches($prod_file; $rule_paths)))
-                  | .id
-                ] | unique
-              ) as $matched_rule_ids
-            | (
-                [
-                  ($gate.doc_mapping // {})
-                  | to_entries[]
-                  | .value.rules[]?
-                  | select((.id // "") as $id | $matched_rule_ids | index($id))
-                  | (.check_docs // [])[]
-                ] | unique
-              ) as $mapped_docs
-            | (
-                if ($prod_files | length) >= (($gate.cross_cutting_trigger_threshold // 999999) | tonumber)
-                then (($gate.cross_cutting_docs // []) + $mapped_docs | unique)
-                else $mapped_docs
-                end
-              ) as $candidate_docs
-            | (
-                [
-                  $candidate_docs[]
-                  | . as $doc
-                  | select((($gate.doc_exclusions // []) | any(. as $pattern | ($doc | test($pattern)))) | not)
-                ] | unique
-              ) as $required_docs
-            | {
-                triggers: (if ($required_docs | length) > 0 then ["spec-readiness-doc-update"] else [] end),
-                required_docs: $required_docs,
-                writer_roles: (if ($required_docs | length) > 0 then ["process-implementer"] else [] end),
-                review_roles: (if ($required_docs | length) > 0 then [($gate.required_reviewer // "spec-reviewer")] else [] end)
-              }
-            '
-    )"
-    spec_readiness_triggers_json="$(jq -c '.triggers' <<<"$spec_readiness_data_json")"
-    spec_readiness_required_docs_json="$(jq -c '.required_docs' <<<"$spec_readiness_data_json")"
-    spec_readiness_writer_roles_json="$(jq -c '.writer_roles' <<<"$spec_readiness_data_json")"
-    spec_readiness_review_roles_json="$(jq -c '.review_roles' <<<"$spec_readiness_data_json")"
-    diff_scope_spec_readiness_candidate=false
-    if array_contains "solidity_prod" "${selected_surfaces[@]}"; then
-        diff_scope_spec_readiness_candidate=true
-        for selected_surface in "${selected_surfaces[@]}"; do
-            case "$selected_surface" in
-                solidity_prod|solidity_test|harness_control) ;;
-                *) diff_scope_spec_readiness_candidate=false ;;
-            esac
-        done
-    fi
-    if [ "$diff_scope_spec_readiness_candidate" = true ] \
-        && [ "$(jq 'length' <<<"$spec_readiness_required_docs_json")" -gt 0 ]; then
-        if required_docs_present_in_spec_diff_scope "$spec_readiness_required_docs_json"; then
-            spec_readiness_satisfied_by_diff_scope=true
-            append_unique orchestration_reasons "spec-readiness-satisfied-by-diff-scope"
-        else
-            no_spec_change_attestation_json="$(evaluate_no_spec_change_attestation "$spec_readiness_required_docs_json" "$solidity_prod_json")"
-            if [ "$(jq -r '.valid' <<<"$no_spec_change_attestation_json")" = "true" ]; then
-                spec_readiness_satisfied_by_no_spec_change_attestation=true
-                append_unique orchestration_reasons "spec-readiness-satisfied-by-no-spec-change-attestation"
-            fi
-        fi
-    fi
-    if [ "$(jq 'length' <<<"$spec_readiness_triggers_json")" -gt 0 ]; then
-        append_unique orchestration_reasons "spec-readiness-doc-update"
-        requires_human_confirmation=true
-        if [ "$(jq -r '.spec_readiness_gate.gate_action // "block"' "$policy_file")" = "block" ] \
-            && [ "$spec_readiness_satisfied_by_diff_scope" != true ] \
-            && [ "$spec_readiness_satisfied_by_no_spec_change_attestation" != true ]; then
-            spec_readiness_blocked=true
-            hard_blocked=1
-            append_finding blocking_findings_json \
-                "main-orchestrator" \
-                "spec readiness documentation update required before code implementation" \
-                "spec-readiness-doc-update" \
-                "error"
-        fi
-    fi
-fi
-
 if [ "${#changed_files[@]}" -eq 0 ] && [ "$hard_blocked" -eq 0 ]; then
     surface_json='"no-op"'
     change_class="no-op"
-    writer_role="none"
     verification_profile="none"
-    selected_review_roles_json='[]'
-    selected_writer_roles_json='[]'
     orchestration_profile="no-op"
     final_verdict="no-op"
 else
@@ -1630,17 +1355,7 @@ else
 
     verification_profile="$profile"
 
-    if [ "$spec_readiness_blocked" = true ] && [ "$change_class" = "prod-semantic" ] && [ "$structural_escalation" != true ]; then
-        default_orchestration_profile="full-review"
-        candidate_orchestration_profile="direct-review"
-        requires_main_risk_analysis=true
-        orchestration_decision_state="pending-main-session-risk-analysis"
-        risk_analysis_record_required=true
-    fi
-
-    if [ "$spec_readiness_blocked" = true ]; then
-        orchestration_profile="blocked"
-    elif [ "$hard_blocked" -eq 1 ]; then
+    if [ "$hard_blocked" -eq 1 ]; then
         orchestration_profile="blocked"
     elif [ "$change_class" = "prod-semantic" ]; then
         if [ "$structural_escalation" = true ]; then
@@ -1671,9 +1386,8 @@ else
             mapfile -t review_roles < <(jq -r --arg class "$change_class" '.orchestration_review_roles[$class][]? // empty' "$policy_file")
         fi
         for review_role in "${review_roles[@]}"; do
-            append_unique selected_review_roles "$review_role"
+            append_unique code_review_roles "$review_role"
         done
-        selected_review_roles_source="orchestration_review_roles"
     elif [ "$orchestration_profile" = "delegated" ]; then
         while IFS= read -r delegated_rule; do
             [ -n "$delegated_rule" ] || continue
@@ -1698,47 +1412,26 @@ else
 
             mapfile -t delegated_review_roles < <(jq -r '.reviewers[]? // empty' <<<"$delegated_rule")
             for review_role in "${delegated_review_roles[@]}"; do
-                append_unique selected_review_roles "$review_role"
+                append_unique code_review_roles "$review_role"
             done
             if [ "$(jq -r '.requires_human_confirmation // false' <<<"$delegated_rule")" = "true" ]; then
                 requires_human_confirmation=true
             fi
         done < <(jq -c '.delegated_review_rules[]? // empty' "$policy_file")
-        selected_review_roles_source="delegated_review_rules"
     elif [ "$orchestration_profile" = "full-review" ] || [ "$orchestration_profile" = "full-subagent" ]; then
         mapfile -t review_roles < <(jq -r --arg class "$change_class" '.full_review_matrix[$class][]? // empty' "$policy_file")
         for review_role in "${review_roles[@]}"; do
-            append_unique selected_review_roles "$review_role"
+            append_unique code_review_roles "$review_role"
         done
-        selected_review_roles_source="full_review_matrix[$change_class]"
-    fi
-
-    if [ "$spec_readiness_blocked" = true ]; then
-        selected_writer_roles=()
-        while IFS= read -r writer_role_item; do
-            [ -n "$writer_role_item" ] || continue
-            append_unique selected_writer_roles "$writer_role_item"
-        done < <(jq -r '.[]' <<<"$spec_readiness_writer_roles_json")
-
-        selected_review_roles=()
-        while IFS= read -r review_role; do
-            [ -n "$review_role" ] || continue
-            append_unique selected_review_roles "$review_role"
-        done < <(jq -r '.[]' <<<"$spec_readiness_review_roles_json")
-
-        selected_review_roles_source="spec_readiness_gate"
-        writer_role="process-implementer"
-    fi
-
-    selected_writer_roles_json="$(json_array_from_values "${selected_writer_roles[@]}")"
-    if [ "${#selected_review_roles[@]}" -gt 0 ]; then
-        selected_review_roles_json="$(json_array_from_values "${selected_review_roles[@]}")"
-    else
-        selected_review_roles_json='[]'
     fi
 fi
 
+harness_writer_roles_json="$(json_array_from_values "${harness_writer_roles[@]}")"
+code_writer_roles_json="$(json_array_from_values "${code_writer_roles[@]}")"
+code_review_roles_json="$(json_array_from_values "${code_review_roles[@]}")"
+
 orchestration_reasons_json="$(json_array_from_values "${orchestration_reasons[@]}")"
+dispatch_summary="$(build_dispatch_summary "$harness_writer_roles_json" "$spec_review_required" "$code_writer_roles_json" "$code_review_roles_json")"
 
 classification_record_json="$(jq -cn \
     --arg repo "$(jq -r '.repo' "$policy_file")" \
@@ -1760,18 +1453,11 @@ classification_record_json="$(jq -cn \
     --arg default_orchestration_profile "$default_orchestration_profile" \
     --arg candidate_orchestration_profile "$candidate_orchestration_profile" \
     --arg verification_profile "$verification_profile" \
-    --argjson selected_writer_roles "$selected_writer_roles_json" \
-    --arg writer_role "$writer_role" \
-    --argjson selected_review_roles "$selected_review_roles_json" \
-    --arg selected_review_roles_source "$selected_review_roles_source" \
+    --argjson harness_writer_roles "$harness_writer_roles_json" \
+    --argjson spec_review_required "$spec_review_required" \
+    --argjson code_writer_roles "$code_writer_roles_json" \
+    --argjson code_review_roles "$code_review_roles_json" \
     --argjson orchestration_reasons "$orchestration_reasons_json" \
-    --argjson spec_readiness_triggers "$spec_readiness_triggers_json" \
-    --argjson spec_readiness_required_docs "$spec_readiness_required_docs_json" \
-    --argjson spec_readiness_writer_roles "$spec_readiness_writer_roles_json" \
-    --argjson spec_readiness_review_roles "$spec_readiness_review_roles_json" \
-    --argjson no_spec_change_attestation "$no_spec_change_attestation_json" \
-    --argjson spec_readiness_satisfied_by_diff_scope "$spec_readiness_satisfied_by_diff_scope" \
-    --argjson spec_readiness_satisfied_by_no_spec_change_attestation "$spec_readiness_satisfied_by_no_spec_change_attestation" \
     --argjson blocking_findings "$blocking_findings_json" \
     --argjson residual_risks "$residual_risks_json" \
     --argjson coverage_required_full_ci "$coverage_required_full_ci" \
@@ -1802,18 +1488,11 @@ classification_record_json="$(jq -cn \
       requires_human_confirmation: $requires_human_confirmation,
       orchestration_profile: $orchestration_profile,
       verification_profile: $verification_profile,
-      selected_writer_roles: $selected_writer_roles,
-      writer_role: $writer_role,
-      selected_review_roles: $selected_review_roles,
-      selected_review_roles_source: $selected_review_roles_source,
+      harness_writer_roles: $harness_writer_roles,
+      spec_review_required: $spec_review_required,
+      code_writer_roles: $code_writer_roles,
+      code_review_roles: $code_review_roles,
       orchestration_reasons: $orchestration_reasons,
-      spec_readiness_triggers: $spec_readiness_triggers,
-      spec_readiness_required_docs: $spec_readiness_required_docs,
-      spec_readiness_writer_roles: $spec_readiness_writer_roles,
-      spec_readiness_review_roles: $spec_readiness_review_roles,
-      no_spec_change_attestation: $no_spec_change_attestation,
-      spec_readiness_satisfied_by_diff_scope: $spec_readiness_satisfied_by_diff_scope,
-      spec_readiness_satisfied_by_no_spec_change_attestation: $spec_readiness_satisfied_by_no_spec_change_attestation,
       blocking_findings: $blocking_findings,
       residual_risks: $residual_risks,
       coverage_required_full_ci: $coverage_required_full_ci,
@@ -1834,7 +1513,7 @@ if [ -n "${RUN_RECORD_PATH:-}" ]; then
 fi
 
 if [ "$classify_only" -eq 1 ]; then
-    emit_gate_record "$classification_record_json" "$(jq -r '.final_verdict' <<<"$classification_record_json")" "$change_class" "$orchestration_profile" "$writer_role"
+    emit_gate_record "$classification_record_json" "$(jq -r '.final_verdict' <<<"$classification_record_json")" "$change_class" "$orchestration_profile" "$dispatch_summary"
     if [ "$orchestration_profile" = "blocked" ]; then
         exit 1
     fi
@@ -2078,6 +1757,7 @@ fi
 final_record_json="$(jq -cn \
     --argjson base "$classification_record_json" \
     --arg final_verdict "$final_verdict" \
+    --argjson blocking_findings "$blocking_findings_json" \
     --argjson profile_required_commands "$profile_required_commands_json" \
     --argjson commands_run "$commands_run_json" \
     --argjson command_results "$command_results_json" \
@@ -2085,6 +1765,7 @@ final_record_json="$(jq -cn \
     $base
     + {
       final_verdict: $final_verdict,
+      blocking_findings: $blocking_findings,
       profile_required_commands: $profile_required_commands,
       commands_run: $commands_run,
       command_results: $command_results
@@ -2095,7 +1776,7 @@ if [ -n "${RUN_RECORD_PATH:-}" ]; then
     printf '%s\n' "$final_record_json" >"$RUN_RECORD_PATH"
 fi
 
-emit_gate_record "$final_record_json" "$final_verdict" "$change_class" "$orchestration_profile" "$writer_role"
+emit_gate_record "$final_record_json" "$final_verdict" "$change_class" "$orchestration_profile" "$dispatch_summary"
 
 case "$final_verdict" in
     pass|no-op)
