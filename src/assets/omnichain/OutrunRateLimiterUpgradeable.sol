@@ -75,7 +75,7 @@ abstract contract OutrunRateLimiterUpgradeable is Initializable {
             for (uint256 i; i < numConfigs; ++i) {
                 RateLimit storage rl = $.rateLimits[rateLimitConfigs[i].dstEid];
                 // Checkpoint the current state before updating the stored limit values.
-                _checkAndUpdateRateLimit(rateLimitConfigs[i].dstEid, 0);
+                _checkAndUpdateRateLimit(rl, 0);
                 rl.limit = rateLimitConfigs[i].limit;
                 rl.window = rateLimitConfigs[i].window;
             }
@@ -106,8 +106,18 @@ abstract contract OutrunRateLimiterUpgradeable is Initializable {
         uint256 timeSinceLastDeposit = block.timestamp - lastUpdated;
         if (timeSinceLastDeposit >= window) return (0, limit);
         uint256 decay = (uint256(limit) * timeSinceLastDeposit) / window;
-        currentAmountInFlight = amountInFlight <= decay ? 0 : amountInFlight - decay;
-        amountCanBeSent = limit <= currentAmountInFlight ? 0 : limit - currentAmountInFlight;
+        if (amountInFlight > decay) {
+            // The guard prevents underflow.
+            unchecked {
+                currentAmountInFlight = amountInFlight - decay;
+            }
+        }
+        if (limit > currentAmountInFlight) {
+            // The guard prevents underflow.
+            unchecked {
+                amountCanBeSent = limit - currentAmountInFlight;
+            }
+        }
     }
 
     /// @notice Records an outflow against the rate limit for a destination.
@@ -126,6 +136,16 @@ abstract contract OutrunRateLimiterUpgradeable is Initializable {
     function _checkAndUpdateRateLimit(uint32 dstEid, uint256 amount) internal {
         OutrunRateLimiterStorage storage $ = _getOutrunRateLimiterStorage();
         RateLimit storage rl = $.rateLimits[dstEid];
+        _checkAndUpdateRateLimit(rl, amount);
+    }
+
+    /// @notice Checks and updates a loaded rate limit: reverts if the outflow would exceed capacity.
+    /// @dev Accepts storage directly so callers that already loaded the rate limit do not resolve it again.
+    /// @param rl Stored rate limit to checkpoint and update
+    /// @param amount Outflow amount to record
+    // slither-disable-next-line timestamp
+    function _checkAndUpdateRateLimit(RateLimit storage rl, uint256 amount) internal {
+        if (rl.window == 0) return;
         (uint256 currentAmountInFlight, uint256 amountCanBeSent) =
             _amountCanBeSent(rl.amountInFlight, rl.lastUpdated, rl.limit, rl.window);
         if (amount > amountCanBeSent) revert RateLimitExceeded();

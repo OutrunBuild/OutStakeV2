@@ -6,6 +6,7 @@ import {MessagingFee, OFTLimit, SendParam} from "@layerzerolabs/oft-evm/contract
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 import {OutrunUniversalAssetsUpgradeable} from "../../src/assets/base/OutrunUniversalAssetsUpgradeable.sol";
+import {OutrunRateLimiterUpgradeable} from "../../src/assets/omnichain/OutrunRateLimiterUpgradeable.sol";
 import {MockLzEndpoint} from "./helpers/OFTTestHelper.sol";
 import {ProxyTestHelper} from "./helpers/ProxyTestHelper.sol";
 
@@ -64,9 +65,15 @@ contract OutrunOFTUpgradeableTest is Test {
         vm.prank(user);
         (uint256 sent, uint256 received) = oft.exposedDebit(user, 25e18, 0, DST_EID);
 
+        OutrunRateLimiterUpgradeable.RateLimit memory rateLimit = oft.rateLimits(DST_EID);
         assertEq(sent, 25e18);
         assertEq(received, 25e18);
         assertEq(oft.balanceOf(user), 75e18);
+        assertEq(oft.outflowCalls(), 1);
+        assertEq(rateLimit.amountInFlight, 0);
+        assertEq(rateLimit.lastUpdated, 0);
+        assertEq(rateLimit.limit, 0);
+        assertEq(rateLimit.window, 0);
     }
 
     function testQuoteLimitReflectsConfiguredRateLimit() external {

@@ -27,6 +27,7 @@ contract OutrunUniversalAssetsUpgradeable is Initializable, IUniversalAssets, Ou
 
     error InvalidOFTUpgradeConfig();
     error DecimalsMismatch(uint8 expected, uint8 provided);
+    error InvalidTransferParams();
 
     constructor(uint8 localDecimals_, address lzEndpoint) OutrunOFTUpgradeable(localDecimals_, lzEndpoint) {}
 
@@ -39,8 +40,9 @@ contract OutrunUniversalAssetsUpgradeable is Initializable, IUniversalAssets, Ou
         external
         initializer
     {
-        if (decimals_ != _localDecimalsForValidation()) {
-            revert DecimalsMismatch(_localDecimalsForValidation(), decimals_);
+        uint8 expectedDecimals = _localDecimalsForValidation();
+        if (decimals_ != expectedDecimals) {
+            revert DecimalsMismatch(expectedDecimals, decimals_);
         }
         __UUPSUpgradeable_init();
         __OutrunOFT_init(name_, symbol_, decimals_, owner_);
@@ -106,7 +108,7 @@ contract OutrunUniversalAssetsUpgradeable is Initializable, IUniversalAssets, Ou
     /// @param to Destination minter address
     /// @param amount Amount of debt to transfer
     function transferMinterDebt(address from, address to, uint256 amount) external override onlyOwner {
-        require(from != address(0) && to != address(0) && from != to && amount != 0, ZeroInput());
+        require(from != address(0) && to != address(0) && from != to && amount != 0, InvalidTransferParams());
 
         MintingStatus storage fromStatus = _mintingStatus(from);
         uint256 fromAmountInMinted = fromStatus.amountInMinted;
@@ -115,6 +117,7 @@ contract OutrunUniversalAssetsUpgradeable is Initializable, IUniversalAssets, Ou
         MintingStatus storage toStatus = _mintingStatus(to);
         uint256 toAmountInMinted = toStatus.amountInMinted;
         uint256 toMintingCap = toStatus.mintingCap;
+        // Keep the cap/debt invariant explicit so this reverts with ReachMintCap instead of a raw underflow panic.
         require(toMintingCap >= toAmountInMinted && amount <= toMintingCap - toAmountInMinted, ReachMintCap());
 
         fromStatus.amountInMinted = fromAmountInMinted - amount;
@@ -131,11 +134,14 @@ contract OutrunUniversalAssetsUpgradeable is Initializable, IUniversalAssets, Ou
         require(amount != 0 && receiver != address(0), ZeroInput());
 
         MintingStatus storage status = _mintingStatus(msg.sender);
+        uint256 amountInMinted = status.amountInMinted;
+        uint256 mintingCap = status.mintingCap;
         // Check the minter (msg.sender) hasn't exceeded its cap.
-        require(status.amountInMinted + amount <= status.mintingCap, ReachMintCap());
+        require(mintingCap >= amountInMinted && amount <= mintingCap - amountInMinted, ReachMintCap());
 
-        // Increase minter's outstanding debt.
-        status.amountInMinted += amount;
+        // Update debt before _mint — keeps C-E-I ordering in case future
+        // hook overrides introduce external calls.
+        status.amountInMinted = amountInMinted + amount;
         // Mint uAsset tokens to receiver.
         _mint(receiver, amount);
 
@@ -145,7 +151,7 @@ contract OutrunUniversalAssetsUpgradeable is Initializable, IUniversalAssets, Ou
     /// @notice Burns uAsset from an account and decreases the minter's outstanding debt.
     /// @param account Address whose uAsset will be burned
     /// @param amount Amount of uAsset to burn
-    function repay(address account, uint256 amount) external override {
+    function repay(address account, uint256 amount) external override whenNotPaused {
         require(account != address(0) && amount != 0, ZeroInput());
 
         MintingStatus storage status = _mintingStatus(msg.sender);
@@ -153,7 +159,8 @@ contract OutrunUniversalAssetsUpgradeable is Initializable, IUniversalAssets, Ou
         // Check the minter has enough outstanding debt to cover the repayment.
         require(amountInMinted >= amount, ReachBurnCap());
 
-        // Decrease minter's outstanding debt.
+        // Update debt before _burn — keeps C-E-I ordering in case future
+        // hook overrides introduce external calls.
         status.amountInMinted = amountInMinted - amount;
 
         // If repaying another account's balance, check allowance.

@@ -134,7 +134,7 @@ abstract contract OutrunOFTUpgradeable is
         returns (uint256 amountSentLD, uint256 amountReceivedLD)
     {
         (amountSentLD, amountReceivedLD) = _debitView(_amountLD, _minAmountLD, _dstEid);
-        if (rateLimits(_dstEid).window != 0) _outflow(_dstEid, amountSentLD);
+        _outflow(_dstEid, amountSentLD);
         // Outbound transfer: (1) compute amounts, (2) apply rate limit outflow,
         // (3) burn tokens from sender. Must respect pause state.
         // _amountLD means "amount in local decimals".

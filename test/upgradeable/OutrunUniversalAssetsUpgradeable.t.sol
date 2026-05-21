@@ -119,6 +119,18 @@ contract OutrunUniversalAssetsUpgradeableTest is Test {
         assertEq(uAsset.checkMintableAmount(minter), 75e18);
     }
 
+    function testMintNearUint256BoundaryRevertsWithReachMintCap() external {
+        vm.prank(owner);
+        uAsset.setMintingCap(minter, type(uint256).max);
+
+        vm.prank(minter);
+        uAsset.mint(receiver, type(uint256).max - 1);
+
+        vm.prank(minter);
+        vm.expectRevert(IUniversalAssets.ReachMintCap.selector);
+        uAsset.mint(receiver, 2);
+    }
+
     function testRevokeKeepsDebtClearsCapBlocksMintAndAllowsRepay() external {
         vm.prank(owner);
         uAsset.setMintingCap(minter, 100e18);
@@ -211,13 +223,13 @@ contract OutrunUniversalAssetsUpgradeableTest is Test {
         uAsset.mint(receiver, 60e18);
 
         vm.startPrank(owner);
-        vm.expectRevert(IUniversalAssets.ZeroInput.selector);
+        vm.expectRevert(OutrunUniversalAssetsUpgradeable.InvalidTransferParams.selector);
         uAsset.transferMinterDebt(address(0), otherMinter, 1);
 
-        vm.expectRevert(IUniversalAssets.ZeroInput.selector);
+        vm.expectRevert(OutrunUniversalAssetsUpgradeable.InvalidTransferParams.selector);
         uAsset.transferMinterDebt(minter, address(0), 1);
 
-        vm.expectRevert(IUniversalAssets.ZeroInput.selector);
+        vm.expectRevert(OutrunUniversalAssetsUpgradeable.InvalidTransferParams.selector);
         uAsset.transferMinterDebt(minter, otherMinter, 0);
 
         vm.expectRevert(IUniversalAssets.ReachBurnCap.selector);
@@ -239,7 +251,7 @@ contract OutrunUniversalAssetsUpgradeableTest is Test {
         uint256 receiverBalanceBefore = uAsset.balanceOf(receiver);
 
         vm.prank(owner);
-        vm.expectRevert(IUniversalAssets.ZeroInput.selector);
+        vm.expectRevert(OutrunUniversalAssetsUpgradeable.InvalidTransferParams.selector);
         uAsset.transferMinterDebt(minter, minter, 10e18);
 
         IUniversalAssets.MintingStatus memory status = uAsset.mintingStatusTable(minter);
