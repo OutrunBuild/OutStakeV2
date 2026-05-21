@@ -19,7 +19,19 @@ Local current-work gate invocations must use exact changed-file input. Solidity 
 
 For code-only `prod-semantic` classification after spec/document updates, `GATE_DIFF_BASE` is the preferred and reliable source for spec-readiness satisfaction checks. When `GATE_DIFF_BASE` is unavailable, gate falls back to the union of local staged and unstaged tracked-file deltas as a best-effort local convenience path.
 
+A valid no-spec-change attestation JSON provided through `NO_SPEC_CHANGE_ATTESTATION_FILE` also satisfies spec readiness for behavior-preserving refactors. Gate requires the attestation to:
+
+- declare `kind: "no-spec-change-attestation"` and `change_class: "prod-semantic"`
+- cover the current `src/**/*.sol` files in `solidity_paths`
+- cover the mapped required docs in `specs_reviewed`
+- assert `refactor_only`, `product_semantics_unchanged`, `permissions_unchanged`, `fund_flow_unchanged`, `state_machine_unchanged`, `storage_layout_unchanged`, `abi_unchanged`, and `mapped_specs_remain_valid` as `true`
+- assert `business_spec_update_required` as `false`
+
+This clears only `spec-readiness-doc-update`. It does not lower review/risk-analysis requirements or clear any other hard block.
+
 Diff evidence must not be created as persistent repository files. Prefer `GATE_DIFF_BASE=<git-ref>`; when `CHANGE_CLASSIFIER_DIFF_FILE` is needed, point it at a `mktemp` file outside the repository and remove it after `gate.sh` exits.
+
+The no-spec-change attestation input is also a runtime-only file. Keep it outside the repository, do not include it in `--changed-files`, and pass it only through `NO_SPEC_CHANGE_ATTESTATION_FILE=/tmp/no-spec-change.json`.
 
 `full` and `ci` command gates:
 

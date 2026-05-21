@@ -203,6 +203,116 @@ EOF
     printf '%s\n' "$record"
 }
 
+run_no_spec_change_attestation_classify_in_scratch_repo() {
+    local name="$1"
+    local include_unclassified_path="$2"
+    local repo="$tmp_dir/$name.repo"
+    local record="$tmp_dir/$name.record.json"
+    local changed="$tmp_dir/$name.changed"
+    local diff="$tmp_dir/$name.diff"
+    local attestation="$tmp_dir/$name.no-spec-change.json"
+
+    mkdir -p \
+        "$repo/script/harness" \
+        "$repo/.harness" \
+        "$repo/src/position"
+    cp script/harness/gate.sh "$repo/script/harness/gate.sh"
+    cp -R .harness/policy.json .harness/schemas "$repo/.harness/"
+
+    cat >"$repo/src/position/OutrunStakingPositionUpgradeable.sol" <<'EOF'
+pragma solidity ^0.8.0;
+contract OutrunStakingPositionUpgradeable {
+    function amount() external pure returns (uint256) {
+        return 1;
+    }
+}
+EOF
+
+    (
+        cd "$repo"
+        git init -q
+        git config user.email test@example.invalid
+        git config user.name "Harness Test"
+        git add .
+        git commit -q -m baseline
+
+        cat >src/position/OutrunStakingPositionUpgradeable.sol <<'EOF'
+pragma solidity ^0.8.0;
+contract OutrunStakingPositionUpgradeable {
+    function amount() external pure returns (uint256) {
+        return 2;
+    }
+}
+EOF
+
+        cat >"$attestation" <<'EOF'
+{
+  "kind": "no-spec-change-attestation",
+  "change_class": "prod-semantic",
+  "summary": "Inline a single-use helper without changing product behavior.",
+  "solidity_paths": [
+    "src/position/OutrunStakingPositionUpgradeable.sol"
+  ],
+  "specs_reviewed": [
+    "docs/spec/position/state-machines.md",
+    "docs/spec/position/accounting.md",
+    "docs/spec/router/router-and-user-flows.md"
+  ],
+  "assertions": {
+    "refactor_only": true,
+    "product_semantics_unchanged": true,
+    "permissions_unchanged": true,
+    "fund_flow_unchanged": true,
+    "state_machine_unchanged": true,
+    "storage_layout_unchanged": true,
+    "abi_unchanged": true,
+    "mapped_specs_remain_valid": true,
+    "business_spec_update_required": false
+  }
+}
+EOF
+
+        printf '%s\n' "src/position/OutrunStakingPositionUpgradeable.sol" >"$changed"
+        if [ "$include_unclassified_path" = "true" ]; then
+            printf '%s\n' "notes.txt" >>"$changed"
+            printf 'note\n' >notes.txt
+        fi
+
+        cat >"$diff" <<'EOF'
+diff --git a/src/position/OutrunStakingPositionUpgradeable.sol b/src/position/OutrunStakingPositionUpgradeable.sol
+--- a/src/position/OutrunStakingPositionUpgradeable.sol
++++ b/src/position/OutrunStakingPositionUpgradeable.sol
+@@ -2,5 +2,5 @@ pragma solidity ^0.8.0;
+ contract OutrunStakingPositionUpgradeable {
+     function amount() external pure returns (uint256) {
+-        return 1;
++        return 2;
+     }
+ }
+EOF
+
+        set +e
+        RUN_RECORD_PATH="$record" CHANGE_CLASSIFIER_DIFF_FILE="$diff" \
+            NO_SPEC_CHANGE_ATTESTATION_FILE="$attestation" \
+            bash script/harness/gate.sh --classify-only --changed-files "$changed" >/dev/null
+        status=$?
+        set -e
+
+        if [ "$include_unclassified_path" = "true" ] && [ "$status" -ne 1 ]; then
+            echo "expected classify status 1 for $name, got $status" >&2
+            exit 1
+        fi
+
+        if [ "$include_unclassified_path" != "true" ] && [ "$status" -ne 0 ]; then
+            echo "expected classify status 0 for $name, got $status" >&2
+            exit 1
+        fi
+    )
+
+    jq -e . "$record" >/dev/null
+    printf '%s\n' "$record"
+}
+
 write_changed_files() {
     local name="$1"
     shift
@@ -311,6 +421,8 @@ jq -e '
   .spec_readiness_writer_roles == ["process-implementer"] and
   .spec_readiness_review_roles == ["spec-reviewer"] and
   .requires_human_confirmation == true and
+  .spec_readiness_satisfied_by_no_spec_change_attestation == false and
+  .no_spec_change_attestation.reason == "env-var-unset" and
   (.orchestration_reasons | index("spec-readiness-doc-update") != null) and
   (.blocking_findings[] | select(.rule_id == "spec-readiness-doc-update")) and
   (.spec_readiness_required_docs | index("docs/spec/position/state-machines.md") != null)
@@ -377,6 +489,39 @@ jq -e '
   ]
 ' "$mixed_full_docs_record" >/dev/null
 assert_no_removed_fields "$mixed_full_docs_record"
+
+no_spec_change_record="$(run_no_spec_change_attestation_classify_in_scratch_repo no-spec-change false)"
+jq -e '
+  .change_class == "prod-semantic" and
+  .orchestration_profile == "full-review" and
+  .final_verdict == "classified" and
+  .requires_main_risk_analysis == true and
+  .risk_analysis_record_required == true and
+  .spec_readiness_satisfied_by_diff_scope == false and
+  .spec_readiness_satisfied_by_no_spec_change_attestation == true and
+  .no_spec_change_attestation.valid == true and
+  (.no_spec_change_attestation.attestation_path | test("/no-spec-change\\.no-spec-change\\.json$")) and
+  .no_spec_change_attestation.env_var == "NO_SPEC_CHANGE_ATTESTATION_FILE" and
+  .selected_writer_roles == ["solidity-implementer"] and
+  (.selected_review_roles | sort) == ["gas-reviewer", "logic-reviewer", "security-reviewer"] and
+  .selected_review_roles_source == "full_review_matrix[prod-semantic]" and
+  (.orchestration_reasons | index("spec-readiness-doc-update") != null) and
+  (.orchestration_reasons | index("spec-readiness-satisfied-by-no-spec-change-attestation") != null) and
+  ([.blocking_findings[]?.rule_id] | index("spec-readiness-doc-update")) == null
+' "$no_spec_change_record" >/dev/null
+assert_no_removed_fields "$no_spec_change_record"
+
+no_spec_change_other_block_record="$(run_no_spec_change_attestation_classify_in_scratch_repo no-spec-change-other-block true)"
+jq -e '
+  .change_class == "prod-semantic" and
+  .orchestration_profile == "blocked" and
+  .final_verdict == "blocked" and
+  .spec_readiness_satisfied_by_no_spec_change_attestation == true and
+  .no_spec_change_attestation.valid == true and
+  (.blocking_findings[] | select(.rule_id == "unclassified-paths")) and
+  ([.blocking_findings[]?.rule_id] | index("spec-readiness-doc-update")) == null
+' "$no_spec_change_other_block_record" >/dev/null
+assert_no_removed_fields "$no_spec_change_other_block_record"
 
 default_record="$(run_default_classify_in_scratch_repo default README.md)"
 jq -e '

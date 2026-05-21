@@ -264,6 +264,119 @@ process.exit(missing.length === 0 ? 0 : 1);
 EOF
 }
 
+evaluate_no_spec_change_attestation() {
+    local required_docs_json="$1"
+    local prod_files_json="$2"
+    local attestation_policy_json
+    attestation_policy_json="$(jq -c '.spec_readiness_gate.no_spec_change_attestation // null' "$policy_file")"
+
+    if [ "$attestation_policy_json" = "null" ]; then
+        printf '%s\n' '{"valid":false,"reason":"policy-disabled","attestation_path":null}'
+        return 0
+    fi
+
+    local attestation_env_var
+    attestation_env_var="$(jq -r '.env_var // empty' <<<"$attestation_policy_json")"
+    if [ -z "$attestation_env_var" ]; then
+        printf '%s\n' '{"valid":false,"reason":"policy-invalid","attestation_path":null}'
+        return 0
+    fi
+
+    NO_SPEC_CHANGE_POLICY_JSON="$attestation_policy_json" \
+    NO_SPEC_CHANGE_ATTESTATION_FILE_VAR="$attestation_env_var" \
+    NO_SPEC_CHANGE_ATTESTATION_FILE_VALUE="${!attestation_env_var-}" \
+    REQUIRED_DOCS_JSON="$required_docs_json" \
+    PROD_FILES_JSON="$prod_files_json" node <<'EOF'
+const fs = require('fs');
+
+const policy = JSON.parse(process.env.NO_SPEC_CHANGE_POLICY_JSON || 'null');
+const attestationEnvVar = process.env.NO_SPEC_CHANGE_ATTESTATION_FILE_VAR || '';
+const attestationPath = process.env.NO_SPEC_CHANGE_ATTESTATION_FILE_VALUE || '';
+const requiredDocs = JSON.parse(process.env.REQUIRED_DOCS_JSON || '[]');
+const prodFiles = JSON.parse(process.env.PROD_FILES_JSON || '[]');
+
+const fail = (reason, attestationPath = null) => ({
+  valid: false,
+  reason,
+  attestation_path: attestationPath,
+  env_var: attestationEnvVar || null,
+});
+
+if (!policy || typeof policy.env_var !== 'string' || policy.env_var.length === 0) {
+  process.stdout.write(JSON.stringify(fail('policy-invalid')));
+  process.exit(0);
+}
+
+if (policy.env_var !== attestationEnvVar) {
+  process.stdout.write(JSON.stringify(fail('policy-env-var-mismatch', attestationPath || null)));
+  process.exit(0);
+}
+
+if (attestationPath.trim() === '') {
+  process.stdout.write(JSON.stringify(fail('env-var-unset')));
+  process.exit(0);
+}
+
+if (!fs.existsSync(attestationPath)) {
+  process.stdout.write(JSON.stringify(fail('file-missing', attestationPath)));
+  process.exit(0);
+}
+
+let attestation;
+try {
+  attestation = JSON.parse(fs.readFileSync(attestationPath, 'utf8'));
+} catch (error) {
+  process.stdout.write(JSON.stringify(fail('json-invalid', attestationPath)));
+  process.exit(0);
+}
+
+let failureReason = null;
+if (!attestation || typeof attestation !== 'object' || Array.isArray(attestation)) {
+  failureReason = 'shape-invalid';
+} else if (attestation.kind !== policy.required_kind) {
+  failureReason = 'kind-mismatch';
+} else if (attestation.change_class !== policy.required_change_class) {
+  failureReason = 'change-class-mismatch';
+} else if (typeof attestation.summary !== 'string' || attestation.summary.trim() === '') {
+  failureReason = 'summary-missing';
+} else if (!Array.isArray(attestation.solidity_paths)) {
+  failureReason = 'solidity-paths-missing';
+} else if (prodFiles.some((file) => !attestation.solidity_paths.includes(file))) {
+  failureReason = 'solidity-paths-mismatch';
+} else if (!Array.isArray(attestation.specs_reviewed)) {
+  failureReason = 'specs-reviewed-missing';
+} else if (requiredDocs.some((doc) => !attestation.specs_reviewed.includes(doc))) {
+  failureReason = 'required-docs-mismatch';
+} else if (!attestation.assertions || typeof attestation.assertions !== 'object' || Array.isArray(attestation.assertions)) {
+  failureReason = 'assertions-missing';
+} else {
+  for (const [key, expected] of Object.entries(policy.required_assertions || {})) {
+    if (attestation.assertions[key] !== expected) {
+      failureReason = `assertion-mismatch:${key}`;
+      break;
+    }
+  }
+}
+
+if (failureReason) {
+  process.stdout.write(JSON.stringify(fail(failureReason, attestationPath)));
+  process.exit(0);
+}
+
+process.stdout.write(JSON.stringify({
+  valid: true,
+  reason: 'valid',
+  attestation_path: attestationPath,
+  env_var: attestationEnvVar,
+  kind: attestation.kind,
+  change_class: attestation.change_class,
+  summary: attestation.summary,
+  solidity_paths: attestation.solidity_paths,
+  specs_reviewed: attestation.specs_reviewed
+}));
+EOF
+}
+
 append_finding() {
     local target_name="$1"
     local source_role="$2"
@@ -1363,6 +1476,9 @@ spec_readiness_triggers_json='[]'
 spec_readiness_required_docs_json='[]'
 spec_readiness_writer_roles_json='[]'
 spec_readiness_review_roles_json='[]'
+no_spec_change_attestation_json='null'
+spec_readiness_satisfied_by_diff_scope=false
+spec_readiness_satisfied_by_no_spec_change_attestation=false
 spec_readiness_blocked=false
 declare -a selected_review_roles=()
 declare -a orchestration_reasons=()
@@ -1454,7 +1570,6 @@ if [ "$change_class" = "prod-semantic" ]; then
     spec_readiness_required_docs_json="$(jq -c '.required_docs' <<<"$spec_readiness_data_json")"
     spec_readiness_writer_roles_json="$(jq -c '.writer_roles' <<<"$spec_readiness_data_json")"
     spec_readiness_review_roles_json="$(jq -c '.review_roles' <<<"$spec_readiness_data_json")"
-    spec_readiness_satisfied_by_diff_scope=false
     diff_scope_spec_readiness_candidate=false
     if array_contains "solidity_prod" "${selected_surfaces[@]}"; then
         diff_scope_spec_readiness_candidate=true
@@ -1466,16 +1581,24 @@ if [ "$change_class" = "prod-semantic" ]; then
         done
     fi
     if [ "$diff_scope_spec_readiness_candidate" = true ] \
-        && [ "$(jq 'length' <<<"$spec_readiness_required_docs_json")" -gt 0 ] \
-        && required_docs_present_in_spec_diff_scope "$spec_readiness_required_docs_json"; then
-        spec_readiness_satisfied_by_diff_scope=true
-        append_unique orchestration_reasons "spec-readiness-satisfied-by-diff-scope"
+        && [ "$(jq 'length' <<<"$spec_readiness_required_docs_json")" -gt 0 ]; then
+        if required_docs_present_in_spec_diff_scope "$spec_readiness_required_docs_json"; then
+            spec_readiness_satisfied_by_diff_scope=true
+            append_unique orchestration_reasons "spec-readiness-satisfied-by-diff-scope"
+        else
+            no_spec_change_attestation_json="$(evaluate_no_spec_change_attestation "$spec_readiness_required_docs_json" "$solidity_prod_json")"
+            if [ "$(jq -r '.valid' <<<"$no_spec_change_attestation_json")" = "true" ]; then
+                spec_readiness_satisfied_by_no_spec_change_attestation=true
+                append_unique orchestration_reasons "spec-readiness-satisfied-by-no-spec-change-attestation"
+            fi
+        fi
     fi
     if [ "$(jq 'length' <<<"$spec_readiness_triggers_json")" -gt 0 ]; then
         append_unique orchestration_reasons "spec-readiness-doc-update"
         requires_human_confirmation=true
         if [ "$(jq -r '.spec_readiness_gate.gate_action // "block"' "$policy_file")" = "block" ] \
-            && [ "$spec_readiness_satisfied_by_diff_scope" != true ]; then
+            && [ "$spec_readiness_satisfied_by_diff_scope" != true ] \
+            && [ "$spec_readiness_satisfied_by_no_spec_change_attestation" != true ]; then
             spec_readiness_blocked=true
             hard_blocked=1
             append_finding blocking_findings_json \
@@ -1646,6 +1769,9 @@ classification_record_json="$(jq -cn \
     --argjson spec_readiness_required_docs "$spec_readiness_required_docs_json" \
     --argjson spec_readiness_writer_roles "$spec_readiness_writer_roles_json" \
     --argjson spec_readiness_review_roles "$spec_readiness_review_roles_json" \
+    --argjson no_spec_change_attestation "$no_spec_change_attestation_json" \
+    --argjson spec_readiness_satisfied_by_diff_scope "$spec_readiness_satisfied_by_diff_scope" \
+    --argjson spec_readiness_satisfied_by_no_spec_change_attestation "$spec_readiness_satisfied_by_no_spec_change_attestation" \
     --argjson blocking_findings "$blocking_findings_json" \
     --argjson residual_risks "$residual_risks_json" \
     --argjson coverage_required_full_ci "$coverage_required_full_ci" \
@@ -1685,6 +1811,9 @@ classification_record_json="$(jq -cn \
       spec_readiness_required_docs: $spec_readiness_required_docs,
       spec_readiness_writer_roles: $spec_readiness_writer_roles,
       spec_readiness_review_roles: $spec_readiness_review_roles,
+      no_spec_change_attestation: $no_spec_change_attestation,
+      spec_readiness_satisfied_by_diff_scope: $spec_readiness_satisfied_by_diff_scope,
+      spec_readiness_satisfied_by_no_spec_change_attestation: $spec_readiness_satisfied_by_no_spec_change_attestation,
       blocking_findings: $blocking_findings,
       residual_risks: $residual_risks,
       coverage_required_full_ci: $coverage_required_full_ci,

@@ -28,6 +28,7 @@
 - Do not dispatch writer or reviewer agents for `direct`.
 - Use only project agents under `.claude/agents/` or `.codex/agents/` for delegated work.
 - Do not bypass `process-implementer`, `spec-reviewer`, or human confirmation for docs/spec or spec-readiness changes.
+- A valid JSON file referenced by `NO_SPEC_CHANGE_ATTESTATION_FILE` may clear only `spec-readiness-doc-update` for a behavior-preserving `prod-semantic` refactor. It does not lower review, risk-analysis, or verifier requirements, and it does not clear unrelated hard blocks.
 - Production Solidity semantic changes without structural escalation require a main-session Risk Analysis Record before using `direct-review`; otherwise use `full-review`.
 - README.md editorial-only direct changes require a Doc Editorial Attestation; otherwise use `delegated`.
 - `direct-review` reviewer roles come from `orchestration_review_roles`, not `full_review_matrix`.

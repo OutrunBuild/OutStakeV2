@@ -207,6 +207,22 @@
     "doc_exclusions": ["^docs/superpowers/"],
     "gate_action": "block",
     "required_reviewer": "spec-reviewer",
+    "no_spec_change_attestation": {
+      "env_var": "NO_SPEC_CHANGE_ATTESTATION_FILE",
+      "required_kind": "no-spec-change-attestation",
+      "required_change_class": "prod-semantic",
+      "required_assertions": {
+        "refactor_only": true,
+        "product_semantics_unchanged": true,
+        "permissions_unchanged": true,
+        "fund_flow_unchanged": true,
+        "state_machine_unchanged": true,
+        "storage_layout_unchanged": true,
+        "abi_unchanged": true,
+        "mapped_specs_remain_valid": true,
+        "business_spec_update_required": false
+      }
+    },
     "cross_cutting_trigger_threshold": 2,
     "cross_cutting_docs": [
       "docs/ARCHITECTURE.md",

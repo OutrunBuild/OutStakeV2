@@ -444,6 +444,48 @@
       "propertyNames": { "type": "string", "minLength": 1 },
       "additionalProperties": { "$ref": "#/$defs/specReadinessDocMappingEntry" }
     },
+    "noSpecChangeAssertions": {
+      "type": "object",
+      "required": [
+        "refactor_only",
+        "product_semantics_unchanged",
+        "permissions_unchanged",
+        "fund_flow_unchanged",
+        "state_machine_unchanged",
+        "storage_layout_unchanged",
+        "abi_unchanged",
+        "mapped_specs_remain_valid",
+        "business_spec_update_required"
+      ],
+      "properties": {
+        "refactor_only": { "const": true },
+        "product_semantics_unchanged": { "const": true },
+        "permissions_unchanged": { "const": true },
+        "fund_flow_unchanged": { "const": true },
+        "state_machine_unchanged": { "const": true },
+        "storage_layout_unchanged": { "const": true },
+        "abi_unchanged": { "const": true },
+        "mapped_specs_remain_valid": { "const": true },
+        "business_spec_update_required": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "noSpecChangeAttestationPolicy": {
+      "type": "object",
+      "required": [
+        "env_var",
+        "required_kind",
+        "required_change_class",
+        "required_assertions"
+      ],
+      "properties": {
+        "env_var": { "type": "string", "minLength": 1 },
+        "required_kind": { "const": "no-spec-change-attestation" },
+        "required_change_class": { "const": "prod-semantic" },
+        "required_assertions": { "$ref": "#/$defs/noSpecChangeAssertions" }
+      },
+      "additionalProperties": false
+    },
     "specReadinessGate": {
       "type": "object",
       "required": [
@@ -451,6 +493,7 @@
         "doc_exclusions",
         "gate_action",
         "required_reviewer",
+        "no_spec_change_attestation",
         "cross_cutting_trigger_threshold",
         "cross_cutting_docs",
         "doc_mapping"
@@ -460,6 +503,7 @@
         "doc_exclusions": { "$ref": "#/$defs/stringArray" },
         "gate_action": { "type": "string", "enum": ["block"] },
         "required_reviewer": { "type": "string", "enum": ["spec-reviewer"] },
+        "no_spec_change_attestation": { "$ref": "#/$defs/noSpecChangeAttestationPolicy" },
         "cross_cutting_trigger_threshold": { "type": "integer", "minimum": 1 },
         "cross_cutting_docs": { "$ref": "#/$defs/stringArray" },
         "doc_mapping": { "$ref": "#/$defs/specReadinessDocMapping" }
