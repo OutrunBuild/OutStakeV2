@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+// Rate limiter for cross-chain transfers. Uses a linear decay model:
+// capacity refills proportionally over time.
+// When no window is configured, the limit is infinite.
+
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 abstract contract OutrunRateLimiterUpgradeable is Initializable {
@@ -41,10 +45,17 @@ abstract contract OutrunRateLimiterUpgradeable is Initializable {
 
     function __OutrunRateLimiter_init() internal onlyInitializing {}
 
+    /// @notice Returns the stored rate limit configuration for a destination.
+    /// @param dstEid Destination endpoint ID
+    /// @return RateLimit struct (amountInFlight, lastUpdated, limit, window)
     function rateLimits(uint32 dstEid) public view returns (RateLimit memory) {
         return _getOutrunRateLimiterStorage().rateLimits[dstEid];
     }
 
+    /// @notice Returns how much can currently be sent to a destination given the rate limit state.
+    /// @param dstEid Destination endpoint ID
+    /// @return currentAmountInFlight Tokens currently in-flight
+    /// @return amountCanBeSent Remaining capacity available to send
     function getAmountCanBeSent(uint32 dstEid)
         public
         view
@@ -55,13 +66,16 @@ abstract contract OutrunRateLimiterUpgradeable is Initializable {
         return _amountCanBeSent(rl.amountInFlight, rl.lastUpdated, rl.limit, rl.window);
     }
 
+    /// @notice Applies a batch of rate limit configurations, checkpointing each before updating.
+    /// @param rateLimitConfigs Array of rate limit configs (dstEid, limit, window)
     function _setRateLimits(RateLimitConfig[] memory rateLimitConfigs) internal virtual {
         OutrunRateLimiterStorage storage $ = _getOutrunRateLimiterStorage();
         uint256 numConfigs = rateLimitConfigs.length;
         unchecked {
             for (uint256 i; i < numConfigs; ++i) {
                 RateLimit storage rl = $.rateLimits[rateLimitConfigs[i].dstEid];
-                _checkpointRateLimit(rateLimitConfigs[i].dstEid);
+                // Checkpoint the current state before updating the stored limit values.
+                _checkAndUpdateRateLimit(rateLimitConfigs[i].dstEid, 0);
                 rl.limit = rateLimitConfigs[i].limit;
                 rl.window = rateLimitConfigs[i].window;
             }
@@ -69,6 +83,14 @@ abstract contract OutrunRateLimiterUpgradeable is Initializable {
         emit RateLimitsChanged(rateLimitConfigs);
     }
 
+    /// @notice Computes current in-flight and available capacity using linear decay.
+    /// @dev Capacity refills proportionally over time: decay = (limit * timeSinceLastUpdate) / window.
+    /// @param amountInFlight Current in-flight amount
+    /// @param lastUpdated Timestamp of the last rate limit update
+    /// @param limit Maximum amount allowed in the window
+    /// @param window Time window in seconds for full capacity refill
+    /// @return currentAmountInFlight In-flight amount after applying time-based decay
+    /// @return amountCanBeSent Remaining capacity available to send
     // slither-disable-next-line timestamp
     function _amountCanBeSent(uint192 amountInFlight, uint64 lastUpdated, uint192 limit, uint64 window)
         internal
@@ -76,6 +98,10 @@ abstract contract OutrunRateLimiterUpgradeable is Initializable {
         virtual
         returns (uint256 currentAmountInFlight, uint256 amountCanBeSent)
     {
+        // Computes how much capacity has refilled since the last transfer.
+        // Decay = (limit * secondsSinceLastTransfer) / window.
+        // Current in-flight = max(0, previousInFlight - decay).
+        // Available = limit - currentInFlight.
         // slither-disable-next-line timestamp
         uint256 timeSinceLastDeposit = block.timestamp - lastUpdated;
         if (timeSinceLastDeposit >= window) return (0, limit);
@@ -84,15 +110,18 @@ abstract contract OutrunRateLimiterUpgradeable is Initializable {
         amountCanBeSent = limit <= currentAmountInFlight ? 0 : limit - currentAmountInFlight;
     }
 
+    /// @notice Records an outflow against the rate limit for a destination.
+    /// @param dstEid Destination endpoint ID
+    /// @param amount Amount of tokens being sent
     // slither-disable-next-line timestamp
     function _outflow(uint32 dstEid, uint256 amount) internal virtual {
         _checkAndUpdateRateLimit(dstEid, amount);
     }
 
-    function _checkpointRateLimit(uint32 dstEid) internal {
-        _checkAndUpdateRateLimit(dstEid, 0);
-    }
-
+    /// @notice Checks and updates the rate limit for a destination: reverts if the outflow would exceed capacity.
+    /// @dev Updates in-flight counter after applying time-based decay. The counter decays automatically.
+    /// @param dstEid Destination endpoint ID
+    /// @param amount Outflow amount to record
     // slither-disable-next-line timestamp
     function _checkAndUpdateRateLimit(uint32 dstEid, uint256 amount) internal {
         OutrunRateLimiterStorage storage $ = _getOutrunRateLimiterStorage();
@@ -107,6 +136,8 @@ abstract contract OutrunRateLimiterUpgradeable is Initializable {
         rl.lastUpdated = uint64(block.timestamp);
     }
 
+    /// @notice Deletes the stored rate limit for a destination, removing all capacity constraints.
+    /// @param dstEid Destination endpoint ID
     function _deleteRateLimit(uint32 dstEid) internal {
         delete _getOutrunRateLimiterStorage().rateLimits[dstEid];
     }

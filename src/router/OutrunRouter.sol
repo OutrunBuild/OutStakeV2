@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.28;
 
+/**
+ * @title OutrunRouter
+ * @notice Main user-facing entry point for the OutStake protocol.
+ *
+ * Handles token-to-SY conversion, staking, and genesis flows.
+ * SY = Standardized Yield (wrapper token that normalizes yield-bearing assets).
+ * SP = Stake Position manager (creates and tracks staking positions).
+ * uAsset = universal asset (receipt token minted when staking or wrap-staking).
+ */
+
 // OutrunTODO Delete the Ownable when the mainnet goes live
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -14,6 +24,7 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
     error InvalidMemeverseLauncher(address launcher);
     error UnexpectedRemainingAllowance(address token, address spender, uint256 remainingAllowance);
 
+    // Memeverse is the launch platform; this address is called during genesis flows.
     address public memeverseLauncher;
 
     constructor(address _owner, address _memeverseLauncher) Ownable(_owner) {
@@ -52,13 +63,27 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         external
         returns (uint256 amountInTokenOut)
     {
-        amountInTokenOut = _redeemSy(SY, receiver, tokenOut, amountInSY, minTokenOut);
+        // transferFrom moves caller's SY into the SY contract, then burnFromInternalBalance=true burns from SY's own balance.
+        _transferFrom(IERC20(SY), msg.sender, SY, amountInSY);
+        amountInTokenOut = IStandardizedYield(SY).redeem(receiver, amountInSY, tokenOut, minTokenOut, true);
     }
 
+    /**
+     * @notice Mints Standardized Yield by depositing an input token into the SY contract.
+     * @dev Pulls `tokenIn` from the caller and forwards it to `SY.deposit`. Supports both
+     * ERC20 and native tokens (NATIVE sentinel = address(0)).
+     * @param SY Standardized yield contract that receives the deposit.
+     * @param tokenIn Token to supply when minting SY (NATIVE for the chain's native currency).
+     * @param receiver Recipient of the minted SY.
+     * @param amountInput Amount of input token to deposit.
+     * @param minSyOut Minimum acceptable SY output or the call reverts.
+     * @return amountInSYOut Amount of SY minted for `receiver`.
+     */
     function _mintSY(address SY, address tokenIn, address receiver, uint256 amountInput, uint256 minSyOut)
         internal
         returns (uint256 amountInSYOut)
     {
+        // NATIVE is the sentinel address(0), meaning native token (ETH/BNB) rather than an ERC20.
         if (tokenIn != NATIVE && msg.value != 0) revert NativeAmountMismatch();
 
         _transferIn(tokenIn, msg.sender, amountInput);
@@ -66,14 +91,6 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         uint256 amountInNative = tokenIn == NATIVE ? amountInput : 0;
         _approveExact(tokenIn, SY, amountInput);
         amountInSYOut = IStandardizedYield(SY).deposit{value: amountInNative}(receiver, tokenIn, amountInput, minSyOut);
-    }
-
-    function _redeemSy(address SY, address receiver, address tokenOut, uint256 amountInSY, uint256 minTokenOut)
-        internal
-        returns (uint256 amountInRedeemed)
-    {
-        _transferFrom(IERC20(SY), msg.sender, SY, amountInSY);
-        amountInRedeemed = IStandardizedYield(SY).redeem(receiver, amountInSY, tokenOut, minTokenOut, true);
     }
 
     /**
@@ -93,6 +110,7 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         address SY = IOutrunStakeManager(SP).SY();
         uint256 amountInSY = IStandardizedYield(SY).previewDeposit(tokenIn, tokenAmount);
         UAssetMintable = IOutrunStakeManager(SP).previewStake(amountInSY);
+        // No-op: reads lockupDays to suppress unused-variable compiler warning (needed for type conversion to uint128).
         stakeParam.lockupDays;
     }
 
@@ -110,6 +128,7 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         returns (uint256 UAssetMintable)
     {
         UAssetMintable = IOutrunStakeManager(SP).previewStake(amountInSY);
+        // No-op: reads lockupDays to suppress unused-variable compiler warning (needed for type conversion to uint128).
         stakeParam.lockupDays;
     }
 
@@ -184,7 +203,9 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
      * @param SP Stake manager receiving the wrapped stake.
      * @param tokenIn Token to deposit into SY.
      * @param tokenAmount Amount of `tokenIn` to convert and wrap-stake.
+     * @param minSyOut Minimum acceptable SY output from the deposit step.
      * @param uAssetRecipient Recipient of the wrapped uAsset position.
+     * @param minUAssetMinted Minimum acceptable uAsset minted or the call reverts.
      * @return UAssetMinted Amount of uAsset minted to `uAssetRecipient`.
      */
     function wrapStakeFromToken(
@@ -195,6 +216,7 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         address uAssetRecipient,
         uint256 minUAssetMinted
     ) public payable returns (uint256 UAssetMinted) {
+        // Wrap stake enters the shared pool — no individual position id is created, no lockup applies.
         address SY = IOutrunStakeManager(SP).SY();
         uint256 amountInSY = _mintSY(SY, tokenIn, address(this), tokenAmount, minSyOut);
 
@@ -209,12 +231,14 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
      * @param SP Stake manager receiving the wrapped stake.
      * @param amountInSY Amount of SY to wrap-stake.
      * @param uAssetRecipient Recipient of the minted uAsset.
+     * @param minUAssetMinted Minimum acceptable uAsset minted or the call reverts.
      * @return UAssetMinted Amount of uAsset minted to `uAssetRecipient`.
      */
     function wrapStakeFromSY(address SP, uint256 amountInSY, address uAssetRecipient, uint256 minUAssetMinted)
         public
         returns (uint256 UAssetMinted)
     {
+        // Wrap stake enters the shared pool — no individual position id is created, no lockup applies.
         address SY = IOutrunStakeManager(SP).SY();
         _transferFrom(IERC20(SY), msg.sender, address(this), amountInSY);
 
@@ -239,6 +263,17 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         amountTokenOut = IOutrunStakeManager(SP).previewWrapRedeem(amountInUAsset, tokenOut);
     }
 
+    /**
+     * @notice Approves SY to the stake manager and creates a locked staking position.
+     * @param SY Standardized yield token address.
+     * @param SP Stake position manager address.
+     * @param amountInSY Amount of SY to stake.
+     * @param lockupDays Number of days the position is locked.
+     * @param positionOwner Owner of the newly created staking position.
+     * @param uAssetReceiver Recipient of the minted uAsset.
+     * @return positionId Unique identifier for the created staking position.
+     * @return UAssetMinted Amount of uAsset minted.
+     */
     function _stakeFromSYBalance(
         address SY,
         address SP,
@@ -252,24 +287,53 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
             IOutrunStakeManager(SP).stake(amountInSY, lockupDays, positionOwner, uAssetReceiver);
     }
 
+    /**
+     * @notice Approves exactly `amount` to `spender`, reverting on infinite approval.
+     * @dev uint256.max approval is rejected because leftover allowance after the operation
+     * masks whether the spender took the expected amount — exact approvals let callers detect partial consumption.
+     * Native token (NATIVE = address(0)) is a no-op.
+     * @param token ERC20 token to approve (NATIVE for native currency, which skips approval).
+     * @param spender Address granted the allowance.
+     * @param amount Exact allowance amount (must not be type(uint256).max).
+     */
     function _approveExact(address token, address spender, uint256 amount) internal {
         if (token == NATIVE) return;
+        // Reject infinite approval — leftover allowance after the operation masks whether the spender took the expected amount.
         if (amount == type(uint256).max) revert InvalidParam();
         _safeApprove(token, spender, amount);
     }
 
+    /**
+     * @notice Reverts if the spender has leftover allowance after an approve-and-consume operation.
+     * @dev Nonzero remaining allowance means the spender did not consume the full approved amount,
+     * which can indicate unexpected partial consumption.
+     * Native token (NATIVE = address(0)) is a no-op.
+     * @param token ERC20 token to check (NATIVE for native currency, which skips the check).
+     * @param spender Address whose allowance is verified to be fully consumed.
+     */
     function _assertApprovalConsumed(address token, address spender) internal view {
         if (token == NATIVE) return;
+        // Verify the spender consumed exactly the approved amount — leftover allowance means the spender took less than expected.
         uint256 remainingAllowance = IERC20(token).allowance(address(this), spender);
         if (remainingAllowance != 0) {
             revert UnexpectedRemainingAllowance(token, spender, remainingAllowance);
         }
     }
 
+    /**
+     * @notice Reverts if the minted uAsset amount is below the caller's minimum acceptable threshold.
+     * @dev Slippage guard: enforces the floor specified by the caller (minUAssetMinted).
+     * @param UAssetMinted Amount of uAsset actually minted.
+     * @param minUAssetMinted Minimum uAsset amount the caller is willing to accept.
+     */
     function _assertMinUAssetMinted(uint256 UAssetMinted, uint256 minUAssetMinted) internal pure {
         require(UAssetMinted >= minUAssetMinted, InsufficientUAssetMinted(UAssetMinted, minUAssetMinted));
     }
 
+    /**
+     * @notice Sets the memeverse launcher address, reverting if the address has no code.
+     * @param _memeverseLauncher New launcher contract address (must be a deployed contract).
+     */
     function _setMemeverseLauncher(address _memeverseLauncher) internal {
         if (_memeverseLauncher.code.length == 0) revert InvalidMemeverseLauncher(_memeverseLauncher);
         memeverseLauncher = _memeverseLauncher;
@@ -293,6 +357,7 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         _transferFrom(IERC20(uAsset), msg.sender, address(this), amountInUAsset);
         _approveExact(uAsset, SP, amountInUAsset);
 
+        // Burns caller's uAsset through SP.wrapRedeem and receives tokenOut — this redeems from the shared wrap pool.
         amountTokenOut = IOutrunStakeManager(SP).wrapRedeem(amountInUAsset, receiver, tokenOut, minTokenOut);
     }
 
@@ -303,6 +368,8 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
      * @param SP Stake manager receiving the genesis stake.
      * @param tokenIn Token to deposit into SY before staking.
      * @param tokenAmount Amount of `tokenIn` to convert and stake.
+     * @param minSyOut Minimum acceptable SY output from the deposit step.
+     * @param minUAssetMinted Minimum acceptable uAsset minted or the call reverts.
      * @param lockupDays Lockup duration forwarded to the stake manager.
      * @param verseId Memeverse verse identifier to launch against.
      * @param genesisUser User credited for the genesis position.
@@ -318,15 +385,20 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         address genesisUser
     ) external payable {
         address SY = IOutrunStakeManager(SP).SY();
+        // (1) Mint SY from the input token.
         uint256 amountInSY = _mintSY(SY, tokenIn, address(this), tokenAmount, minSyOut);
         address uAsset = IOutrunStakeManager(SP).uAsset();
+        // (2) Stake SY to create a locked position for genesisUser.
         (, uint256 amountInUAsset) = _stakeFromSYBalance(SY, SP, amountInSY, lockupDays, genesisUser, address(this));
         _assertMinUAssetMinted(amountInUAsset, minUAssetMinted);
         if (amountInUAsset > type(uint128).max) revert InvalidParam();
+        // (3) Approve uAsset to the launcher.
         _approveExact(uAsset, memeverseLauncher, amountInUAsset);
+        // (4) Call launcher genesis with the staked uAsset.
         // amountInUAsset is bounded by type(uint128).max immediately before this cast.
         // forge-lint: disable-next-line(unsafe-typecast)
         IMemeverseLauncher(memeverseLauncher).genesis(verseId, uint128(amountInUAsset), genesisUser);
+        // (5) Verify no leftover allowance — launcher must consume exactly the approved amount.
         _assertApprovalConsumed(uAsset, memeverseLauncher);
     }
 
@@ -338,6 +410,7 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
      * @param lockupDays Lockup duration forwarded to the stake manager.
      * @param verseId Memeverse verse identifier to launch against.
      * @param genesisUser User credited for the genesis position.
+     * @param minUAssetMinted Minimum acceptable uAsset minted or the call reverts.
      */
     function genesisBySY(
         address SP,
@@ -348,15 +421,20 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         uint256 minUAssetMinted
     ) external {
         address SY = IOutrunStakeManager(SP).SY();
+        // (1) Pull caller's SY into the router.
         _transferFrom(IERC20(SY), msg.sender, address(this), amountInSY);
         address uAsset = IOutrunStakeManager(SP).uAsset();
+        // (2) Stake SY to create a locked position for genesisUser.
         (, uint256 amountInUAsset) = _stakeFromSYBalance(SY, SP, amountInSY, lockupDays, genesisUser, address(this));
         _assertMinUAssetMinted(amountInUAsset, minUAssetMinted);
         if (amountInUAsset > type(uint128).max) revert InvalidParam();
+        // (3) Approve uAsset to the launcher.
         _approveExact(uAsset, memeverseLauncher, amountInUAsset);
+        // (4) Call launcher genesis with the staked uAsset.
         // amountInUAsset is bounded by type(uint128).max immediately before this cast.
         // forge-lint: disable-next-line(unsafe-typecast)
         IMemeverseLauncher(memeverseLauncher).genesis(verseId, uint128(amountInUAsset), genesisUser);
+        // (5) Verify no leftover allowance — launcher must consume exactly the approved amount.
         _assertApprovalConsumed(uAsset, memeverseLauncher);
     }
 

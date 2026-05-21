@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.28;
 
+// SY adapter for Sky (Maker) sUSDS on Ethereum mainnet. The yield-bearing token is sUSDS (an ERC4626 vault for USDS).
+// Deposit paths: (a) USDS → deposit into 4626 vault for sUSDS shares, (b) existing sUSDS directly.
+// Redeem can withdraw USDS from vault or send sUSDS to receiver. Exchange rate from ERC4626 convertToAssets.
+
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import {SYBaseUpgradeable} from "../../SYBaseUpgradeable.sol";
@@ -37,6 +41,7 @@ contract OutrunStakedUsdsSYUpgradeable is SYBaseUpgradeable {
     function _deposit(address tokenIn, uint256 amountDeposited) internal override returns (uint256 amountSharesOut) {
         address _USDS = USDS();
         address _yieldBearingToken = yieldBearingToken();
+        // Branch 1: deposit USDS into the ERC4626 sUSDS vault to mint sUSDS shares. Branch 2: deposit sUSDS directly 1:1.
         if (tokenIn == _USDS) {
             _safeApproveInf(_USDS, _yieldBearingToken);
             amountSharesOut = IERC4626(_yieldBearingToken).deposit(amountDeposited, address(this));
@@ -52,23 +57,29 @@ contract OutrunStakedUsdsSYUpgradeable is SYBaseUpgradeable {
     {
         address _yieldBearingToken = yieldBearingToken();
         if (tokenOut == USDS()) {
+            // Withdraw USDS from the sUSDS vault and send to receiver.
             amountTokenOut = IERC4626(_yieldBearingToken).redeem(amountSharesToRedeem, receiver, address(this));
         } else {
+            // Transfer sUSDS directly — receiver can withdraw from vault later.
             _transferOut(_yieldBearingToken, receiver, amountSharesToRedeem);
             amountTokenOut = amountSharesToRedeem;
         }
     }
 
     function exchangeRate() public view override returns (uint256 res) {
+        // ERC4626 convertToAssets(1 ether) returns how much USDS 1 sUSDS is worth.
+        // The rate grows from 1.0 as Sky protocol yield is added to the savings rate.
         return IERC4626(yieldBearingToken()).convertToAssets(1 ether);
     }
 
     function _previewDeposit(address tokenIn, uint256 amountTokenToDeposit) internal view override returns (uint256) {
+        // USDS deposits mint sUSDS through the vault; sUSDS deposits are already shares.
         if (tokenIn == USDS()) return IERC4626(yieldBearingToken()).previewDeposit(amountTokenToDeposit);
         return amountTokenToDeposit;
     }
 
     function _previewRedeem(address tokenOut, uint256 amountSharesToRedeem) internal view override returns (uint256) {
+        // Redeeming to USDS exits the ERC4626 vault; redeeming to sUSDS is a direct share transfer.
         if (tokenOut == USDS()) return IERC4626(yieldBearingToken()).previewRedeem(amountSharesToRedeem);
         return amountSharesToRedeem;
     }

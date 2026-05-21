@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.28;
 
+// L2 SY adapter for Sky sUSDS. Uses PSM3 (Peg Stability Module) to swap between USDC, USDS, and sUSDS.
+// Deposit paths: USDC → swap to sUSDS via PSM3, USDS → swap to sUSDS via PSM3, or sUSDS directly.
+// Exchange rate from PSM3.previewSwapExactIn(sUSDS→USDS).
+
 import {SYBaseUpgradeable} from "../../SYBaseUpgradeable.sol";
 import {ArrayLib} from "../../../libraries/ArrayLib.sol";
 import {IPSM3} from "../../../integrations/sky/interfaces/IPSM3.sol";
@@ -38,19 +42,23 @@ contract OutrunL2StakedUsdsSYUpgradeable is SYBaseUpgradeable {
     }
 
     function USDC() public view returns (address) {
+        // Stablecoin input (USDC on L2)
         return _getStorage().USDC;
     }
 
     function USDS() public view returns (address) {
+        // Sky's native stablecoin (also on L2 via bridge)
         return _getStorage().USDS;
     }
 
     function PSM3() public view returns (address) {
+        // Peg Stability Module that handles swaps between USDC, USDS, and sUSDS
         return _getStorage().PSM3;
     }
 
     function _deposit(address tokenIn, uint256 amountDeposited) internal override returns (uint256 amountSharesOut) {
         address _yieldBearingToken = yieldBearingToken();
+        // Deposit: if depositing sUSDS directly, 1:1. Otherwise, swap the input token to sUSDS via PSM3 at the current pool rate.
         if (tokenIn == _yieldBearingToken) {
             amountSharesOut = amountDeposited;
         } else {
@@ -66,6 +74,7 @@ contract OutrunL2StakedUsdsSYUpgradeable is SYBaseUpgradeable {
         returns (uint256 amountTokenOut)
     {
         address _yieldBearingToken = yieldBearingToken();
+        // Redeem: if tokenOut is sUSDS, transfer directly. Otherwise, swap sUSDS to tokenOut via PSM3.
         if (tokenOut == _yieldBearingToken) {
             _transferOut(_yieldBearingToken, receiver, amountSharesToRedeem);
             amountTokenOut = amountSharesToRedeem;
@@ -77,15 +86,19 @@ contract OutrunL2StakedUsdsSYUpgradeable is SYBaseUpgradeable {
     }
 
     function exchangeRate() public view override returns (uint256 res) {
+        // PSM3 previewSwapExactIn(sUSDS→USDS, 1 ether) gives the current exchange rate.
+        // PSM3 maintains a USDS/USDC peg, so this rate reflects the sUSDS savings rate multiplied by any PSM3 pool imbalance.
         return IPSM3(PSM3()).previewSwapExactIn(yieldBearingToken(), USDS(), 1 ether);
     }
 
     function _previewDeposit(address tokenIn, uint256 amountTokenToDeposit) internal view override returns (uint256) {
+        // sUSDS deposits are already shares; USDC/USDS deposits are quoted through PSM3.
         if (tokenIn == yieldBearingToken()) return amountTokenToDeposit;
         return IPSM3(PSM3()).previewSwapExactIn(tokenIn, yieldBearingToken(), amountTokenToDeposit);
     }
 
     function _previewRedeem(address tokenOut, uint256 amountSharesToRedeem) internal view override returns (uint256) {
+        // Redeeming to sUSDS is 1:1; redeeming to USDC/USDS is quoted through PSM3.
         if (tokenOut == yieldBearingToken()) return amountSharesToRedeem;
         return IPSM3(PSM3()).previewSwapExactIn(yieldBearingToken(), tokenOut, amountSharesToRedeem);
     }

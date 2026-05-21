@@ -23,11 +23,15 @@ abstract contract AutoIncrementIdUpgradeable is Initializable {
     function __AutoIncrementId_init() internal onlyInitializing {}
 
     /// @notice Returns the last issued id.
+    /// @return The last issued id counter value.
     function idCounter() public view returns (uint256) {
         return _getAutoIncrementIdStorage().idCounter;
     }
 
+    /// @notice Increments the counter then returns it, ids start at 1.
+    /// @return The newly issued id.
     /// @dev Increments the counter before returning, so ids start at 1 and are monotonic.
+    /// Uses unchecked arithmetic because overflow of a uint256 counter is practically impossible.
     function _nextId() internal returns (uint256) {
         AutoIncrementIdStorage storage $ = _getAutoIncrementIdStorage();
         unchecked {
