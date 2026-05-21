@@ -9,6 +9,7 @@ import {IStandardizedYield} from "../../src/yield/interfaces/IStandardizedYield.
 import {IUniversalAssets} from "../../src/assets/interfaces/IUniversalAssets.sol";
 import {ProxyTestHelper} from "../upgradeable/helpers/ProxyTestHelper.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 // ============================================================
 //                    MOCK CONTRACTS
@@ -463,15 +464,13 @@ contract AdversarialTests is Test {
     // ============================================================
 
     /**
-     * @notice Documents that keeper can grief by leaving dust positions
-     * @dev This doesn't steal funds but creates dust positions
-     *      Mitigation is social (keeper trust) or protocol-level min redeem
+     * @notice Keeper dust redeem reverts when the proportional SY output rounds to zero
      */
     function test_Adversarial_KeeperPartialRedeemLeavesSmallPosition() external {
         // Setup: Alice stakes 100e18 at rate 2e18, gets 200 uAsset
         sy.setExchangeRate(2e18);
         vm.prank(alice);
-        (uint256 positionId,) = position.stake(100e18, 30, alice, alice);
+        (uint256 positionId, uint256 positionDebt) = position.stake(100e18, 30, alice, alice);
 
         // Warp past lockup
         vm.warp(block.timestamp + 31 days);
@@ -489,23 +488,12 @@ contract AdversarialTests is Test {
         // Rate drops to 5e17
         sy.setExchangeRate(5e17);
 
-        // Keeper calls keepRedeem with only 1 wei of uAsset
+        // 100e18 * 1 / 200e18 rounds down to 0, so no position state should change.
+        assertEq(Math.mulDiv(100e18, 1, positionDebt), 0, "test setup should create zero-output redeem");
+
         vm.prank(keeper);
-        (uint256 uAssetBurned, uint256 keeperPrincipalSY, uint256 ownerExcessSY) =
-            position.keepRedeem(positionId, 1, keeper);
-
-        // Verify: Position still exists with nearly full stake
-        (address posOwner, uint256 syStaked, uint256 posUAssetMinted,,) = position.positions(positionId);
-
-        assertEq(uAssetBurned, 1, "Only 1 wei burned");
-        assertEq(keeperPrincipalSY, 0, "Keeper gets 0 SY principal due to clamping");
-        assertEq(ownerExcessSY, 0, "No excess for owner");
-        assertEq(posOwner, alice, "Position still owned by Alice");
-        assertEq(syStaked, 100e18, "Position still has full SY staked"); // Only burned pro-rata
-        assertEq(posUAssetMinted, 199999999999999999999, "Position still has nearly full debt");
-
-        // Document: This is a griefing vector - keeper can create dust positions
-        // but cannot steal funds. Protocol may want min redeem amount.
+        vm.expectRevert(IOutrunStakeManager.ZeroInput.selector);
+        position.keepRedeem(positionId, 1, keeper);
     }
 
     /**
@@ -931,7 +919,7 @@ contract AdversarialTests is Test {
 
         // Stake another 200e18 - should fail (only 100 remaining)
         vm.prank(alice);
-        vm.expectRevert(IOutrunStakeManager.UAssetMintingCapReached.selector);
+        vm.expectRevert(IUniversalAssets.ReachMintCap.selector);
         cappedPosition.stake(200e18, 30, alice, alice);
 
         // Stake exactly 100e18 - should succeed
@@ -941,7 +929,7 @@ contract AdversarialTests is Test {
 
         // Any further stake fails
         vm.prank(alice);
-        vm.expectRevert(IOutrunStakeManager.UAssetMintingCapReached.selector);
+        vm.expectRevert(IUniversalAssets.ReachMintCap.selector);
         cappedPosition.stake(1, 30, alice, alice);
     }
 
@@ -983,7 +971,7 @@ contract AdversarialTests is Test {
         sy.setExchangeRate(4e18);
 
         vm.prank(alice);
-        vm.expectRevert(IOutrunStakeManager.UAssetMintingCapReached.selector);
+        vm.expectRevert(IUniversalAssets.ReachMintCap.selector);
         cappedPosition.drawUAsset(posId, alice);
     }
 
@@ -1013,7 +1001,7 @@ contract AdversarialTests is Test {
 
         // Wrap stake exceeding cap
         vm.prank(alice);
-        vm.expectRevert(IOutrunStakeManager.UAssetMintingCapReached.selector);
+        vm.expectRevert(IUniversalAssets.ReachMintCap.selector);
         cappedPosition.wrapStake(1, alice);
     }
 

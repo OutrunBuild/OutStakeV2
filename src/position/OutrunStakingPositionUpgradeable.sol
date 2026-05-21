@@ -172,7 +172,7 @@ contract OutrunStakingPositionUpgradeable is
     }
 
     /// @notice Previews the uAsset amount mintable from a given SY stake amount.
-    /// Rounds down.
+    /// Rounds down. Quote-only: does not check or reserve the uAsset mint cap.
     /// @param amountInSY The SY amount to stake.
     /// @return UAssetMintable uAsset amount that would be minted.
     function previewStake(uint256 amountInSY) external view returns (uint256 UAssetMintable) {
@@ -181,7 +181,7 @@ contract OutrunStakingPositionUpgradeable is
     }
 
     /// @notice Previews the uAsset amount mintable from a given SY amount for a wrap stake.
-    /// Rounds down.
+    /// Rounds down. Quote-only: does not check or reserve the uAsset mint cap.
     /// @param amountInSY The SY amount to wrap stake.
     /// @return UAssetMintable uAsset amount that would be minted.
     function previewWrapStake(uint256 amountInSY) external view returns (uint256 UAssetMintable) {
@@ -191,6 +191,7 @@ contract OutrunStakingPositionUpgradeable is
 
     /// @notice Previews additional uAsset drawable from a position based on accrued yield.
     /// Returns 0 if current value has not exceeded previously minted amounts.
+    /// Quote-only: does not check or reserve the uAsset mint cap.
     /// @param positionId The position identifier.
     /// @return UAssetMintable Additional uAsset amount that can be drawn.
     function previewDrawUAsset(uint256 positionId) public view returns (uint256 UAssetMintable) {
@@ -217,6 +218,8 @@ contract OutrunStakingPositionUpgradeable is
     {
         Position storage position = _getStorage().positions[positionId];
         if (position.owner == address(0)) revert PositionAccessDenied();
+        uint128 deadline = position.deadline;
+        if (block.timestamp < deadline) revert LockTimeNotExpired(deadline);
         _validateRedeemAmount(position.syStaked, syRedeemed);
 
         // Partial redeem debt uses ceil so redeemed SY cannot leave rounded debt dust on the remaining position.
@@ -261,15 +264,12 @@ contract OutrunStakingPositionUpgradeable is
 
         // Step 3: convert SY principal to uAsset value at the current exchange rate.
         uint256 principalValue = _syToAsset(amountInSY);
-        // Step 4: check that uAsset mint cap is not exceeded.
-        _checkUAssetMintCap(_uAsset, principalValue);
-
         OutrunStakingPositionStorage storage $ = _getStorage();
         unchecked {
             $.syTotalStaking += amountInSY;
         }
 
-        // Step 5: create a new position with lockup deadline.
+        // Step 4: create a new position with lockup deadline.
         positionId = _nextId();
         UAssetMinted = principalValue;
         $.positions[positionId] = Position({
@@ -281,7 +281,7 @@ contract OutrunStakingPositionUpgradeable is
             deadline: uint128(block.timestamp + lockupDays * 1 days)
         });
 
-        // Step 6: mint uAsset to the designated receiver.
+        // Step 5: mint uAsset to the designated receiver.
         IUniversalAssets(_uAsset).mint(uAssetReceiver, UAssetMinted);
         emit Stake(
             positionId, positionOwner, amountInSY, principalValue, UAssetMinted, $.positions[positionId].deadline
@@ -309,8 +309,6 @@ contract OutrunStakingPositionUpgradeable is
         position.UAssetMinted += amountInUAsset;
 
         address _uAsset = uAsset();
-        // The global minter cap protects total uAsset minted by this stake manager.
-        _checkUAssetMintCap(_uAsset, amountInUAsset);
         IUniversalAssets(_uAsset).mint(recipient, amountInUAsset);
         emit DrawUAsset(positionId, recipient, amountInUAsset);
     }
@@ -336,7 +334,6 @@ contract OutrunStakingPositionUpgradeable is
 
         // Minted uAsset is tracked as shared pool debt, not position-specific debt.
         uint256 principalValue = _syToAsset(amountInSY);
-        _checkUAssetMintCap(_uAsset, principalValue);
 
         OutrunStakingPositionStorage storage $ = _getStorage();
         unchecked {
@@ -460,15 +457,18 @@ contract OutrunStakingPositionUpgradeable is
         if (amountInUAsset == 0) revert ZeroInput();
         if (amountInUAsset > positionUAssetMinted) revert ErrorInput();
 
-        // Step 1: burn uAsset from the caller (keeper provides uAsset).
+        // Step 1: compute the proportional SY share before burning keeper uAsset.
+        uint256 syRedeemed = Math.mulDiv(syStaked, amountInUAsset, positionUAssetMinted);
+        // Dust uAsset inputs that round to zero SY must not burn debt without reducing staked SY.
+        if (syRedeemed == 0) revert ZeroInput();
+
+        // Step 2: burn uAsset from the caller (keeper provides uAsset).
         UAssetBurned = amountInUAsset;
         IUniversalAssets(_uAsset).repay(msg.sender, UAssetBurned);
 
-        // Step 2: convert burned uAsset to SY at the current exchange rate (keeperPrincipalSY).
-        // Step 3: compute the proportional SY share of the redeemed debt (syRedeemed = syStaked * burnedUAsset / totalDebt).
+        // Step 3: convert burned uAsset to SY at the current exchange rate (keeperPrincipalSY).
         // Step 4: clamp keeperPrincipalSY so it never exceeds the proportional SY redeemed.
         keeperPrincipalSY = _assetToSy(UAssetBurned);
-        uint256 syRedeemed = Math.mulDiv(syStaked, amountInUAsset, positionUAssetMinted);
         if (keeperPrincipalSY > syRedeemed) keeperPrincipalSY = syRedeemed;
         // Step 5: the position owner receives any remaining SY above the keeper's share.
         ownerExcessSY = syRedeemed - keeperPrincipalSY;
@@ -547,12 +547,6 @@ contract OutrunStakingPositionUpgradeable is
         if (amountInSY < minStake_) revert MinStakeInsufficient(minStake_);
     }
 
-    function _checkUAssetMintCap(address _uAsset, uint256 amount) internal view {
-        if (IUniversalAssets(_uAsset).checkMintableAmount(address(this)) < amount) {
-            revert UAssetMintingCapReached();
-        }
-    }
-
     // `canonicalAssetValue` follows `SY.assetInfo().assetDecimals`.
     // `uAssetDebtUnits` follows `uAsset.decimals()`.
     // These helpers first convert via `SY.exchangeRate()` and then rescale across the two decimal domains.
@@ -616,6 +610,7 @@ contract OutrunStakingPositionUpgradeable is
         OutrunStakingPositionStorage storage $ = _getStorage();
         uint256 syStaked = position.syStaked;
         uint256 positionUAssetMinted = position.UAssetMinted;
+        if (syRedeemed > syStaked || UAssetBurned > positionUAssetMinted) revert ErrorInput();
         uint256 remainingSY;
         uint256 remainingUAsset;
 

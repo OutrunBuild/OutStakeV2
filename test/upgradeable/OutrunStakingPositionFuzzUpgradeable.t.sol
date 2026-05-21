@@ -313,12 +313,15 @@ contract OutrunStakingPositionFuzzTest is Test {
         // Bound burn amount to available uAsset (must be >= 1 and <= totalMinted)
         burnUAsset = bound(burnUAsset, 1, totalMinted);
 
+        // Success path only: dust burns that round to zero SY are covered by the adversarial revert test.
+        uint256 syRedeemed = Math.mulDiv(amountInSY, burnUAsset, totalMinted);
+        vm.assume(syRedeemed > 0);
+
         // Transfer uAsset to keeper
         vm.prank(owner);
         uAsset.transfer(keeper, burnUAsset);
 
         // Calculate expected values
-        uint256 syRedeemed = Math.mulDiv(amountInSY, burnUAsset, totalMinted);
         uint256 keeperPrincipalSYRaw = _assetToSy(burnUAsset, newRate);
         uint256 expectedKeeperPrincipalSY = keeperPrincipalSYRaw > syRedeemed ? syRedeemed : keeperPrincipalSYRaw;
         uint256 expectedOwnerExcessSY = syRedeemed - expectedKeeperPrincipalSY;

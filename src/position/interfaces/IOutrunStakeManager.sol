@@ -22,7 +22,6 @@ interface IOutrunStakeManager {
     error ZeroInput();
     error ErrorInput();
     error PermissionDenied();
-    error UAssetMintingCapReached();
     error LockTimeNotExpired(uint128 deadLine);
     error MinStakeInsufficient(uint256 minStake);
     error PositionAccessDenied();
