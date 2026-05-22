@@ -186,6 +186,8 @@ contract OutrunStakingPositionUpgradeable is
     function previewWrapStake(uint256 amountInSY) external view returns (uint256 UAssetMintable) {
         if (amountInSY == 0) revert ZeroInput();
         UAssetMintable = _syToAsset(amountInSY);
+        // Floor conversion can make tiny SY inputs mint zero uAsset; reject them before quoting.
+        if (UAssetMintable == 0) revert ZeroInput();
     }
 
     /// @notice Previews additional uAsset drawable from a position based on accrued yield.
@@ -330,13 +332,15 @@ contract OutrunStakingPositionUpgradeable is
         returns (uint256 UAssetAmount)
     {
         if (uAssetRecipient == address(0) || amountInSY == 0) revert ZeroInput();
+        // Minted uAsset is tracked as shared pool debt, not position-specific debt.
+        uint256 principalValue = _syToAsset(amountInSY);
+        // Reject zero-debt stakes before pulling SY so rounded dust cannot change pool accounting or balances.
+        if (principalValue == 0) revert ZeroInput();
+
         address _SY = SY();
         address _uAsset = uAsset();
         // The shared wrap pool receives SY directly from the caller; no position owner or deadline is stored.
         _transferIn(_SY, msg.sender, amountInSY);
-
-        // Minted uAsset is tracked as shared pool debt, not position-specific debt.
-        uint256 principalValue = _syToAsset(amountInSY);
 
         OutrunStakingPositionStorage storage $ = _getStorage();
         unchecked {
@@ -388,7 +392,7 @@ contract OutrunStakingPositionUpgradeable is
         if (tokenOut == _SY && syRedeemed < minTokenOut) revert InsufficientTokenOut(syRedeemed, minTokenOut);
         // Reduce or delete the position before burning uAsset so external observers never see repaid debt
         // paired with stale position debt.
-        _applyPositionRedeem(positionId, position, syRedeemed, UAssetBurned);
+        _applyPositionRedeem(positionId, position, syRedeemed, UAssetBurned, syStaked, positionUAssetMinted);
         // Repay burns uAsset from the caller and reduces this stake manager's outstanding mint debt.
         IUniversalAssets(uAsset()).repay(msg.sender, UAssetBurned);
         // Release SY directly or redeem through the SY adapter into tokenOut.
@@ -491,7 +495,7 @@ contract OutrunStakingPositionUpgradeable is
         ownerExcessSY = syRedeemed - keeperPrincipalSY;
 
         // Step 6: apply position reduction and transfer SY to both parties.
-        _applyPositionRedeem(positionId, position, syRedeemed, UAssetBurned);
+        _applyPositionRedeem(positionId, position, syRedeemed, UAssetBurned, syStaked, positionUAssetMinted);
         _transferSY(receiver, keeperPrincipalSY);
         _transferSY(positionOwner, ownerExcessSY);
 
@@ -525,7 +529,7 @@ contract OutrunStakingPositionUpgradeable is
             // Direct SY payout avoids adapter redemption and therefore needs its own minTokenOut check.
             if (amountInSY < minTokenOut) revert InsufficientTokenOut(amountInSY, minTokenOut);
             amountTokenOut = amountInSY;
-            _transferSY($.revenuePool, amountInSY);
+            _transferSY(_SY, $.revenuePool, amountInSY);
         } else {
             // Non-SY payout converts excess SY through the adapter and sends proceeds to revenuePool.
             amountTokenOut = IStandardizedYield(_SY).redeem($.revenuePool, amountInSY, tokenOut, minTokenOut, false);
@@ -622,11 +626,11 @@ contract OutrunStakingPositionUpgradeable is
         uint256 positionId,
         Position storage position,
         uint256 syRedeemed,
-        uint256 UAssetBurned
+        uint256 UAssetBurned,
+        uint256 syStaked,
+        uint256 positionUAssetMinted
     ) internal {
         OutrunStakingPositionStorage storage $ = _getStorage();
-        uint256 syStaked = position.syStaked;
-        uint256 positionUAssetMinted = position.UAssetMinted;
         if (syRedeemed > syStaked) revert ExceedsPositionBalance(syRedeemed, syStaked);
         if (UAssetBurned > positionUAssetMinted) {
             revert ExceedsPositionDebt(UAssetBurned, positionUAssetMinted);

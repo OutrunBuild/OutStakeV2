@@ -712,7 +712,7 @@ contract OutrunStakingPositionFuzzTest is Test {
     // 12. Rounding Direction Tests
     // ============================================
 
-    function testFuzz_RoundingDirectionSYConversion(uint256 amountInSY, uint256 rate) public {
+    function testFuzz_RoundingDirectionSYConversion(uint256 amountInSY, uint256 rate) public pure {
         amountInSY = _boundAmount(amountInSY);
         rate = _boundRate(rate);
 

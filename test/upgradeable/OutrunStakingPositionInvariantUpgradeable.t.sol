@@ -392,7 +392,7 @@ contract OutrunStakingPositionInvariantTest is StdInvariant, Test {
      * @notice Invariant 1: syTotalStaking equals sum of position SY + wrap pool SY
      * @dev This is the MOST CRITICAL invariant - ensures accounting consistency
      */
-    function invariant_syTotalStakingMatchesSum() public {
+    function invariant_syTotalStakingMatchesSum() public view {
         uint256 totalPositionSY = 0;
         uint256 activeCount = handler.getActivePositionCount();
 
@@ -420,7 +420,7 @@ contract OutrunStakingPositionInvariantTest is StdInvariant, Test {
      * 2. Only harvesting yield when there's excess SY above debt
      * This invariant verifies the system state is consistent, not that it's always fully collateralized.
      */
-    function invariant_wrapPoolCollateralizationConsistent() public {
+    function invariant_wrapPoolCollateralizationConsistent() public view {
         uint256 wrapDebt = position.wrapUAssetDebt();
         uint256 syWrap = position.syWrapStaking();
 
@@ -450,7 +450,7 @@ contract OutrunStakingPositionInvariantTest is StdInvariant, Test {
      * @notice Invariant 3: Position IDs are monotonically increasing
      * @dev Each new position gets a higher ID than the previous one
      */
-    function invariant_positionIdMonotonic() public {
+    function invariant_positionIdMonotonic() public view {
         uint256 currentId = position.idCounter();
         uint256 activeCount = handler.getActivePositionCount();
 
@@ -465,7 +465,7 @@ contract OutrunStakingPositionInvariantTest is StdInvariant, Test {
      * @notice Invariant 4: uAsset supply accounting consistency
      * @dev Total uAsset minted equals sum of position debt + wrap debt
      */
-    function invariant_uAssetSupplyConsistency() public {
+    function invariant_uAssetSupplyConsistency() public view {
         uint256 totalPositionDebt = 0;
         uint256 activeCount = handler.getActivePositionCount();
 
@@ -496,7 +496,7 @@ contract OutrunStakingPositionInvariantTest is StdInvariant, Test {
      * @notice Invariant 5: No position has UAssetMinted == 0 with syStaked > 0
      * @dev A valid position always has UAssetMinted > 0 when syStaked > 0
      */
-    function invariant_validPositionsHaveUAssetDebt() public {
+    function invariant_validPositionsHaveUAssetDebt() public view {
         uint256 activeCount = handler.getActivePositionCount();
 
         for (uint256 i = 0; i < activeCount; i++) {
@@ -514,7 +514,7 @@ contract OutrunStakingPositionInvariantTest is StdInvariant, Test {
      * @notice Invariant 6: Position owner consistency
      * @dev Active positions should have valid owners
      */
-    function invariant_activePositionsHaveValidOwners() public {
+    function invariant_activePositionsHaveValidOwners() public view {
         uint256 activeCount = handler.getActivePositionCount();
 
         for (uint256 i = 0; i < activeCount; i++) {
@@ -533,7 +533,7 @@ contract OutrunStakingPositionInvariantTest is StdInvariant, Test {
      * @notice Invariant 7: Ghost state tracking matches contract state
      * @dev Ensures our handler's ghost variables accurately track contract state
      */
-    function invariant_ghostStateMatchesContractState() public {
+    function invariant_ghostStateMatchesContractState() public view {
         uint256 totalPositionSY = 0;
         uint256 totalPositionUAsset = 0;
         uint256 activeCount = handler.getActivePositionCount();
@@ -565,7 +565,7 @@ contract OutrunStakingPositionInvariantTest is StdInvariant, Test {
      * @notice Invariant 8: Wrap pool accounting consistency
      * @dev Ensures wrap pool accounting never goes negative and maintains consistency
      */
-    function invariant_wrapPoolAccountingConsistent() public {
+    function invariant_wrapPoolAccountingConsistent() public view {
         uint256 syWrap = position.syWrapStaking();
         uint256 syTotal = position.syTotalStaking();
 

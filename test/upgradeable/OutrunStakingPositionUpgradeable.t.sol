@@ -89,7 +89,7 @@ contract OutrunStakingPositionUpgradeableTest is Test {
         vm.stopPrank();
     }
 
-    function testInitializeSetsOwnerSyUAssetRevenuePoolMinStake() external {
+    function testInitializeSetsOwnerSyUAssetRevenuePoolMinStake() external view {
         assertEq(position.owner(), owner);
         assertEq(position.SY(), address(sy));
         assertEq(position.uAsset(), address(uAsset));
@@ -205,6 +205,30 @@ contract OutrunStakingPositionUpgradeableTest is Test {
 
         assertEq(mixedPosition.previewStake(1e6), 1e18);
         assertEq(mixedPosition.previewWrapStake(1e6), 1e18);
+    }
+
+    function testMixedDecimalsWrapStakeRevertsWhenUAssetRoundsToZero() external {
+        _setupMixedDecimalsPosition();
+        mixedSy.setExchangeRate(1);
+
+        uint256 syWrapStakingBefore = mixedPosition.syWrapStaking();
+        uint256 syTotalStakingBefore = mixedPosition.syTotalStaking();
+        uint256 wrapUAssetDebtBefore = mixedPosition.wrapUAssetDebt();
+        uint256 userSYBefore = mixedSy.balanceOf(user);
+        uint256 userUAssetBefore = mixedUAsset.balanceOf(user);
+
+        vm.expectRevert(IOutrunStakeManager.ZeroInput.selector);
+        mixedPosition.previewWrapStake(1);
+
+        vm.prank(user);
+        vm.expectRevert(IOutrunStakeManager.ZeroInput.selector);
+        mixedPosition.wrapStake(1, user);
+
+        assertEq(mixedPosition.syWrapStaking(), syWrapStakingBefore);
+        assertEq(mixedPosition.syTotalStaking(), syTotalStakingBefore);
+        assertEq(mixedPosition.wrapUAssetDebt(), wrapUAssetDebtBefore);
+        assertEq(mixedSy.balanceOf(user), userSYBefore);
+        assertEq(mixedUAsset.balanceOf(user), userUAssetBefore);
     }
 
     function testMixedDecimalsDrawUAssetUsesEighteenDecimalsAfterRateIncrease() external {
