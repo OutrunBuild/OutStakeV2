@@ -7,4 +7,9 @@ interface IExchangeRateOracle {
     ///      bounds, fallback, or multi-source guarantees.
     /// @return The current exchange rate value.
     function getExchangeRate() external view returns (uint256);
+
+    error InvalidOracleAnswer();
+    error StaleOracleAnswer();
+    error SequencerDown();
+    error SequencerGracePeriodNotOver();
 }

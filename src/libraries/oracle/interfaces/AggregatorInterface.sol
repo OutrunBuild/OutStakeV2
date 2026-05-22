@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 // solhint-disable-next-line interface-starts-with-i
 interface AggregatorInterface {
     /// @notice Return the number of decimals used by the answer.
-    /// @dev OutrunExchangeOracleAdapter reads this once to normalize `latestAnswer()` to its configured scale.
+    /// @dev OutrunExchangeOracleAdapter reads this once to normalize `latestRoundData().answer`.
     /// @return The decimals used to scale answer values.
     function decimals() external view returns (uint8);
 
@@ -60,7 +60,7 @@ interface AggregatorInterface {
         returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
 
     /// @notice Return round data for the latest round.
-    /// @dev Exposed for aggregator compatibility. The local oracle adapter does not consume round metadata.
+    /// @dev OutrunExchangeOracleAdapter consumes `answer` and `updatedAt` from this tuple.
     /// @return roundId The latest round id.
     /// @return answer The latest answer value.
     /// @return startedAt The timestamp when the latest round started.

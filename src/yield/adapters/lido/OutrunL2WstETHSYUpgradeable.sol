@@ -17,6 +17,10 @@ contract OutrunL2WstETHSYUpgradeable is SYBaseUpgradeable {
         // Oracle reports the current L1 wstETH exchange rate.
         // Needed because L2 wstETH balance is static — the oracle
         // makes the rate visible for position accounting.
+        // Production Lido L2 wstETH/stETH rate adapters should use maxStaleness = 2 days
+        // and enable the L2 sequencer uptime feed with a post-recovery grace period.
+        // Evidence: Lido cross-chain token guide says stETH rate data should not be outdated by more than 2 days.
+        // https://docs.lido.fi/token-guides/cross-chain-tokens-guide/
         address exchangeRateOracle;
         // The underlying is stETH on Ethereum mainnet (not deployed on this L2).
         // Asset info describes what the SY ultimately represents.
