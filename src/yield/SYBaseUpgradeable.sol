@@ -45,7 +45,6 @@ abstract contract SYBaseUpgradeable is
         onlyInitializing
     {
         require(yieldBearingToken_ != address(0), SYZeroAddress());
-        __UUPSUpgradeable_init();
         __OutrunERC20Pausable_init(name_, symbol_, IERC20Metadata(yieldBearingToken_).decimals(), owner_);
         _getSYBaseStorage().yieldBearingToken = yieldBearingToken_;
     }

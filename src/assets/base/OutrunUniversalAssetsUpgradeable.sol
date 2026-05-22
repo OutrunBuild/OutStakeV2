@@ -44,7 +44,6 @@ contract OutrunUniversalAssetsUpgradeable is Initializable, IUniversalAssets, Ou
         if (decimals_ != expectedDecimals) {
             revert DecimalsMismatch(expectedDecimals, decimals_);
         }
-        __UUPSUpgradeable_init();
         __OutrunOFT_init(name_, symbol_, decimals_, owner_);
     }
 

@@ -78,7 +78,6 @@ contract OutrunStakingPositionUpgradeable is
         __AutoIncrementId_init();
         __Pausable_init();
         __Ownable_init(owner_);
-        __UUPSUpgradeable_init();
 
         OutrunStakingPositionStorage storage $ = _getStorage();
         (,, uint8 canonicalAssetDecimals) = IStandardizedYield(sy_).assetInfo();

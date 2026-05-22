@@ -3,9 +3,7 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {
-    ReentrancyGuardTransientUpgradeable
-} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardTransientUpgradeable.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {SYBaseUpgradeable} from "../../src/yield/SYBaseUpgradeable.sol";
@@ -38,7 +36,7 @@ contract TestSYUpgradeable is SYBaseUpgradeable {
                 assembly {
                     selector := mload(add(reason, 0x20))
                 }
-                reentryBlocked = selector == ReentrancyGuardTransientUpgradeable.ReentrancyGuardReentrantCall.selector;
+                reentryBlocked = selector == ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector;
             }
         }
         return amountDeposited;
