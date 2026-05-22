@@ -249,6 +249,77 @@ contract OutrunStakingPositionUpgradeableTest is Test {
         assertEq(mixedPosition.wrapUAssetDebt(), 0);
     }
 
+    function testMixedDecimalsWrapRedeemRevertsWhenDustUAssetRoundsToZeroSY() external {
+        _setupMixedDecimalsPosition();
+
+        vm.prank(user);
+        uint256 minted = mixedPosition.wrapStake(1e6, user);
+
+        uint256 syWrapStakingBefore = mixedPosition.syWrapStaking();
+        uint256 syTotalStakingBefore = mixedPosition.syTotalStaking();
+        uint256 wrapUAssetDebtBefore = mixedPosition.wrapUAssetDebt();
+        uint256 userSYBefore = mixedSy.balanceOf(user);
+        uint256 userUAssetBefore = mixedUAsset.balanceOf(user);
+
+        vm.prank(user);
+        mixedUAsset.approve(address(mixedPosition), 1);
+
+        vm.prank(user);
+        vm.expectRevert(IOutrunStakeManager.ZeroInput.selector);
+        mixedPosition.wrapRedeem(1, user, address(mixedSy), 0);
+
+        assertEq(minted, 1e18);
+        assertEq(syWrapStakingBefore, 1e6);
+        assertEq(syTotalStakingBefore, 1e6);
+        assertEq(wrapUAssetDebtBefore, 1e18);
+        assertEq(mixedPosition.syWrapStaking(), syWrapStakingBefore);
+        assertEq(mixedPosition.syTotalStaking(), syTotalStakingBefore);
+        assertEq(mixedPosition.wrapUAssetDebt(), wrapUAssetDebtBefore);
+        assertEq(mixedSy.balanceOf(user), userSYBefore);
+        assertEq(mixedUAsset.balanceOf(user), userUAssetBefore);
+    }
+
+    function testRedeemUpdatesPositionStateBeforeRepay() external {
+        _setupMixedDecimalsPosition();
+
+        vm.prank(user);
+        (uint256 positionId,) = mixedPosition.stake(1e6, 30, user, user);
+
+        vm.warp(block.timestamp + 31 days);
+
+        vm.prank(user);
+        mixedUAsset.approve(address(mixedPosition), 5e17);
+        mixedUAsset.probePositionDuringRepay(mixedPosition, positionId);
+
+        vm.prank(user);
+        mixedPosition.redeem(positionId, 5e5, user, address(mixedSy), 5e5);
+
+        (, uint256 syStakedDuringRepay, uint256 uAssetMintedDuringRepay,,) = mixedPosition.positions(positionId);
+        assertEq(syStakedDuringRepay, 5e5);
+        assertEq(uAssetMintedDuringRepay, 5e17);
+        assertEq(mixedUAsset.syStakedDuringRepay(), 5e5);
+        assertEq(mixedUAsset.uAssetMintedDuringRepay(), 5e17);
+        assertEq(mixedUAsset.syTotalStakingDuringRepay(), 5e5);
+    }
+
+    function testWrapRedeemUpdatesWrapPoolStateBeforeRepay() external {
+        _setupMixedDecimalsPosition();
+
+        vm.prank(user);
+        mixedPosition.wrapStake(1e6, user);
+
+        vm.prank(user);
+        mixedUAsset.approve(address(mixedPosition), 5e17);
+        mixedUAsset.probePositionDuringRepay(mixedPosition, 0);
+
+        vm.prank(user);
+        mixedPosition.wrapRedeem(5e17, user, address(mixedSy), 5e5);
+
+        assertEq(mixedUAsset.syTotalStakingDuringRepay(), 5e5);
+        assertEq(mixedUAsset.syWrapStakingDuringRepay(), 5e5);
+        assertEq(mixedUAsset.wrapUAssetDebtDuringRepay(), 5e17);
+    }
+
     function testMixedDecimalsKeepRedeemSplitsKeeperPrincipalAndOwnerExcessInSYUnits() external {
         _setupMixedDecimalsPosition();
 

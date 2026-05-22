@@ -520,7 +520,7 @@ contract AdversarialTests is Test {
 
         // Keeper tries to redeem more than position debt (250e18 > 200e18)
         vm.prank(keeper);
-        vm.expectRevert(IOutrunStakeManager.ErrorInput.selector);
+        vm.expectRevert(abi.encodeWithSelector(IOutrunStakeManager.ExceedsPositionDebt.selector, 250e18, 200e18));
         position.keepRedeem(positionId, 250e18, keeper);
     }
 
@@ -716,6 +716,21 @@ contract AdversarialTests is Test {
         uint256 syOut = position.wrapRedeem(100e18, alice, address(sy), 0);
         assertEq(syOut, 100e18, "Alice should get 100 SY");
         assertEq(position.wrapUAssetDebt(), 100e18, "Wrap debt should be 100");
+    }
+
+    /**
+     * @notice Wrap redeem cannot burn more uAsset than the wrap pool owes
+     */
+    function test_Adversarial_WrapRedeemCannotExceedTotalWrapDebt() external {
+        vm.prank(alice);
+        position.wrapStake(100e18, alice);
+
+        vm.prank(alice);
+        uAsset.approve(address(position), type(uint256).max);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(IOutrunStakeManager.ExceedsWrapDebt.selector, 101e18, 100e18));
+        position.wrapRedeem(101e18, alice, address(sy), 0);
     }
 
     /**

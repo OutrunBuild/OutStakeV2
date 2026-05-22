@@ -5,6 +5,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IStandardizedYield} from "../../../src/yield/interfaces/IStandardizedYield.sol";
 import {IUniversalAssets} from "../../../src/assets/interfaces/IUniversalAssets.sol";
+import {IOutrunStakeManager} from "../../../src/position/interfaces/IOutrunStakeManager.sol";
 
 contract MockSY is ERC20, IStandardizedYield {
     address internal immutable underlying;
@@ -132,6 +133,14 @@ contract MockUAsset is ERC20, IUniversalAssets {
 
     mapping(address minter => MintingStatus) public mintingStatusTable;
 
+    IOutrunStakeManager internal positionProbe;
+    uint256 internal positionIdProbe;
+    uint256 public syStakedDuringRepay;
+    uint256 public uAssetMintedDuringRepay;
+    uint256 public syTotalStakingDuringRepay;
+    uint256 public syWrapStakingDuringRepay;
+    uint256 public wrapUAssetDebtDuringRepay;
+
     error OwnableUnauthorizedAccount(address account);
 
     modifier onlyOwner() {
@@ -179,11 +188,25 @@ contract MockUAsset is ERC20, IUniversalAssets {
         _mint(receiver, amount);
     }
 
+    function probePositionDuringRepay(IOutrunStakeManager positionProbe_, uint256 positionIdProbe_) external {
+        positionProbe = positionProbe_;
+        positionIdProbe = positionIdProbe_;
+    }
+
     function repay(address account, uint256 amount) external {
         MintingStatus storage status = mintingStatusTable[msg.sender];
         require(status.amountInMinted >= amount, "Burn cap reached");
         _spendAllowance(account, msg.sender, amount);
         status.amountInMinted -= amount;
+
+        IOutrunStakeManager _positionProbe = positionProbe;
+        if (address(_positionProbe) != address(0)) {
+            (, syStakedDuringRepay, uAssetMintedDuringRepay,,) = _positionProbe.positions(positionIdProbe);
+            syTotalStakingDuringRepay = _positionProbe.syTotalStaking();
+            syWrapStakingDuringRepay = _positionProbe.syWrapStaking();
+            wrapUAssetDebtDuringRepay = _positionProbe.wrapUAssetDebt();
+        }
+
         _burn(account, amount);
     }
 }

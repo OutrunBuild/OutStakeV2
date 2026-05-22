@@ -372,12 +372,12 @@ contract OutrunStakingPositionFuzzTest is Test {
         vm.assume(maxRedeemUAsset > 0);
 
         redeemUAsset = bound(redeemUAsset, 1, maxRedeemUAsset);
+        uint256 expectedSYOut = _assetToSy(redeemUAsset, newRate);
+        vm.assume(expectedSYOut > 0);
 
         // WrapRedeem
         vm.prank(owner);
         uint256 syOut = position.wrapRedeem(redeemUAsset, owner, address(sy), 0);
-
-        uint256 expectedSYOut = _assetToSy(redeemUAsset, newRate);
 
         assertEq(syOut, expectedSYOut, "wrap redeem SY out incorrect");
 
@@ -456,6 +456,8 @@ contract OutrunStakingPositionFuzzTest is Test {
         vm.assume(maxRedeemUAsset > 0);
 
         redeemUAsset = bound(redeemUAsset, 1, maxRedeemUAsset);
+        uint256 expectedSYOut = _assetToSy(redeemUAsset, newRate);
+        vm.assume(expectedSYOut > 0);
 
         // Preview
         uint256 previewed = position.previewWrapRedeem(redeemUAsset, address(sy));

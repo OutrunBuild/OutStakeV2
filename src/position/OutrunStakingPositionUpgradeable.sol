@@ -295,18 +295,22 @@ contract OutrunStakingPositionUpgradeable is
     /// @return amountInUAsset Additional uAsset amount minted.
     function drawUAsset(uint256 positionId, address recipient)
         external
-        onlyPositionOwner(positionId)
         nonReentrant
         whenNotPaused
         returns (uint256 amountInUAsset)
     {
         if (recipient == address(0)) revert ZeroInput();
-        amountInUAsset = previewDrawUAsset(positionId);
-        if (amountInUAsset == 0) revert NothingToDraw();
-
         Position storage position = _getStorage().positions[positionId];
+        address positionOwner = position.owner;
+        if (positionOwner == address(0) || positionOwner != msg.sender) revert PositionAccessDenied();
+
+        uint256 currentValue = _syToAsset(position.syStaked);
+        uint256 minted = position.UAssetMinted;
+        if (currentValue <= minted) revert NothingToDraw();
+
+        amountInUAsset = currentValue - minted;
         // Increase the position debt first so the newly minted uAsset is recorded against this position.
-        position.UAssetMinted += amountInUAsset;
+        position.UAssetMinted = currentValue;
 
         address _uAsset = uAsset();
         IUniversalAssets(_uAsset).mint(recipient, amountInUAsset);
@@ -362,22 +366,32 @@ contract OutrunStakingPositionUpgradeable is
     /// @return amountTokenOut Amount of tokenOut sent to the receiver.
     function redeem(uint256 positionId, uint256 syRedeemed, address receiver, address tokenOut, uint256 minTokenOut)
         external
-        onlyPositionOwner(positionId)
         nonReentrant
         whenNotPaused
         returns (uint256 UAssetBurned, uint256 amountTokenOut)
     {
         if (receiver == address(0)) revert ZeroInput();
         address _SY = SY();
+        Position storage position = _getStorage().positions[positionId];
+        address positionOwner = position.owner;
+        if (positionOwner == address(0) || positionOwner != msg.sender) revert PositionAccessDenied();
+
+        uint128 deadline = position.deadline;
+        if (block.timestamp < deadline) revert LockTimeNotExpired(deadline);
+
+        uint256 syStaked = position.syStaked;
+        uint256 positionUAssetMinted = position.UAssetMinted;
+        _validateRedeemAmount(syStaked, syRedeemed);
+
         // Matured position debt is computed before any state change so the burn amount is deterministic.
-        UAssetBurned = _previewRedeemPositionDebt(positionId, syRedeemed);
+        UAssetBurned = _computeRedeemPositionDebt(positionUAssetMinted, syRedeemed, syStaked);
         // Direct SY redemption bypasses SY.redeem, so enforce minTokenOut here.
         if (tokenOut == _SY && syRedeemed < minTokenOut) revert InsufficientTokenOut(syRedeemed, minTokenOut);
-        // Burn the required uAsset debt and reduce or delete the position.
-        Position storage position = _getStorage().positions[positionId];
+        // Reduce or delete the position before burning uAsset so external observers never see repaid debt
+        // paired with stale position debt.
+        _applyPositionRedeem(positionId, position, syRedeemed, UAssetBurned);
         // Repay burns uAsset from the caller and reduces this stake manager's outstanding mint debt.
         IUniversalAssets(uAsset()).repay(msg.sender, UAssetBurned);
-        _applyPositionRedeem(positionId, position, syRedeemed, UAssetBurned);
         // Release SY directly or redeem through the SY adapter into tokenOut.
         amountTokenOut = _redeemTokenOut(_SY, receiver, tokenOut, syRedeemed, minTokenOut);
 
@@ -403,22 +417,24 @@ contract OutrunStakingPositionUpgradeable is
     {
         if (receiver == address(0) || amountInUAsset == 0) revert ZeroInput();
         OutrunStakingPositionStorage storage $ = _getStorage();
-        if (amountInUAsset > $.wrapUAssetDebt) revert ErrorInput();
+        if (amountInUAsset > $.wrapUAssetDebt) revert ExceedsWrapDebt(amountInUAsset, $.wrapUAssetDebt);
 
         address _SY = SY();
         address _uAsset = uAsset();
         // Floor conversion: wrapRedeem never releases more SY than the repaid debt accounts for.
         uint256 amountInSY = _assetToSy(amountInUAsset);
+        // Dust uAsset inputs that round to zero SY must not burn debt without reducing staked SY.
+        if (amountInSY == 0) revert ZeroInput();
         // Check that the wrap pool holds enough SY to cover the release.
         if (amountInSY > $.syWrapStaking) revert ExceedsWrapPoolBalance(amountInSY, $.syWrapStaking);
-
-        IUniversalAssets(_uAsset).repay(msg.sender, amountInUAsset);
 
         unchecked {
             $.syTotalStaking -= amountInSY;
             $.syWrapStaking -= amountInSY;
             $.wrapUAssetDebt -= amountInUAsset;
         }
+
+        IUniversalAssets(_uAsset).repay(msg.sender, amountInUAsset);
 
         // If tokenOut is SY itself, send SY directly — no redemption fee is incurred.
         if (tokenOut == _SY) {
@@ -455,7 +471,9 @@ contract OutrunStakingPositionUpgradeable is
         uint256 syStaked = position.syStaked;
         uint256 positionUAssetMinted = position.UAssetMinted;
         if (amountInUAsset == 0) revert ZeroInput();
-        if (amountInUAsset > positionUAssetMinted) revert ErrorInput();
+        if (amountInUAsset > positionUAssetMinted) {
+            revert ExceedsPositionDebt(amountInUAsset, positionUAssetMinted);
+        }
 
         // Step 1: compute the proportional SY share before burning keeper uAsset.
         uint256 syRedeemed = Math.mulDiv(syStaked, amountInUAsset, positionUAssetMinted);
@@ -610,7 +628,10 @@ contract OutrunStakingPositionUpgradeable is
         OutrunStakingPositionStorage storage $ = _getStorage();
         uint256 syStaked = position.syStaked;
         uint256 positionUAssetMinted = position.UAssetMinted;
-        if (syRedeemed > syStaked || UAssetBurned > positionUAssetMinted) revert ErrorInput();
+        if (syRedeemed > syStaked) revert ExceedsPositionBalance(syRedeemed, syStaked);
+        if (UAssetBurned > positionUAssetMinted) {
+            revert ExceedsPositionDebt(UAssetBurned, positionUAssetMinted);
+        }
         uint256 remainingSY;
         uint256 remainingUAsset;
 

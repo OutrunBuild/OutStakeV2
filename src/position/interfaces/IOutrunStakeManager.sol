@@ -20,12 +20,13 @@ interface IOutrunStakeManager {
     }
 
     error ZeroInput();
-    error ErrorInput();
     error PermissionDenied();
     error LockTimeNotExpired(uint128 deadLine);
     error MinStakeInsufficient(uint256 minStake);
     error PositionAccessDenied();
     error ExceedsPositionBalance(uint256 requested, uint256 available);
+    error ExceedsPositionDebt(uint256 requested, uint256 available);
+    error ExceedsWrapDebt(uint256 requested, uint256 available);
     error ExceedsWrapPoolBalance(uint256 requested, uint256 available);
     error NothingToDraw();
     error PartialRedeemMustLeaveDebt();
