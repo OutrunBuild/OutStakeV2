@@ -1,7 +1,7 @@
 # OutStakeV2 Verification
 
 - Verification entrypoint: `script/harness/gate.sh`
-- Classification-only entrypoint: `bash script/harness/gate.sh --classify-only --changed-files <path>`
+- Classification-only entrypoint: `bash script/harness/gate.sh --classify-only --changed-files <path> [<path> ...]`
 - Default local profile: `npm run gate` (`fast`)
 - Fast local profile: `npm run gate:fast`
 - Full local profile: `npm run gate:full`
@@ -16,14 +16,16 @@ Gate output controls:
 - `--log-level error|warn|info|debug`: defaults to `info`. `error` prints only error-oriented output, `warn` prints warnings/errors without success summaries, and `debug` includes the structured gate record in text mode.
 - `--output text|json`: defaults to JSON for `--classify-only` and text for normal verification. `json` prints the structured classification or final record to stdout and takes precedence over `--quiet`.
 
+`--changed-files` has one meaning: every repo-relative path after it, until the next option, is treated as a changed file. Old "pass a changed-files list file path" behavior is removed.
+
 Local current-work gate invocations must use exact changed-file input. Solidity changed-files mode requires diff evidence via `CHANGE_CLASSIFIER_DIFF_FILE` or `GATE_DIFF_BASE`; without it, semantic classification is blocked.
 
 Gate verifies classification and command outcomes. Spec/document impact is decided before doc writers, `spec-reviewer`, code writers, or code reviewers are dispatched, not by gate.
 
 CI uses two entry paths:
 
-- When a reliable diff base exists, `script/harness/ci-gate-entrypoint.sh` computes changed files plus diff evidence and invokes `gate:ci -- --changed-files <path>`.
-- For `workflow_dispatch` or zero-base events, the CI entrypoint invokes `gate:ci -- --all` instead of synthesizing a repo-wide changed-files list.
+- When a reliable diff base exists, `script/harness/ci-gate-entrypoint.sh` computes `git diff --name-only`, expands those repo-relative paths into `gate:ci -- --changed-files <path> [<path> ...]`, and passes diff evidence through `CHANGE_CLASSIFIER_DIFF_FILE`.
+- For `workflow_dispatch`, zero-base, or empty-diff events, the CI entrypoint invokes `gate:ci -- --all` instead of synthesizing a repo-wide changed-files list.
 
 Diff evidence must not be created as persistent repository files. Prefer `GATE_DIFF_BASE=<git-ref>`; when `CHANGE_CLASSIFIER_DIFF_FILE` is needed, point it at a `mktemp` file outside the repository and remove it after `gate.sh` exits.
 

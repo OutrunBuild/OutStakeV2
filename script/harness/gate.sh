@@ -2,7 +2,7 @@
 set -euo pipefail
 
 profile="fast"
-changed_files_arg=""
+declare -a changed_files_args=()
 all_mode=0
 classify_only=0
 quiet=0
@@ -13,7 +13,7 @@ declare -a cleanup_paths=()
 
 usage() {
     cat >&2 <<'EOF'
-Usage: bash ./script/harness/gate.sh [--profile fast|full|ci] [--changed-files <path>] [--all] [--classify-only] [--quiet] [--log-level error|warn|info|debug] [--output text|json]
+Usage: bash ./script/harness/gate.sh [--profile fast|full|ci] [--changed-files <path> [<path> ...]] [--all] [--classify-only] [--quiet] [--log-level error|warn|info|debug] [--output text|json]
 EOF
 }
 
@@ -713,8 +713,22 @@ while [ "$#" -gt 0 ]; do
                 usage
                 exit 1
             fi
-            changed_files_arg="$2"
-            shift 2
+            shift
+            while [ "$#" -gt 0 ]; do
+                case "$1" in
+                    --*)
+                        break
+                        ;;
+                    *)
+                        changed_files_args+=("$1")
+                        shift
+                        ;;
+                esac
+            done
+            if [ "${#changed_files_args[@]}" -eq 0 ]; then
+                usage
+                exit 1
+            fi
             ;;
         --all)
             all_mode=1
@@ -776,14 +790,13 @@ case "$output_format" in
         ;;
 esac
 
-if [ "$all_mode" -eq 1 ] && [ -n "$changed_files_arg" ]; then
+if [ "$all_mode" -eq 1 ] && [ "${#changed_files_args[@]}" -gt 0 ]; then
     die "--all and --changed-files are mutually exclusive"
 fi
 
 command -v jq >/dev/null 2>&1 || die "jq is required"
 command -v node >/dev/null 2>&1 || die "node is required"
 
-original_cwd="$(pwd)"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 cd "$repo_root"
@@ -872,13 +885,12 @@ if [ "$all_mode" -eq 1 ]; then
 
     mapfile -t changed_files < <(printf '%s\n' "${solidity_prod_files[@]}" "${solidity_test_files[@]}" "${harness_control_files[@]}" | awk '!seen[$0]++')
 else
-    if [ -n "$changed_files_arg" ]; then
-        case "$changed_files_arg" in
-            /*) ;;
-            *) changed_files_arg="$original_cwd/$changed_files_arg" ;;
-        esac
-        [ -f "$changed_files_arg" ] || die "changed files input not found: $changed_files_arg"
-        mapfile -t changed_files < <(awk '{ sub(/\r$/, ""); if ($0 != "") print $0 }' "$changed_files_arg" | awk '!seen[$0]++')
+    if [ "${#changed_files_args[@]}" -gt 0 ]; then
+        mapfile -t changed_files < <(
+            printf '%s\n' "${changed_files_args[@]}" |
+                awk '{ sub(/\r$/, ""); if ($0 != "") print $0 }' |
+                awk '!seen[$0]++'
+        )
     elif [ "$profile" = "ci" ]; then
         die "--changed-files is required when --profile ci is used"
     else
@@ -1021,7 +1033,7 @@ if [ "$all_mode" -eq 1 ]; then
     : >"$patch_file"
     classification_requires_diff=0
 elif [ "${#classification_solidity_files[@]}" -gt 0 ]; then
-    if [ -n "$changed_files_arg" ]; then
+    if [ "${#changed_files_args[@]}" -gt 0 ]; then
         if [ -n "${CHANGE_CLASSIFIER_DIFF_FILE:-}" ]; then
             if [ ! -r "${CHANGE_CLASSIFIER_DIFF_FILE}" ]; then
                 diff_evidence_error=1
@@ -1128,13 +1140,13 @@ while IFS= read -r hard_block_rule; do
 done < <(jq -c '.hard_blocks[]' "$policy_file")
 
 if [ "$all_mode" -eq 0 ]; then
-    if [ -n "$changed_files_arg" ] && { [ "${#solidity_prod_files[@]}" -gt 0 ] || [ "${#solidity_test_files[@]}" -gt 0 ]; } && [ "$classification_requires_diff" -eq 1 ]; then
+    if [ "${#changed_files_args[@]}" -gt 0 ] && { [ "${#solidity_prod_files[@]}" -gt 0 ] || [ "${#solidity_test_files[@]}" -gt 0 ]; } && [ "$classification_requires_diff" -eq 1 ]; then
         classification_requires_diff=1
         hard_blocked=1
         append_finding blocking_findings_json "main-orchestrator" "changed-files mode for Solidity changes requires CHANGE_CLASSIFIER_DIFF_FILE or GATE_DIFF_BASE to classify non-semantic diffs deterministically" "semantic-classification-requires-diff" "error"
     fi
 
-    if [ -n "$changed_files_arg" ] && { [ "${#solidity_prod_files[@]}" -gt 0 ] || [ "${#solidity_test_files[@]}" -gt 0 ]; } && [ "$diff_evidence_error" -eq 1 ]; then
+    if [ "${#changed_files_args[@]}" -gt 0 ] && { [ "${#solidity_prod_files[@]}" -gt 0 ] || [ "${#solidity_test_files[@]}" -gt 0 ]; } && [ "$diff_evidence_error" -eq 1 ]; then
         hard_blocked=1
         append_finding blocking_findings_json "main-orchestrator" "changed-files mode provided unusable diff evidence for Solidity classification" "semantic-classification-diff-unusable" "error"
     fi

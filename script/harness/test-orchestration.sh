@@ -9,21 +9,22 @@ trap 'rm -rf "$tmp_dir"' EXIT
 
 run_classify() {
     local name="$1"
-    local changed_files="$2"
-    local diff_file="${3-}"
-    local expected_status="${4-0}"
+    local diff_file="${2-}"
+    local expected_status="${3-0}"
+    shift 3
     local record="$tmp_dir/$name.record.json"
     local stdout="$tmp_dir/$name.stdout"
     local status
+    local -a cmd=(bash script/harness/gate.sh --classify-only --changed-files "$@")
 
     set +e
     if [ -n "$diff_file" ]; then
         RUN_RECORD_PATH="$record" CHANGE_CLASSIFIER_DIFF_FILE="$diff_file" \
-            bash script/harness/gate.sh --classify-only --changed-files "$changed_files" >"$stdout"
+            "${cmd[@]}" >"$stdout"
         status=$?
     else
         RUN_RECORD_PATH="$record" \
-            bash script/harness/gate.sh --classify-only --changed-files "$changed_files" >"$stdout"
+            "${cmd[@]}" >"$stdout"
         status=$?
     fi
     set -e
@@ -63,14 +64,6 @@ run_default_classify_in_scratch_repo() {
     printf '%s\n' "$record"
 }
 
-write_changed_files() {
-    local name="$1"
-    shift
-    local file="$tmp_dir/$name.changed"
-    printf '%s\n' "$@" >"$file"
-    printf '%s\n' "$file"
-}
-
 write_diff() {
     local name="$1"
     local path="$2"
@@ -107,21 +100,19 @@ capture_dir="${HARNESS_CAPTURE_DIR:?}"
 printf '%s\n' "$@" >"$capture_dir/argv"
 printf '%s' "${CHANGE_CLASSIFIER_DIFF_FILE:-}" >"$capture_dir/diff_path"
 
-changed_files_path=""
-prev_arg=""
+capture_changed_files=0
 for arg in "$@"; do
-    if [ "$prev_arg" = "--changed-files" ]; then
-        changed_files_path="$arg"
+    if [ "$capture_changed_files" -eq 1 ] && [[ "$arg" == --* ]]; then
         break
     fi
-    prev_arg="$arg"
+    if [ "$capture_changed_files" -eq 1 ]; then
+        printf '%s\n' "$arg" >>"$capture_dir/changed_files_args"
+        continue
+    fi
+    if [ "$arg" = "--changed-files" ]; then
+        capture_changed_files=1
+    fi
 done
-
-printf '%s' "$changed_files_path" >"$capture_dir/changed_files_path"
-
-if [ -n "$changed_files_path" ] && [ -f "$changed_files_path" ]; then
-    cp "$changed_files_path" "$capture_dir/changed_files"
-fi
 
 if [ -n "${CHANGE_CLASSIFIER_DIFF_FILE:-}" ] && [ -f "${CHANGE_CLASSIFIER_DIFF_FILE}" ]; then
     cp "${CHANGE_CLASSIFIER_DIFF_FILE}" "$capture_dir/diff_file"
@@ -195,8 +186,7 @@ assert_no_removed_fields() {
     ' "$record" >/dev/null
 }
 
-docs_changed="$(write_changed_files docs docs/foo.md)"
-docs_record="$(run_classify docs "$docs_changed")"
+docs_record="$(run_classify docs "" 0 docs/foo.md)"
 jq -e '
   .change_class == "non-semantic" and
   .orchestration_profile == "delegated" and
@@ -207,8 +197,23 @@ jq -e '
 ' "$docs_record" >/dev/null
 assert_no_removed_fields "$docs_record"
 
-readme_changed="$(write_changed_files readme README.md)"
-readme_record="$(run_classify readme "$readme_changed")"
+direct_paths_record="$(run_classify directpaths "" 0 script/harness/gate.sh script/harness/test-orchestration.sh)"
+jq -e '
+  .changed_files == ["script/harness/gate.sh", "script/harness/test-orchestration.sh"] and
+  .change_class == "non-semantic" and
+  .orchestration_profile == "delegated"
+' "$direct_paths_record" >/dev/null
+assert_no_removed_fields "$direct_paths_record"
+
+single_direct_record="$(run_classify singledirect "" 0 script/harness/gate.sh)"
+jq -e '
+  .changed_files == ["script/harness/gate.sh"] and
+  .change_class == "non-semantic" and
+  .orchestration_profile == "delegated"
+' "$single_direct_record" >/dev/null
+assert_no_removed_fields "$single_direct_record"
+
+readme_record="$(run_classify readme "" 0 README.md)"
 jq -e '
   .change_class == "non-semantic" and
   .orchestration_profile == "delegated" and
@@ -221,8 +226,7 @@ jq -e '
 ' "$readme_record" >/dev/null
 assert_no_removed_fields "$readme_record"
 
-spec_changed="$(write_changed_files spec docs/spec/position/foo.md)"
-spec_record="$(run_classify spec "$spec_changed")"
+spec_record="$(run_classify spec "" 0 docs/spec/position/foo.md)"
 jq -e '
   .orchestration_profile == "delegated" and
   .harness_writer_roles == ["process-implementer"] and
@@ -233,9 +237,8 @@ jq -e '
 ' "$spec_record" >/dev/null
 assert_no_removed_fields "$spec_record"
 
-test_changed="$(write_changed_files testsol test/upgradeable/OutrunStakingPositionUpgradeable.t.sol)"
 test_diff="$(write_diff testsol test/upgradeable/OutrunStakingPositionUpgradeable.t.sol 'uint256 oldValue = 1;' 'uint256 newValue = 2;')"
-test_record="$(run_classify testsol "$test_changed" "$test_diff")"
+test_record="$(run_classify testsol "$test_diff" 0 test/upgradeable/OutrunStakingPositionUpgradeable.t.sol)"
 jq -e '
   .change_class == "test-semantic" and
   .orchestration_profile == "direct-review" and
@@ -246,9 +249,8 @@ jq -e '
 ' "$test_record" >/dev/null
 assert_no_removed_fields "$test_record"
 
-src_changed="$(write_changed_files srcsol src/position/OutrunStakingPositionUpgradeable.sol)"
 src_diff="$(write_diff srcsol src/position/OutrunStakingPositionUpgradeable.sol 'uint256 oldAmount = amount;' 'uint256 newAmount = amount + 1;')"
-src_record="$(run_classify srcsol "$src_changed" "$src_diff")"
+src_record="$(run_classify srcsol "$src_diff" 0 src/position/OutrunStakingPositionUpgradeable.sol)"
 jq -e '
   .change_class == "prod-semantic" and
   .orchestration_profile == "full-review" and
@@ -259,8 +261,7 @@ jq -e '
 ' "$src_record" >/dev/null
 assert_no_removed_fields "$src_record"
 
-mixed_changed="$(write_changed_files mixed src/position/OutrunStakingPositionUpgradeable.sol docs/spec/position/state-machines.md)"
-mixed_record="$(run_classify mixed "$mixed_changed" "$src_diff")"
+mixed_record="$(run_classify mixed "$src_diff" 0 src/position/OutrunStakingPositionUpgradeable.sol docs/spec/position/state-machines.md)"
 jq -e '
   .change_class == "prod-semantic" and
   .orchestration_profile == "full-review" and
@@ -272,8 +273,7 @@ jq -e '
 ' "$mixed_record" >/dev/null
 assert_no_removed_fields "$mixed_record"
 
-mixed_non_spec_changed="$(write_changed_files mixednonspec src/position/OutrunStakingPositionUpgradeable.sol docs/TRACEABILITY.md)"
-mixed_non_spec_record="$(run_classify mixednonspec "$mixed_non_spec_changed" "$src_diff")"
+mixed_non_spec_record="$(run_classify mixednonspec "$src_diff" 0 src/position/OutrunStakingPositionUpgradeable.sol docs/TRACEABILITY.md)"
 jq -e '
   .change_class == "prod-semantic" and
   .orchestration_profile == "full-review" and
@@ -285,8 +285,7 @@ jq -e '
 ' "$mixed_non_spec_record" >/dev/null
 assert_no_removed_fields "$mixed_non_spec_record"
 
-pure_unknown_changed="$(write_changed_files pureunknown notes.txt)"
-pure_unknown_record="$(run_classify pureunknown "$pure_unknown_changed" "" 1)"
+pure_unknown_record="$(run_classify pureunknown "" 1 notes.txt)"
 jq -e '
   .change_class == "no-op" and
   .orchestration_profile == "blocked" and
@@ -325,11 +324,11 @@ grep -qx -- "run" "$diff_capture/argv"
 grep -qx -- "gate:ci" "$diff_capture/argv"
 grep -qx -- "--" "$diff_capture/argv"
 grep -qx -- "--changed-files" "$diff_capture/argv"
-[ -s "$diff_capture/changed_files_path" ]
 [ -s "$diff_capture/diff_path" ]
-[ -s "$diff_capture/changed_files" ]
+[ -s "$diff_capture/changed_files_args" ]
 [ -s "$diff_capture/diff_file" ]
-diff -u <(git diff --name-only "$empty_tree" "$current_head") "$diff_capture/changed_files"
+[ ! -f "$diff_capture/changed_files" ]
+diff -u <(git diff --name-only "$empty_tree" "$current_head") "$diff_capture/changed_files_args"
 
 pre_edit_output="$(run_pre_edit_check "$repo_root/script/harness/test-orchestration.sh")"
 assert_pre_edit_check_guidance "$pre_edit_output"
