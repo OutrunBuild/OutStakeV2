@@ -53,28 +53,69 @@ if [ -n "$dependency_status" ]; then
     exit 1
 fi
 
-for dependency in "${expected_dependencies[@]}"; do
-    current_dependency="$current_root/lib/$dependency"
-    canonical_dependency="$canonical_lib/$dependency"
+prepare_submodule_worktree() {
+    local parent_canonical="$1"
+    local parent_current="$2"
+    local relative_path="$3"
+    local canonical_submodule="$parent_canonical/$relative_path"
+    local current_submodule="$parent_current/$relative_path"
+    local canonical_top
+    local expected_commit
 
-    if [ -L "$current_dependency" ]; then
-        linked_target="$(readlink "$current_dependency")"
-        if [ "$linked_target" = "$canonical_dependency" ]; then
+    canonical_top="$(git -C "$canonical_submodule" rev-parse --show-toplevel 2>/dev/null || true)"
+    if [ "$canonical_top" != "$canonical_submodule" ]; then
+        echo "blocked: missing initialized canonical submodule $canonical_submodule"
+        exit 1
+    fi
+
+    expected_commit="$(git -C "$parent_current" rev-parse "HEAD:$relative_path")"
+    if ! git -C "$canonical_submodule" cat-file -e "$expected_commit^{commit}" 2>/dev/null; then
+        echo "blocked: canonical submodule $canonical_submodule does not contain $expected_commit"
+        exit 1
+    fi
+
+    if [ "$(git -C "$current_submodule" rev-parse --show-toplevel 2>/dev/null || true)" = "$current_submodule" ]; then
+        if [ "$(git -C "$current_submodule" rev-parse HEAD)" != "$expected_commit" ]; then
+            echo "blocked: $current_submodule is checked out at a different commit"
+            exit 1
+        fi
+    else
+        if [ -e "$current_submodule" ] && find "$current_submodule" -mindepth 1 -print -quit | grep -q .; then
+            echo "blocked: existing $current_submodule is non-empty; not deleting automatically"
+            exit 1
+        fi
+
+        git -C "$canonical_submodule" worktree prune
+        rm -rf "$current_submodule"
+        mkdir -p "$(dirname "$current_submodule")"
+        git -C "$canonical_submodule" worktree add --detach "$current_submodule" "$expected_commit" >/dev/null
+    fi
+
+    prepare_initialized_nested_submodules "$canonical_submodule" "$current_submodule"
+}
+
+prepare_initialized_nested_submodules() {
+    local parent_canonical="$1"
+    local parent_current="$2"
+    local nested_path
+
+    if [ ! -f "$parent_canonical/.gitmodules" ]; then
+        return
+    fi
+
+    while IFS= read -r nested_path; do
+        if [ -z "$nested_path" ]; then
             continue
         fi
 
-        echo "blocked: existing $current_dependency symlink points to $linked_target"
-        exit 1
-    fi
+        if [ "$(git -C "$parent_canonical/$nested_path" rev-parse --show-toplevel 2>/dev/null || true)" = "$parent_canonical/$nested_path" ]; then
+            prepare_submodule_worktree "$parent_canonical" "$parent_current" "$nested_path"
+        fi
+    done < <(git -C "$parent_canonical" config --file .gitmodules --get-regexp 'submodule\..*\.path' | awk '{print $2}')
+}
 
-    if [ -e "$current_dependency" ] && find "$current_dependency" -mindepth 1 -print -quit | grep -q .; then
-        echo "blocked: existing $current_dependency is non-empty; not deleting automatically"
-        exit 1
-    fi
-
-    rm -rf "$current_dependency"
-    mkdir -p "$(dirname "$current_dependency")"
-    ln -s "$canonical_dependency" "$current_dependency"
+for dependency in "${expected_dependencies[@]}"; do
+    prepare_submodule_worktree "$canonical_root" "$current_root" "lib/$dependency"
 done
 
-echo "linked worktree submodule libs to canonical lib"
+echo "prepared worktree submodules from canonical lib"
