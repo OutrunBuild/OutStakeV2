@@ -173,19 +173,16 @@ array_contains() {
 
 build_dispatch_summary() {
     local harness_writer_roles_json="$1"
-    local spec_review_required_json="$2"
-    local code_writer_roles_json="$3"
-    local code_review_roles_json="$4"
+    local code_writer_roles_json="$2"
+    local code_review_roles_json="$3"
 
     jq -r -n \
         --argjson harness "$harness_writer_roles_json" \
-        --argjson spec "$spec_review_required_json" \
         --argjson code "$code_writer_roles_json" \
         --argjson review "$code_review_roles_json" '
         def fmt_roles($items):
           if ($items | length) == 0 then "none" else ($items | join(",")) end;
         "harness=" + fmt_roles($harness)
-        + ";spec-review=" + (if $spec then "required" else "none" end)
         + ";code=" + fmt_roles($code)
         + ";code-review=" + fmt_roles($review)
         '
@@ -414,6 +411,123 @@ run_looped_command() {
     verification_failed=1
     record_command_result "$id" "failed" "$exit_code" "at least one scoped command failed" "verifier"
     append_finding blocking_findings_json "verifier" "verification command failed: $id" "$id" "error"
+}
+
+extract_test_contracts_from_list_output() {
+    local output_file="$1"
+    awk '
+        /^  [^[:space:]].*$/ && $0 !~ /^    / {
+            line = $0
+            sub(/^  /, "", line)
+            sub(/[[:space:]]+$/, "", line)
+            print line
+        }
+    ' "$output_file"
+}
+
+escape_extended_regex() {
+    sed -e 's/[][(){}.^$*+?|\\-]/\\&/g'
+}
+
+build_targeted_test_contract_regex() {
+    local regex_var_name="$1"
+    local contracts_var_name="$2"
+    shift 2
+    local -n regex_ref="$regex_var_name"
+    local -n contracts_ref="$contracts_var_name"
+    local test_file
+    local list_exit_code
+    local list_output_file
+    local contract_name
+    local escaped_name
+    local -a escaped_contracts=()
+
+    regex_ref=""
+    contracts_ref=()
+
+    for test_file in "$@"; do
+        list_output_file="$(mktemp "$repo_root/.harness/tmp/cmd.XXXXXX")"
+        register_cleanup "$list_output_file"
+
+        set +e
+        forge test --list --match-path "$test_file" > "$list_output_file" 2>&1
+        list_exit_code=$?
+        set -e
+
+        if [ "$list_exit_code" -ne 0 ]; then
+            return 1
+        fi
+
+        while IFS= read -r contract_name; do
+            [ -n "$contract_name" ] || continue
+            append_unique contracts_ref "$contract_name"
+        done < <(extract_test_contracts_from_list_output "$list_output_file")
+    done
+
+    if [ "${#contracts_ref[@]}" -eq 0 ]; then
+        return 1
+    fi
+
+    for contract_name in "${contracts_ref[@]}"; do
+        escaped_name="$(printf '%s' "$contract_name" | escape_extended_regex)"
+        escaped_contracts+=("$escaped_name")
+    done
+
+    regex_ref="^("
+    regex_ref+="${escaped_contracts[0]}"
+    for escaped_name in "${escaped_contracts[@]:1}"; do
+        regex_ref+="|$escaped_name"
+    done
+    regex_ref+=")$"
+}
+
+validate_targeted_test_contract_regex() {
+    local regex="$1"
+    shift
+    local expected_contracts=("$@")
+    local validation_output_file
+    local validation_exit_code
+    local actual_sorted
+    local expected_sorted
+
+    validation_output_file="$(mktemp "$repo_root/.harness/tmp/cmd.XXXXXX")"
+    register_cleanup "$validation_output_file"
+
+    set +e
+    forge test --list --match-contract "$regex" > "$validation_output_file" 2>&1
+    validation_exit_code=$?
+    set -e
+
+    if [ "$validation_exit_code" -ne 0 ]; then
+        return 1
+    fi
+
+    actual_sorted="$(
+        extract_test_contracts_from_list_output "$validation_output_file" | awk '!seen[$0]++' | sort
+    )"
+    expected_sorted="$(
+        printf '%s\n' "${expected_contracts[@]}" | awk '!seen[$0]++' | sort
+    )"
+
+    [ "$actual_sorted" = "$expected_sorted" ]
+}
+
+run_targeted_tests_command() {
+    local id="$1"
+    local reason="$2"
+    local scope_json="$3"
+    shift 3
+    local -a scope=("$@")
+    local targeted_regex
+    local -a targeted_contracts=()
+
+    if build_targeted_test_contract_regex targeted_regex targeted_contracts "${scope[@]}" \
+        && validate_targeted_test_contract_regex "$targeted_regex" "${targeted_contracts[@]}"; then
+        run_single_command "$id" "$reason" "$scope_json" forge test --match-contract "$targeted_regex"
+        return
+    fi
+
+    run_looped_command "$id" "$reason" "$scope_json" "forge test --match-path" "${scope[@]}"
 }
 
 normalize_slither_key() {
@@ -977,7 +1091,6 @@ if [ "${#changed_files[@]}" -eq 0 ]; then
           orchestration_profile: "no-op",
           verification_profile: $profile,
           harness_writer_roles: [],
-          spec_review_required: false,
           code_writer_roles: [],
           code_review_roles: [],
           orchestration_reasons: ["change_class=no-op", "surface_sensitivity=none"],
@@ -990,7 +1103,7 @@ if [ "${#changed_files[@]}" -eq 0 ]; then
     if [ -n "${RUN_RECORD_PATH:-}" ]; then
         printf '%s\n' "$no_op_record_json" >"$RUN_RECORD_PATH"
     fi
-    emit_gate_record "$no_op_record_json" "no-op" "no-op" "no-op" "harness=none;spec-review=none;code=none;code-review=none"
+    emit_gate_record "$no_op_record_json" "no-op" "no-op" "no-op" "harness=none;code=none;code-review=none"
     if [ "$quiet" -eq 0 ] && [ "$(resolved_output_format)" = "text" ] && [ "$log_level" = "info" ]; then
         echo "[gate] no changed files matched any surface pattern"
     fi
@@ -1301,7 +1414,6 @@ slither_required_full_ci=false
 orchestration_decision_state="final"
 risk_analysis_record_required=false
 declare -a orchestration_reasons=()
-spec_review_required=false
 declare -a code_review_roles=()
 harness_writer_roles_json='[]'
 code_writer_roles_json='[]'
@@ -1319,7 +1431,6 @@ mapfile -t spec_paths < <(jq -r '.orchestration_rules.spec_paths[]? // empty' "$
 if [ "${#spec_paths[@]}" -gt 0 ]; then
     for changed_file in "${changed_files[@]}"; do
         if match_path_against_patterns "$changed_file" "${spec_paths[@]}"; then
-            spec_review_required=true
             requires_human_confirmation=true
             break
         fi
@@ -1443,7 +1554,7 @@ code_writer_roles_json="$(json_array_from_values "${code_writer_roles[@]}")"
 code_review_roles_json="$(json_array_from_values "${code_review_roles[@]}")"
 
 orchestration_reasons_json="$(json_array_from_values "${orchestration_reasons[@]}")"
-dispatch_summary="$(build_dispatch_summary "$harness_writer_roles_json" "$spec_review_required" "$code_writer_roles_json" "$code_review_roles_json")"
+dispatch_summary="$(build_dispatch_summary "$harness_writer_roles_json" "$code_writer_roles_json" "$code_review_roles_json")"
 
 classification_record_json="$(jq -cn \
     --arg repo "$(jq -r '.repo' "$policy_file")" \
@@ -1466,7 +1577,6 @@ classification_record_json="$(jq -cn \
     --arg candidate_orchestration_profile "$candidate_orchestration_profile" \
     --arg verification_profile "$verification_profile" \
     --argjson harness_writer_roles "$harness_writer_roles_json" \
-    --argjson spec_review_required "$spec_review_required" \
     --argjson code_writer_roles "$code_writer_roles_json" \
     --argjson code_review_roles "$code_review_roles_json" \
     --argjson orchestration_reasons "$orchestration_reasons_json" \
@@ -1501,7 +1611,6 @@ classification_record_json="$(jq -cn \
       orchestration_profile: $orchestration_profile,
       verification_profile: $verification_profile,
       harness_writer_roles: $harness_writer_roles,
-      spec_review_required: $spec_review_required,
       code_writer_roles: $code_writer_roles,
       code_review_roles: $code_review_roles,
       orchestration_reasons: $orchestration_reasons,
@@ -1631,7 +1740,7 @@ if [ "${#changed_files[@]}" -gt 0 ]; then
                 if [ "$hard_blocked" -eq 1 ]; then
                     record_blocked_command "$command_id" "forge test --match-path <targeted-test>" "run changed and mapped targeted tests" "$targeted_tests_json" "command blocked before execution by policy hard-block"
                 elif [ "${#targeted_test_files[@]}" -gt 0 ]; then
-                    run_looped_command "$command_id" "run changed and mapped targeted tests" "$targeted_tests_json" "forge test --match-path" "${targeted_test_files[@]}"
+                    run_targeted_tests_command "$command_id" "run changed and mapped targeted tests" "$targeted_tests_json" "${targeted_test_files[@]}"
                 else
                     record_not_applicable_command "$command_id" "forge test --match-path" "run changed and mapped targeted tests" "$targeted_tests_json" "no targeted tests selected"
                 fi
