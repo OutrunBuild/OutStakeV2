@@ -273,27 +273,10 @@ contract RouterMockLauncher {
     }
 }
 
-contract RouterMockUnderConsumingLauncher {
-    error RouterGenesisTransferFailed();
-
-    RouterMockUAsset internal immutable uAsset;
-
-    constructor(address uAsset_) {
-        uAsset = RouterMockUAsset(uAsset_);
-    }
-
-    function genesis(uint256, uint128 amountInUAsset, address) external {
-        uint256 consumedAmount = uint256(amountInUAsset) / 2;
-        if (!uAsset.transferFrom(msg.sender, address(this), consumedAmount)) revert RouterGenesisTransferFailed();
-    }
-}
-
 contract OutrunRouterTest is Test {
     bytes4 internal constant NATIVE_AMOUNT_MISMATCH_SELECTOR = bytes4(keccak256("NativeAmountMismatch()"));
     bytes4 internal constant INVALID_MEMEVERSE_LAUNCHER_SELECTOR =
         bytes4(keccak256("InvalidMemeverseLauncher(address)"));
-    bytes4 internal constant UNEXPECTED_REMAINING_ALLOWANCE_SELECTOR =
-        bytes4(keccak256("UnexpectedRemainingAllowance(address,address,uint256)"));
     RouterMockERC20 internal underlying;
     RouterMockSY internal sy;
     RouterMockUAsset internal uAsset;
@@ -515,21 +498,6 @@ contract OutrunRouterTest is Test {
         vm.prank(owner);
         vm.expectRevert(INVALID_PARAM_SELECTOR);
         router.mintSYFromToken(address(freshSy), address(underlying), owner, maxDepositAmount, 0);
-    }
-
-    function testGenesisBySYRevertsWhenLauncherUnderConsumesApprovedUAsset() external {
-        RouterMockUnderConsumingLauncher underConsumingLauncher = new RouterMockUnderConsumingLauncher(address(uAsset));
-
-        vm.prank(owner);
-        router.setMemeverseLauncher(address(underConsumingLauncher));
-
-        vm.prank(owner);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                UNEXPECTED_REMAINING_ALLOWANCE_SELECTOR, address(uAsset), address(underConsumingLauncher), 50e18
-            )
-        );
-        router.genesisBySY(address(position), 100e18, 30, 1, owner, 0);
     }
 
     function testPreviewWrapRedeemMatchesStakeManagerPreview() external {

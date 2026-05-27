@@ -157,6 +157,7 @@
 - router 在 stake 后校验 `amountInUAsset >= minUAssetMinted`；不足时整笔交易回退并报 `InsufficientUAssetMinted(...)`。
 - router 校验 `amountInUAsset <= type(uint128).max`。
 - 之后 router 授权 `memeverseLauncher`，再调用 `memeverseLauncher.genesis(verseId, uint128(amountInUAsset), genesisUser)`。
+- router 当前不会在 `genesis(...)` 返回后再检查 launcher 是否把本次 allowance 全部消费；这一步依赖当前 launcher 实现按传入的 `amountInUAsset` 精确拉取 `uAsset`。
 
 ### 8.2 genesisBySY
 
@@ -164,18 +165,20 @@
 - 后续和 `genesisByToken(...)` 一样，仍然调用 `SP.stake(...)` 创建 locked position。
 - router 在 stake 后校验 `amountInUAsset >= minUAssetMinted`；不足时整笔交易回退并报 `InsufficientUAssetMinted(...)`。
 - 最终也是由 launcher 拉走本次 stake 产出的 `uAsset`。
+- router 当前不会对 launcher 的 allowance 消费结果做额外断言；精确消费由当前 launcher 实现负责。
 
 ### 8.3 当前实现可确认的 genesis 语义
 
 - genesis 当前一定会生成 locked position，并写入 `deadline`。
 - genesis 当前不会走 wrap 池，所以不会增加 `syWrapStaking`。
-- 测试明确证明：`genesisBySY(...)` 后 `syWrapStaking == 0`，`syTotalStaking` 增加，`uAsset` 最终留在 launcher，不留在用户或 router。
+- 测试明确证明：`genesisBySY(...)` 成功后 `syWrapStaking == 0`，`syTotalStaking` 增加；在当前受信任的 launcher 实现下，本次 stake 产出的 `uAsset` 会被 launcher 拉走，而不是留在用户或 router。
 - genesis 入口没有 preview 参数；`genesisByToken(...)` 有 `minSyOut` 和 `minUAssetMinted`，`genesisBySY(...)` 有 `minUAssetMinted`。
 
 ### 8.4 launcher 配置校验
 
 - `OutrunRouter` 的 constructor 与 `setMemeverseLauncher(...)` 会在配置期 fail fast，拒绝 `address(0)` 和 `code.length == 0` 的 launcher 地址。
 - genesis 流程可把 `memeverseLauncher` 已通过配置期 code-size 校验视为前置条件。
+- router 对 launcher 的运行期信任边界目前只到“地址存在代码、当前实现按参数执行 `genesis(...)`”；router 不额外校验 launcher 是否把本次 allowance 精确消费完。
 - 这属于运行/测试可观测性加固，不改变 launcher 内部仍是外部信任边界这一语义。
 
 ## 9. preview 语义与 slippage 边界

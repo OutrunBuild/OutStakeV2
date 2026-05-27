@@ -22,7 +22,6 @@ import {IOutrunStakeManager} from "../position/interfaces/IOutrunStakeManager.so
 
 contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
     error InvalidMemeverseLauncher(address launcher);
-    error UnexpectedRemainingAllowance(address token, address spender, uint256 remainingAllowance);
 
     // Memeverse is the launch platform; this address is called during genesis flows.
     address public memeverseLauncher;
@@ -289,8 +288,7 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
 
     /**
      * @notice Approves exactly `amount` to `spender`, reverting on infinite approval.
-     * @dev uint256.max approval is rejected because leftover allowance after the operation
-     * masks whether the spender took the expected amount — exact approvals let callers detect partial consumption.
+     * @dev uint256.max approval is rejected so router flows always use finite, exact approvals.
      * Native token (NATIVE = address(0)) is a no-op.
      * @param token ERC20 token to approve (NATIVE for native currency, which skips approval).
      * @param spender Address granted the allowance.
@@ -301,23 +299,6 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         // Reject infinite approval — leftover allowance after the operation masks whether the spender took the expected amount.
         if (amount == type(uint256).max) revert InvalidParam();
         _safeApprove(token, spender, amount);
-    }
-
-    /**
-     * @notice Reverts if the spender has leftover allowance after an approve-and-consume operation.
-     * @dev Nonzero remaining allowance means the spender did not consume the full approved amount,
-     * which can indicate unexpected partial consumption.
-     * Native token (NATIVE = address(0)) is a no-op.
-     * @param token ERC20 token to check (NATIVE for native currency, which skips the check).
-     * @param spender Address whose allowance is verified to be fully consumed.
-     */
-    function _assertApprovalConsumed(address token, address spender) internal view {
-        if (token == NATIVE) return;
-        // Verify the spender consumed exactly the approved amount — leftover allowance means the spender took less than expected.
-        uint256 remainingAllowance = IERC20(token).allowance(address(this), spender);
-        if (remainingAllowance != 0) {
-            revert UnexpectedRemainingAllowance(token, spender, remainingAllowance);
-        }
     }
 
     /**
@@ -398,8 +379,6 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         // amountInUAsset is bounded by type(uint128).max immediately before this cast.
         // forge-lint: disable-next-line(unsafe-typecast)
         IMemeverseLauncher(memeverseLauncher).genesis(verseId, uint128(amountInUAsset), genesisUser);
-        // (5) Verify no leftover allowance — launcher must consume exactly the approved amount.
-        _assertApprovalConsumed(uAsset, memeverseLauncher);
     }
 
     /**
@@ -434,8 +413,6 @@ contract OutrunRouter is IOutrunRouter, TokenHelper, Ownable {
         // amountInUAsset is bounded by type(uint128).max immediately before this cast.
         // forge-lint: disable-next-line(unsafe-typecast)
         IMemeverseLauncher(memeverseLauncher).genesis(verseId, uint128(amountInUAsset), genesisUser);
-        // (5) Verify no leftover allowance — launcher must consume exactly the approved amount.
-        _assertApprovalConsumed(uAsset, memeverseLauncher);
     }
 
     /**
