@@ -22,6 +22,8 @@ Local current-work gate invocations must use exact changed-file input. Solidity 
 
 Gate verifies classification and command outcomes. Spec/document impact is decided before doc writers, `spec-reviewer`, code writers, or code reviewers are dispatched, not by gate.
 
+For `fast` verification, `targeted_tests` still starts from the exact file set selected by `test_mapping`, but the gate now tries to compress that file set into a single `forge test --match-contract <regex>` run. The gate builds the regex from `forge test --list --match-path <file>` results, validates that `forge test --list --match-contract <regex>` resolves to the same test-contract set, and only then runs the compressed command. If extraction or validation fails, the gate falls back to the original per-file `forge test --match-path <file>` loop.
+
 CI uses two entry paths:
 
 - When a reliable diff base exists, `script/harness/ci-gate-entrypoint.sh` computes `git diff --name-only`, expands those repo-relative paths into `gate:ci -- --changed-files <path> [<path> ...]`, and passes diff evidence through `CHANGE_CLASSIFIER_DIFF_FILE`.
