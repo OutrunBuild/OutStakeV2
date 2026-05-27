@@ -30,7 +30,6 @@ interface IOutrunStakeManager {
     error ExceedsWrapPoolBalance(uint256 requested, uint256 available);
     error NothingToDraw();
     error PartialRedeemMustLeaveDebt();
-    error SYTransferFailed();
     error InsufficientTokenOut(uint256 actual, uint256 minExpected);
 
     /**

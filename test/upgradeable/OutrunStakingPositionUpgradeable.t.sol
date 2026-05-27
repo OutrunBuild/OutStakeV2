@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import {Test} from "forge-std/Test.sol";
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {OutrunUniversalAssetsUpgradeable} from "../../src/assets/base/OutrunUniversalAssetsUpgradeable.sol";
 import {IOutrunStakeManager} from "../../src/position/interfaces/IOutrunStakeManager.sol";
 import {OutrunL2StakedTokenSYUpgradeable} from "../../src/yield/OutrunL2StakedTokenSYUpgradeable.sol";
@@ -24,6 +25,15 @@ contract PositionMockToken is ERC20 {
 contract PositionMockOracle {
     function getExchangeRate() external pure returns (uint256) {
         return 1e18;
+    }
+}
+
+contract RejectZeroTransferMockSY is MockSY {
+    constructor(address underlying_) MockSY(underlying_) {}
+
+    function transfer(address to, uint256 amount) public override(ERC20, IERC20) returns (bool) {
+        require(amount != 0, "zero transfer rejected");
+        return super.transfer(to, amount);
     }
 }
 
@@ -140,6 +150,44 @@ contract OutrunStakingPositionUpgradeableTest is Test {
         assertEq(ownerExcessSY, 0);
         assertEq(sy.balanceOf(keeper), 10e18);
         assertEq(uAsset.balanceOf(keeper), 0);
+    }
+
+    function testKeepRedeemSkipsOwnerZeroSyTransferForRejectingToken() external {
+        MockERC20 underlying = new MockERC20("Mock Asset", "mAST");
+        RejectZeroTransferMockSY zeroRejectSy = new RejectZeroTransferMockSY(address(underlying));
+        MockUAsset localUAsset = new MockUAsset();
+        OutrunStakingPositionUpgradeable localPosition = OutrunStakingPositionUpgradeable(
+            ProxyTestHelper.deploy(
+                address(new OutrunStakingPositionUpgradeable()),
+                abi.encodeCall(
+                    OutrunStakingPositionUpgradeable.initialize,
+                    (owner, 1, revenuePool, address(zeroRejectSy), address(localUAsset), keeper)
+                )
+            )
+        );
+
+        localUAsset.setMintingCap(address(localPosition), type(uint256).max);
+        zeroRejectSy.mintShares(user, 10e18);
+
+        vm.prank(user);
+        zeroRejectSy.approve(address(localPosition), type(uint256).max);
+
+        vm.prank(user);
+        (uint256 positionId,) = localPosition.stake(10e18, 30, user, keeper);
+
+        vm.warp(block.timestamp + 31 days);
+
+        vm.startPrank(keeper);
+        localUAsset.approve(address(localPosition), 10e18);
+        (uint256 burned, uint256 keeperPrincipalSY, uint256 ownerExcessSY) =
+            localPosition.keepRedeem(positionId, 10e18, keeper);
+        vm.stopPrank();
+
+        assertEq(burned, 10e18);
+        assertEq(keeperPrincipalSY, 10e18);
+        assertEq(ownerExcessSY, 0);
+        assertEq(zeroRejectSy.balanceOf(keeper), 10e18);
+        assertEq(zeroRejectSy.balanceOf(user), 0);
     }
 
     function testStakeThroughProxyAndUpgradePreservesState() external {
@@ -271,6 +319,36 @@ contract OutrunStakingPositionUpgradeableTest is Test {
         assertEq(mixedUAsset.balanceOf(user), 0);
         assertEq(mixedPosition.syWrapStaking(), 0);
         assertEq(mixedPosition.wrapUAssetDebt(), 0);
+    }
+
+    function testPreviewWrapRedeemRevertsWhenAmountExceedsWrapDebt() external {
+        vm.prank(user);
+        position.wrapStake(100e18, user);
+
+        vm.expectRevert(abi.encodeWithSelector(IOutrunStakeManager.ExceedsWrapDebt.selector, 101e18, 100e18));
+        position.previewWrapRedeem(101e18, address(sy));
+    }
+
+    function testPreviewWrapRedeemRevertsWhenPoolSYIsInsufficient() external {
+        _setupMixedDecimalsPosition();
+
+        vm.prank(user);
+        mixedPosition.wrapStake(1e6, user);
+
+        mixedSy.setExchangeRate(5e17);
+
+        vm.expectRevert(abi.encodeWithSelector(IOutrunStakeManager.ExceedsWrapPoolBalance.selector, 2e6, 1e6));
+        mixedPosition.previewWrapRedeem(1e18, address(mixedSy));
+    }
+
+    function testPreviewWrapRedeemRevertsWhenDustUAssetRoundsToZeroSY() external {
+        _setupMixedDecimalsPosition();
+
+        vm.prank(user);
+        mixedPosition.wrapStake(1e6, user);
+
+        vm.expectRevert(IOutrunStakeManager.ZeroInput.selector);
+        mixedPosition.previewWrapRedeem(1, address(mixedSy));
     }
 
     function testMixedDecimalsWrapRedeemRevertsWhenDustUAssetRoundsToZeroSY() external {

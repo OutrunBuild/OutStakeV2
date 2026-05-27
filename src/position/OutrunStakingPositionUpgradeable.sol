@@ -7,6 +7,7 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/U
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {IOutrunStakeManager} from "./interfaces/IOutrunStakeManager.sol";
 import {IStandardizedYield} from "../yield/interfaces/IStandardizedYield.sol";
@@ -30,6 +31,8 @@ contract OutrunStakingPositionUpgradeable is
     OwnableUpgradeable,
     UUPSUpgradeable
 {
+    using SafeERC20 for IERC20;
+
     /// @custom:storage-location erc7201:outrun.storage.OutrunStakingPosition
     struct OutrunStakingPositionStorage {
         address SY;
@@ -234,8 +237,7 @@ contract OutrunStakingPositionUpgradeable is
     /// @param tokenOut Desired output token address (SY itself or another token via SY.redeem).
     /// @return amountTokenOut Amount of tokenOut that would be received.
     function previewWrapRedeem(uint256 amountInUAsset, address tokenOut) public view returns (uint256 amountTokenOut) {
-        if (amountInUAsset == 0) revert ZeroInput();
-        uint256 amountInSY = _assetToSy(amountInUAsset);
+        uint256 amountInSY = _validateWrapRedeemAmount(amountInUAsset);
         amountTokenOut = _previewTokenOut(SY(), tokenOut, amountInSY);
     }
 
@@ -420,16 +422,10 @@ contract OutrunStakingPositionUpgradeable is
     {
         if (receiver == address(0) || amountInUAsset == 0) revert ZeroInput();
         OutrunStakingPositionStorage storage $ = _getStorage();
-        if (amountInUAsset > $.wrapUAssetDebt) revert ExceedsWrapDebt(amountInUAsset, $.wrapUAssetDebt);
 
         address _SY = SY();
         address _uAsset = uAsset();
-        // Floor conversion: wrapRedeem never releases more SY than the repaid debt accounts for.
-        uint256 amountInSY = _assetToSy(amountInUAsset);
-        // Dust uAsset inputs that round to zero SY must not burn debt without reducing staked SY.
-        if (amountInSY == 0) revert ZeroInput();
-        // Check that the wrap pool holds enough SY to cover the release.
-        if (amountInSY > $.syWrapStaking) revert ExceedsWrapPoolBalance(amountInSY, $.syWrapStaking);
+        uint256 amountInSY = _validateWrapRedeemAmount(amountInUAsset);
 
         unchecked {
             $.syTotalStaking -= amountInSY;
@@ -673,6 +669,20 @@ contract OutrunStakingPositionUpgradeable is
         UAssetBurned = _computeRedeemPositionDebt(positionUAssetMinted, syRedeemed, syStaked);
     }
 
+    function _validateWrapRedeemAmount(uint256 amountInUAsset) internal view returns (uint256 amountInSY) {
+        if (amountInUAsset == 0) revert ZeroInput();
+
+        OutrunStakingPositionStorage storage $ = _getStorage();
+        if (amountInUAsset > $.wrapUAssetDebt) revert ExceedsWrapDebt(amountInUAsset, $.wrapUAssetDebt);
+
+        // Floor conversion: wrapRedeem never releases more SY than the repaid debt accounts for.
+        amountInSY = _assetToSy(amountInUAsset);
+        // Dust uAsset inputs that round to zero SY must not burn debt without reducing staked SY.
+        if (amountInSY == 0) revert ZeroInput();
+        // Check that the wrap pool holds enough SY to cover the release.
+        if (amountInSY > $.syWrapStaking) revert ExceedsWrapPoolBalance(amountInSY, $.syWrapStaking);
+    }
+
     function _validateRedeemAmount(uint256 syStaked, uint256 syRedeemed) internal pure {
         if (syRedeemed == 0) revert ZeroInput();
         if (syRedeemed > syStaked) revert ExceedsPositionBalance(syRedeemed, syStaked);
@@ -725,7 +735,8 @@ contract OutrunStakingPositionUpgradeable is
     }
 
     function _transferSY(address _SY, address receiver, uint256 syAmount) internal {
-        if (!IERC20(_SY).transfer(receiver, syAmount)) revert SYTransferFailed();
+        if (syAmount == 0) return;
+        IERC20(_SY).safeTransfer(receiver, syAmount);
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}
