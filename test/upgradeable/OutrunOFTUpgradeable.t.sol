@@ -1,19 +1,31 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 import {Test} from "forge-std/Test.sol";
 import {MessagingFee, OFTLimit, SendParam} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 import {OutrunUniversalAssetsUpgradeable} from "../../src/assets/base/OutrunUniversalAssetsUpgradeable.sol";
+import {OutrunOFTUpgradeable} from "../../src/assets/omnichain/OutrunOFTUpgradeable.sol";
 import {OutrunRateLimiterUpgradeable} from "../../src/assets/omnichain/OutrunRateLimiterUpgradeable.sol";
 import {MockLzEndpoint} from "./helpers/OFTTestHelper.sol";
 import {ProxyTestHelper} from "./helpers/ProxyTestHelper.sol";
 
-contract OutrunUpgradeableOftHarness is OutrunUniversalAssetsUpgradeable {
+/// @dev Test harness that inherits from OutrunOFTUpgradeable (not OutrunUniversalAssetsUpgradeable)
+/// because `layout at erc7201(...)` prevents child contracts from declaring storage.
+/// Minting cap / mint calls go through the real OutrunUniversalAssetsUpgradeable proxy.
+contract OutrunUpgradeableOftHarness is OutrunOFTUpgradeable {
     uint256 public outflowCalls;
 
-    constructor(uint8 localDecimals, address lzEndpoint) OutrunUniversalAssetsUpgradeable(localDecimals, lzEndpoint) {}
+    constructor(uint8 localDecimals, address lzEndpoint) OutrunOFTUpgradeable(localDecimals, lzEndpoint) {}
+
+    /// @dev Minimal initialize — only sets up OFT, not minting cap logic.
+    function initialize(string calldata name_, string calldata symbol_, uint8 decimals_, address owner_)
+        external
+        initializer
+    {
+        __OutrunOFT_init(name_, symbol_, decimals_, owner_);
+    }
 
     function exposedDebit(address from, uint256 amountLD, uint256 minAmountLD, uint32 dstEid)
         external
@@ -34,6 +46,7 @@ contract OutrunUpgradeableOftHarness is OutrunUniversalAssetsUpgradeable {
 
 contract OutrunOFTUpgradeableTest is Test {
     OutrunUpgradeableOftHarness internal oft;
+    OutrunUniversalAssetsUpgradeable internal uAsset;
     MockLzEndpoint internal endpoint;
 
     address internal owner = address(0xA11CE);
@@ -42,18 +55,33 @@ contract OutrunOFTUpgradeableTest is Test {
 
     function setUp() external {
         endpoint = new MockLzEndpoint();
-        OutrunUpgradeableOftHarness implementation = new OutrunUpgradeableOftHarness(18, address(endpoint));
-        oft = OutrunUpgradeableOftHarness(
+
+        // Deploy the real OutrunUniversalAssetsUpgradeable for minting-cap tests.
+        OutrunUniversalAssetsUpgradeable uAssetImpl = new OutrunUniversalAssetsUpgradeable(18, address(endpoint));
+        uAsset = OutrunUniversalAssetsUpgradeable(
             ProxyTestHelper.deploy(
-                address(implementation),
+                address(uAssetImpl),
                 abi.encodeCall(OutrunUniversalAssetsUpgradeable.initialize, ("Outrun OFT", "OFT", 18, owner))
             )
         );
 
+        // Deploy the harness (OutrunOFTUpgradeable child) for debit/credit/outflow tests.
+        OutrunUpgradeableOftHarness implementation = new OutrunUpgradeableOftHarness(18, address(endpoint));
+        oft = OutrunUpgradeableOftHarness(
+            ProxyTestHelper.deploy(
+                address(implementation),
+                abi.encodeCall(OutrunUpgradeableOftHarness.initialize, ("Outrun OFT", "OFT", 18, owner))
+            )
+        );
+
+        // Set up the real uAsset for minting-cap tests.
         vm.prank(owner);
-        oft.setMintingCap(user, 100e18);
+        uAsset.setMintingCap(user, 100e18);
         vm.prank(user);
-        oft.mint(user, 100e18);
+        uAsset.mint(user, 100e18);
+
+        // Mint tokens on the harness for debit/credit/outflow tests.
+        oft.exposedCredit(user, 100e18, 0);
     }
 
     function testTokenAndApprovalRequiredUseLocalToken() external {

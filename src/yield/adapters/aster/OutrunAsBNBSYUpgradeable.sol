@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 // SY adapter for Aster asBNB (BSC). The yield-bearing token is asBNB.
 // Deposit paths: (a) native BNB → mint asBNB via AsBnbMinter, (b) slisBNB → mint asBNB via AsBnbMinter,
@@ -12,19 +12,14 @@ import {IYieldProxy} from "../../../integrations/aster/interfaces/IYieldProxy.so
 import {ArrayLib} from "../../../libraries/ArrayLib.sol";
 import {SYBaseUpgradeable} from "../../SYBaseUpgradeable.sol";
 
-contract OutrunAsBNBSYUpgradeable is SYBaseUpgradeable {
-    /// @custom:storage-location erc7201:outrun.storage.OutrunAsBNBSY
-    // forge-lint: disable-next-line(pascal-case-struct)
+contract OutrunAsBNBSYUpgradeable layout at erc7201("outrun.storage.OutrunAsBNBSY") is SYBaseUpgradeable {
     struct OutrunAsBNBSYStorage {
         address AS_BNB_MINTER;
         address SLIS_BNB;
         address YIELD_PROXY;
         address STAKE_MANAGER;
     }
-
-    // keccak256(abi.encode(uint256(keccak256("outrun.storage.OutrunAsBNBSY")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant OUTRUN_AS_BNB_SY_STORAGE_LOCATION =
-        0x037ff1f0c947b2628c5e451ad69209eea6dad0b9c31bcbf8186cb85263174300;
+    OutrunAsBNBSYStorage private outrunAsBNBSYStorage;
 
     error AsBnbMintQueued();
     error AsBnbMintZeroShares();
@@ -44,11 +39,10 @@ contract OutrunAsBNBSYUpgradeable is SYBaseUpgradeable {
         __SYBase_init("SY Aster asBNB", "SY asBNB", asBNB_, owner_);
         (address yieldProxy, address stakeManager) = _validateMinter(asBNB_, slisBNB_, asBnbMinter_);
         // Store the validated integration addresses used by deposit and preview paths.
-        OutrunAsBNBSYStorage storage $ = _getStorage();
-        $.AS_BNB_MINTER = asBnbMinter_;
-        $.SLIS_BNB = slisBNB_;
-        $.YIELD_PROXY = yieldProxy;
-        $.STAKE_MANAGER = stakeManager;
+        outrunAsBNBSYStorage.AS_BNB_MINTER = asBnbMinter_;
+        outrunAsBNBSYStorage.SLIS_BNB = slisBNB_;
+        outrunAsBNBSYStorage.YIELD_PROXY = yieldProxy;
+        outrunAsBNBSYStorage.STAKE_MANAGER = stakeManager;
     }
 
     function _validateMinter(address asBNB_, address slisBNB_, address asBnbMinter_)
@@ -68,35 +62,28 @@ contract OutrunAsBNBSYUpgradeable is SYBaseUpgradeable {
         if (stakeManager == address(0)) revert InvalidStakeManager();
     }
 
-    function _getStorage() private pure returns (OutrunAsBNBSYStorage storage $) {
-        // slither-disable-next-line assembly
-        assembly {
-            $.slot := OUTRUN_AS_BNB_SY_STORAGE_LOCATION
-        }
-    }
-
     /// @notice Returns the AsBnbMinter contract address.
     /// @return The AsBnbMinter address.
     function AS_BNB_MINTER() public view returns (address) {
-        return _getStorage().AS_BNB_MINTER;
+        return outrunAsBNBSYStorage.AS_BNB_MINTER;
     }
 
     /// @notice Returns the slisBNB token address.
     /// @return The slisBNB token address.
     function SLIS_BNB() public view returns (address) {
-        return _getStorage().SLIS_BNB;
+        return outrunAsBNBSYStorage.SLIS_BNB;
     }
 
     /// @notice Returns the YieldProxy contract address.
     /// @return The YieldProxy address.
     function YIELD_PROXY() public view returns (address) {
-        return _getStorage().YIELD_PROXY;
+        return outrunAsBNBSYStorage.YIELD_PROXY;
     }
 
     /// @notice Returns the Lista StakeManager contract address.
     /// @return The StakeManager address.
     function STAKE_MANAGER() public view returns (address) {
-        return _getStorage().STAKE_MANAGER;
+        return outrunAsBNBSYStorage.STAKE_MANAGER;
     }
 
     // slither-disable-next-line reentrancy-eth,reentrancy-no-eth

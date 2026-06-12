@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 // SY (Standardized Yield) is a wrapper token that represents a yield-bearing position.
 // Users deposit input tokens and receive SY shares. The exchange rate between SY and the

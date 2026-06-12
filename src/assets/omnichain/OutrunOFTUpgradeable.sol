@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 // LayerZero Omnichain Fungible Token (OFT) base.
 // Combines ERC20 with cross-chain transfer capability.

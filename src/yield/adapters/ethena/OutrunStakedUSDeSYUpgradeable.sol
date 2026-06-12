@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 // SY adapter for Ethena sUSDe. The yield-bearing token is sUSDe (staked USDe — an ERC4626 vault).
 // Deposit paths: (a) USDe → deposit into 4626 vault to get sUSDe shares, (b) existing sUSDe directly.
@@ -10,16 +10,12 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {SYBaseUpgradeable} from "../../SYBaseUpgradeable.sol";
 import {ArrayLib} from "../../../libraries/ArrayLib.sol";
 
-contract OutrunStakedUSDeSYUpgradeable is SYBaseUpgradeable {
-    /// @custom:storage-location erc7201:outrun.storage.OutrunStakedUSDeSY
-    // forge-lint: disable-next-line(pascal-case-struct)
+// solhint-disable-next-line gas-small-strings
+contract OutrunStakedUSDeSYUpgradeable layout at erc7201("outrun.storage.OutrunStakedUSDeSY") is SYBaseUpgradeable {
     struct OutrunStakedUSDeSYStorage {
         address USDE;
     }
-
-    // keccak256(abi.encode(uint256(keccak256("outrun.storage.OutrunStakedUSDeSY")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant OUTRUN_STAKED_USDE_SY_STORAGE_LOCATION =
-        0xc6349914f41ee852ec6671cc14b058a0b3e3b25674e5c52708e581f58824ce00;
+    OutrunStakedUSDeSYStorage private outrunStakedUSDeSYStorage;
 
     /// @notice Initializes the SY adapter for Ethena sUSDe.
     /// @param owner_ The contract owner address.
@@ -28,20 +24,13 @@ contract OutrunStakedUSDeSYUpgradeable is SYBaseUpgradeable {
     function initialize(address owner_, address USDe_, address sUSDe_) external initializer {
         if (USDe_ == address(0)) revert SYZeroAddress();
         __SYBase_init("SY Ethena sUSDe", "SY sUSDe", sUSDe_, owner_);
-        _getStorage().USDE = USDe_;
-    }
-
-    function _getStorage() private pure returns (OutrunStakedUSDeSYStorage storage $) {
-        // slither-disable-next-line assembly
-        assembly {
-            $.slot := OUTRUN_STAKED_USDE_SY_STORAGE_LOCATION
-        }
+        outrunStakedUSDeSYStorage.USDE = USDe_;
     }
 
     /// @notice Returns the address of the USDe stablecoin.
     /// @return The USDe token address.
     function USDE() public view returns (address) {
-        return _getStorage().USDE;
+        return outrunStakedUSDeSYStorage.USDE;
     }
 
     /// @notice Deposits USDe or sUSDe: USDe is deposited into the 4626 vault, sUSDe is taken 1:1.

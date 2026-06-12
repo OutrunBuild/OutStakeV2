@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 // solhint-disable no-console,check-send-result
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 import {IOAppCore} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppCore.sol";
 import {ILayerZeroEndpointV2} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";

@@ -85,6 +85,10 @@ contract YieldDeployMockUniversalAsset {
         lastMintingCap = mintingCap;
         ++capUpdateCount;
     }
+
+    function decimals() external pure returns (uint8) {
+        return 18;
+    }
 }
 
 contract YieldDeployScriptUpgradeableTest is Test {

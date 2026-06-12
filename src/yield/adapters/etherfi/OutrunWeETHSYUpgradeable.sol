@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 import {SYBaseUpgradeable} from "../../SYBaseUpgradeable.sol";
 import {ArrayLib} from "../../../libraries/ArrayLib.sol";
@@ -14,18 +14,13 @@ import {IDepositAdapter} from "../../../integrations/etherfi/interfaces/IDeposit
 //   (b) eETH → wrap to weETH,
 //   (c) existing weETH directly.
 // Exchange rate comes from LiquidityPool.amountForShare.
-contract OutrunWeETHSYUpgradeable is SYBaseUpgradeable {
-    /// @custom:storage-location erc7201:outrun.storage.OutrunWeETHSY
-    // forge-lint: disable-next-line(pascal-case-struct)
+contract OutrunWeETHSYUpgradeable layout at erc7201("outrun.storage.OutrunWeETHSY") is SYBaseUpgradeable {
     struct OutrunWeETHSYStorage {
         address EETH;
         address DEPOSIT_ADAPTER;
         address LIQUIDITY_POOL;
     }
-
-    // keccak256(abi.encode(uint256(keccak256("outrun.storage.OutrunWeETHSY")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant OUTRUN_WE_ETH_SY_STORAGE_LOCATION =
-        0x7c889822051b104e8bf752526ae310e0de27a4e1749297b1b10b3e2ca8c5af00;
+    OutrunWeETHSYStorage private outrunWeETHSYStorage;
 
     /// @param owner_ initial owner of the SY contract
     /// @param eETH_ EtherFi eETH token address
@@ -40,35 +35,27 @@ contract OutrunWeETHSYUpgradeable is SYBaseUpgradeable {
             revert SYZeroAddress();
         }
         __SYBase_init("SY Etherfi weETH", "SY weETH", weETH_, owner_);
-        OutrunWeETHSYStorage storage $ = _getStorage();
-        $.EETH = eETH_;
-        $.DEPOSIT_ADAPTER = depositAdapter_;
-        $.LIQUIDITY_POOL = liquidityPool_;
-    }
-
-    function _getStorage() private pure returns (OutrunWeETHSYStorage storage $) {
-        // slither-disable-next-line assembly
-        assembly {
-            $.slot := OUTRUN_WE_ETH_SY_STORAGE_LOCATION
-        }
+        outrunWeETHSYStorage.EETH = eETH_;
+        outrunWeETHSYStorage.DEPOSIT_ADAPTER = depositAdapter_;
+        outrunWeETHSYStorage.LIQUIDITY_POOL = liquidityPool_;
     }
 
     /// @notice The EtherFi eETH token address
     /// @return address of the eETH ERC20 token
     function EETH() public view returns (address) {
-        return _getStorage().EETH;
+        return outrunWeETHSYStorage.EETH;
     }
 
     /// @notice EtherFi DepositAdapter for ETH to weETH conversion
     /// @return address of the DepositAdapter contract
     function DEPOSIT_ADAPTER() public view returns (address) {
-        return _getStorage().DEPOSIT_ADAPTER;
+        return outrunWeETHSYStorage.DEPOSIT_ADAPTER;
     }
 
     /// @notice EtherFi LiquidityPool used for exchange rate queries
     /// @return address of the LiquidityPool contract
     function LIQUIDITY_POOL() public view returns (address) {
-        return _getStorage().LIQUIDITY_POOL;
+        return outrunWeETHSYStorage.LIQUIDITY_POOL;
     }
 
     /// @notice Three deposit paths: NATIVE -> Adapter, EETH -> wrap, weETH -> 1:1.

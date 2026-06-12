@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 // L2 SY adapter where the yield-bearing token itself is the SY. Deposit and redeem are 1:1
 // with the underlying token. The exchange rate comes from a configured oracle (since the
@@ -9,8 +9,11 @@ import {SYBaseUpgradeable} from "./SYBaseUpgradeable.sol";
 import {ArrayLib} from "../libraries/ArrayLib.sol";
 import {IExchangeRateOracle} from "../libraries/oracle/interfaces/IExchangeRateOracle.sol";
 
-contract OutrunL2StakedTokenSYUpgradeable is SYBaseUpgradeable {
-    /// @custom:storage-location erc7201:outrun.storage.OutrunL2StakedTokenSY
+// solhint-disable-next-line gas-small-strings
+contract OutrunL2StakedTokenSYUpgradeable layout at erc7201("outrun.storage.OutrunL2StakedTokenSY")
+    is
+    SYBaseUpgradeable
+{
     // forge-lint: disable-next-line(pascal-case-struct)
     struct OutrunL2StakedTokenSYStorage {
         address exchangeRateOracle;
@@ -20,9 +23,7 @@ contract OutrunL2StakedTokenSYUpgradeable is SYBaseUpgradeable {
         uint8 underlyingAssetOnEthDecimals;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("outrun.storage.OutrunL2StakedTokenSY")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant OUTRUN_L2_STAKED_TOKEN_SY_STORAGE_LOCATION =
-        0xc47406d15de2f1a441454f67ed7478fdea0ecc904b6c2e82cf019a344492a300;
+    OutrunL2StakedTokenSYStorage private outrunL2StakedTokenSYStorage;
 
     event SetExchangeRateOracle(address indexed oldOracle, address indexed newOracle);
 
@@ -45,30 +46,23 @@ contract OutrunL2StakedTokenSYUpgradeable is SYBaseUpgradeable {
     ) external initializer {
         __SYBase_init(name_, symbol_, token_, owner_);
         if (exchangeRateOracle_ == address(0) || underlyingAssetOnEthAddr_ == address(0)) revert SYZeroAddress();
-        OutrunL2StakedTokenSYStorage storage $ = _getStorage();
+        OutrunL2StakedTokenSYStorage storage $ = outrunL2StakedTokenSYStorage;
         $.exchangeRateOracle = exchangeRateOracle_;
         $.underlyingAssetOnEthAddr = underlyingAssetOnEthAddr_;
         $.underlyingAssetOnEthDecimals = underlyingAssetOnEthDecimals_;
     }
 
-    function _getStorage() private pure returns (OutrunL2StakedTokenSYStorage storage $) {
-        // slither-disable-next-line assembly
-        assembly {
-            $.slot := OUTRUN_L2_STAKED_TOKEN_SY_STORAGE_LOCATION
-        }
-    }
-
     /// @notice Returns the address of the exchange rate oracle.
     /// @return The oracle address that reports the canonical-asset-per-SY exchange rate.
     function exchangeRateOracle() public view returns (address) {
-        return _getStorage().exchangeRateOracle;
+        return outrunL2StakedTokenSYStorage.exchangeRateOracle;
     }
 
     /// @notice Updates the exchange rate oracle address. Owner-only.
     /// @param newOracle The new oracle address. Must not be zero.
     function setExchangeRateOracle(address newOracle) external onlyOwner {
         if (newOracle == address(0)) revert SYZeroAddress();
-        OutrunL2StakedTokenSYStorage storage $ = _getStorage();
+        OutrunL2StakedTokenSYStorage storage $ = outrunL2StakedTokenSYStorage;
         address oldOracle = $.exchangeRateOracle;
         $.exchangeRateOracle = newOracle;
         emit SetExchangeRateOracle(oldOracle, newOracle);
@@ -138,7 +132,7 @@ contract OutrunL2StakedTokenSYUpgradeable is SYBaseUpgradeable {
     /// @return assetAddress Address of the underlying asset on Ethereum mainnet.
     /// @return assetDecimals Decimals of the underlying asset on Ethereum mainnet.
     function assetInfo() external view returns (AssetType assetType, address assetAddress, uint8 assetDecimals) {
-        OutrunL2StakedTokenSYStorage storage $ = _getStorage();
+        OutrunL2StakedTokenSYStorage storage $ = outrunL2StakedTokenSYStorage;
         return (AssetType.TOKEN, $.underlyingAssetOnEthAddr, $.underlyingAssetOnEthDecimals);
     }
 }

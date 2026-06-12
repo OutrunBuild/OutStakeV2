@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 interface IPSM3 {
     /// @notice Swaps an exact amount of `assetIn` for as much `assetOut` as the PSM returns.

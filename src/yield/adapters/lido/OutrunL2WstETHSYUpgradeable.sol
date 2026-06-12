@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 // L2 wstETH SY adapter. On L2, wstETH balance doesn't accrue staking rewards
 // (rewards accrue on Ethereum mainnet). The exchange rate comes from an oracle
@@ -10,9 +10,7 @@ import {SYBaseUpgradeable} from "../../SYBaseUpgradeable.sol";
 import {ArrayLib} from "../../../libraries/ArrayLib.sol";
 import {IExchangeRateOracle} from "../../../libraries/oracle/interfaces/IExchangeRateOracle.sol";
 
-contract OutrunL2WstETHSYUpgradeable is SYBaseUpgradeable {
-    /// @custom:storage-location erc7201:outrun.storage.OutrunL2WstETHSY
-    // forge-lint: disable-next-line(pascal-case-struct)
+contract OutrunL2WstETHSYUpgradeable layout at erc7201("outrun.storage.OutrunL2WstETHSY") is SYBaseUpgradeable {
     struct OutrunL2WstETHSYStorage {
         // Oracle reports the current L1 wstETH exchange rate.
         // Needed because L2 wstETH balance is static — the oracle
@@ -27,10 +25,7 @@ contract OutrunL2WstETHSYUpgradeable is SYBaseUpgradeable {
         address underlyingAssetOnEthAddr;
         uint8 underlyingAssetOnEthDecimals;
     }
-
-    // keccak256(abi.encode(uint256(keccak256("outrun.storage.OutrunL2WstETHSY")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant OUTRUN_L2_WST_ETH_SY_STORAGE_LOCATION =
-        0x7e7baed09ce3e69f5f6da116459da34887eb64a288faa154ae38a8995cda0000;
+    OutrunL2WstETHSYStorage private outrunL2WstETHSYStorage;
 
     event SetExchangeRateOracle(address indexed oldOracle, address indexed newOracle);
 
@@ -43,28 +38,19 @@ contract OutrunL2WstETHSYUpgradeable is SYBaseUpgradeable {
     ) external initializer {
         if (exchangeRateOracle_ == address(0) || underlyingAssetOnEthAddr_ == address(0)) revert SYZeroAddress();
         __SYBase_init("SY Lido wstETH", "SY wstETH", wstETH_, owner_);
-        OutrunL2WstETHSYStorage storage $ = _getStorage();
-        $.exchangeRateOracle = exchangeRateOracle_;
-        $.underlyingAssetOnEthAddr = underlyingAssetOnEthAddr_;
-        $.underlyingAssetOnEthDecimals = underlyingAssetOnEthDecimals_;
-    }
-
-    function _getStorage() private pure returns (OutrunL2WstETHSYStorage storage $) {
-        // slither-disable-next-line assembly
-        assembly {
-            $.slot := OUTRUN_L2_WST_ETH_SY_STORAGE_LOCATION
-        }
+        outrunL2WstETHSYStorage.exchangeRateOracle = exchangeRateOracle_;
+        outrunL2WstETHSYStorage.underlyingAssetOnEthAddr = underlyingAssetOnEthAddr_;
+        outrunL2WstETHSYStorage.underlyingAssetOnEthDecimals = underlyingAssetOnEthDecimals_;
     }
 
     function exchangeRateOracle() public view returns (address) {
-        return _getStorage().exchangeRateOracle;
+        return outrunL2WstETHSYStorage.exchangeRateOracle;
     }
 
     function setExchangeRateOracle(address newOracle) external onlyOwner {
         if (newOracle == address(0)) revert SYZeroAddress();
-        OutrunL2WstETHSYStorage storage $ = _getStorage();
-        address oldOracle = $.exchangeRateOracle;
-        $.exchangeRateOracle = newOracle;
+        address oldOracle = outrunL2WstETHSYStorage.exchangeRateOracle;
+        outrunL2WstETHSYStorage.exchangeRateOracle = newOracle;
         emit SetExchangeRateOracle(oldOracle, newOracle);
     }
 
@@ -110,7 +96,10 @@ contract OutrunL2WstETHSYUpgradeable is SYBaseUpgradeable {
     }
 
     function assetInfo() external view returns (AssetType assetType, address assetAddress, uint8 assetDecimals) {
-        OutrunL2WstETHSYStorage storage $ = _getStorage();
-        return (AssetType.TOKEN, $.underlyingAssetOnEthAddr, $.underlyingAssetOnEthDecimals);
+        return (
+            AssetType.TOKEN,
+            outrunL2WstETHSYStorage.underlyingAssetOnEthAddr,
+            outrunL2WstETHSYStorage.underlyingAssetOnEthDecimals
+        );
     }
 }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 // L2 SY adapter for Sky sUSDS. Uses PSM3 (Peg Stability Module) to swap between USDC, USDS, and sUSDS.
 // Deposit paths: USDC → swap to sUSDS via PSM3, USDS → swap to sUSDS via PSM3, or sUSDS directly.
@@ -9,18 +9,14 @@ import {SYBaseUpgradeable} from "../../SYBaseUpgradeable.sol";
 import {ArrayLib} from "../../../libraries/ArrayLib.sol";
 import {IPSM3} from "../../../integrations/sky/interfaces/IPSM3.sol";
 
-contract OutrunL2StakedUsdsSYUpgradeable is SYBaseUpgradeable {
-    /// @custom:storage-location erc7201:outrun.storage.OutrunL2StakedUsdsSY
-    // forge-lint: disable-next-line(pascal-case-struct)
+// solhint-disable-next-line gas-small-strings
+contract OutrunL2StakedUsdsSYUpgradeable layout at erc7201("outrun.storage.OutrunL2StakedUsdsSY") is SYBaseUpgradeable {
     struct OutrunL2StakedUsdsSYStorage {
         address USDC;
         address USDS;
         address PSM3;
     }
-
-    // keccak256(abi.encode(uint256(keccak256("outrun.storage.OutrunL2StakedUsdsSY")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant OUTRUN_L2_STAKED_USDS_SY_STORAGE_LOCATION =
-        0x87ae3998ef315b555888805db0bb7dcff6c26c66153e8971d42ff237c1174500;
+    OutrunL2StakedUsdsSYStorage private outrunL2StakedUsdsSYStorage;
 
     function initialize(address owner_, address USDC_, address USDS_, address sUSDS_, address PSM3_)
         external
@@ -28,32 +24,25 @@ contract OutrunL2StakedUsdsSYUpgradeable is SYBaseUpgradeable {
     {
         if (USDC_ == address(0) || USDS_ == address(0) || PSM3_ == address(0)) revert SYZeroAddress();
         __SYBase_init("SY Sky sUSDS", "SY sUSDS", sUSDS_, owner_);
-        OutrunL2StakedUsdsSYStorage storage $ = _getStorage();
+        OutrunL2StakedUsdsSYStorage storage $ = outrunL2StakedUsdsSYStorage;
         $.USDC = USDC_;
         $.USDS = USDS_;
         $.PSM3 = PSM3_;
     }
 
-    function _getStorage() private pure returns (OutrunL2StakedUsdsSYStorage storage $) {
-        // slither-disable-next-line assembly
-        assembly {
-            $.slot := OUTRUN_L2_STAKED_USDS_SY_STORAGE_LOCATION
-        }
-    }
-
     function USDC() public view returns (address) {
         // Stablecoin input (USDC on L2)
-        return _getStorage().USDC;
+        return outrunL2StakedUsdsSYStorage.USDC;
     }
 
     function USDS() public view returns (address) {
         // Sky's native stablecoin (also on L2 via bridge)
-        return _getStorage().USDS;
+        return outrunL2StakedUsdsSYStorage.USDS;
     }
 
     function PSM3() public view returns (address) {
         // Peg Stability Module that handles swaps between USDC, USDS, and sUSDS
-        return _getStorage().PSM3;
+        return outrunL2StakedUsdsSYStorage.PSM3;
     }
 
     function _deposit(address tokenIn, uint256 amountDeposited) internal override returns (uint256 amountSharesOut) {

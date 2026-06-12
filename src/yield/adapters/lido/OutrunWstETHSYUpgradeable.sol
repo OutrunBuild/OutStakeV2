@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
@@ -15,32 +15,20 @@ import {SYBaseUpgradeable} from "../../SYBaseUpgradeable.sol";
 //   (b) existing stETH → wrap to wstETH,
 //   (c) existing wstETH directly.
 // Exchange rate from wstETH.stEthPerToken().
-contract OutrunWstETHSYUpgradeable is SYBaseUpgradeable {
-    /// @custom:storage-location erc7201:outrun.storage.OutrunWstETHSY
-    // forge-lint: disable-next-line(pascal-case-struct)
+contract OutrunWstETHSYUpgradeable layout at erc7201("outrun.storage.OutrunWstETHSY") is SYBaseUpgradeable {
     struct OutrunWstETHSYStorage {
         address STETH;
     }
-
-    // keccak256(abi.encode(uint256(keccak256("outrun.storage.OutrunWstETHSY")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant OUTRUN_WST_ETH_SY_STORAGE_LOCATION =
-        0x98c280cd6bacd9bd0502068e8dcfd5ea32813f0670f2ca30214fa4ffb7350000;
+    OutrunWstETHSYStorage private outrunWstETHSYStorage;
 
     function initialize(address owner_, address stETH_, address wstETH_) external initializer {
         if (stETH_ == address(0) || wstETH_ == address(0)) revert SYZeroAddress();
         __SYBase_init("SY Lido wstETH", "SY wstETH", wstETH_, owner_);
-        _getStorage().STETH = stETH_;
-    }
-
-    function _getStorage() private pure returns (OutrunWstETHSYStorage storage $) {
-        // slither-disable-next-line assembly
-        assembly {
-            $.slot := OUTRUN_WST_ETH_SY_STORAGE_LOCATION
-        }
+        outrunWstETHSYStorage.STETH = stETH_;
     }
 
     function STETH() public view returns (address) {
-        return _getStorage().STETH;
+        return outrunWstETHSYStorage.STETH;
     }
 
     // slither-disable-next-line reentrancy-eth,reentrancy-benign

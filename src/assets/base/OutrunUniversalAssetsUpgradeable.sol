@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 // uAsset (universal asset) — a receipt token minted by staking positions.
 // Each minter (a StakeManager contract) has its own debt tracking:
@@ -15,15 +15,20 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/U
 import {IUniversalAssets} from "../interfaces/IUniversalAssets.sol";
 import {OutrunOFTUpgradeable} from "../omnichain/OutrunOFTUpgradeable.sol";
 
-contract OutrunUniversalAssetsUpgradeable is Initializable, IUniversalAssets, OutrunOFTUpgradeable, UUPSUpgradeable {
-    /// @custom:storage-location erc7201:outrun.storage.OutrunUniversalAssets
+contract OutrunUniversalAssetsUpgradeable 
+    // solhint-disable-next-line gas-small-strings
+    layout at erc7201("outrun.storage.OutrunUniversalAssets")
+    is
+    Initializable,
+    IUniversalAssets,
+    OutrunOFTUpgradeable,
+    UUPSUpgradeable
+{
     struct OutrunUniversalAssetsStorage {
         mapping(address minter => MintingStatus) mintingStatusTable;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("outrun.storage.OutrunUniversalAssets")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant OUTRUN_UNIVERSAL_ASSETS_STORAGE_LOCATION =
-        0x2b82e9d5002467e1c5131297c0670c5f52b39ef4cd7112616d88ce4844484100;
+    OutrunUniversalAssetsStorage private outrunUniversalAssetsStorage;
 
     error InvalidOFTUpgradeConfig();
     error DecimalsMismatch(uint8 expected, uint8 provided);
@@ -47,16 +52,8 @@ contract OutrunUniversalAssetsUpgradeable is Initializable, IUniversalAssets, Ou
         __OutrunOFT_init(name_, symbol_, decimals_, owner_);
     }
 
-    function _getOutrunUniversalAssetsStorage() private pure returns (OutrunUniversalAssetsStorage storage $) {
-        // slither-disable-next-line assembly
-        // solhint-disable-next-line no-inline-assembly
-        assembly {
-            $.slot := OUTRUN_UNIVERSAL_ASSETS_STORAGE_LOCATION
-        }
-    }
-
     function _mintingStatus(address minter) private view returns (MintingStatus storage) {
-        return _getOutrunUniversalAssetsStorage().mintingStatusTable[minter];
+        return outrunUniversalAssetsStorage.mintingStatusTable[minter];
     }
 
     /// @notice Returns the full minting status for a minter, including cap and outstanding debt.

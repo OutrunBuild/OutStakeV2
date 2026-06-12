@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
@@ -16,17 +16,13 @@ import {SYBaseUpgradeable} from "../../SYBaseUpgradeable.sol";
 //   (b) deposit existing aToken directly as SY.
 // Exchange rate uses Aave's liquidity index (ray-scaled) divided by 1e9
 // to get the 1e18-scaled rate.
-contract OutrunAaveV3SYUpgradeable is SYBaseUpgradeable {
-    /// @custom:storage-location erc7201:outrun.storage.OutrunAaveV3SY
-    // forge-lint: disable-next-line(pascal-case-struct)
+contract OutrunAaveV3SYUpgradeable layout at erc7201("outrun.storage.OutrunAaveV3SY") is SYBaseUpgradeable {
     struct OutrunAaveV3SYStorage {
         address underlying;
         address aavePool;
     }
+    OutrunAaveV3SYStorage private outrunAaveV3SYStorage;
 
-    // keccak256(abi.encode(uint256(keccak256("outrun.storage.OutrunAaveV3SY")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant OUTRUN_AAVE_V3_SY_STORAGE_LOCATION =
-        0x72217a3ea688bfbd31b48bb32b412c4301717e3e5d9754c566b8b7af0c910a00;
     error AaveZeroShares();
 
     /// @param name_ SY token name
@@ -43,28 +39,20 @@ contract OutrunAaveV3SYUpgradeable is SYBaseUpgradeable {
     ) external initializer {
         if (aavePool_ == address(0)) revert SYZeroAddress();
         __SYBase_init(name_, symbol_, aToken_, owner_);
-        OutrunAaveV3SYStorage storage $ = _getStorage();
-        $.underlying = IAToken(aToken_).UNDERLYING_ASSET_ADDRESS();
-        $.aavePool = aavePool_;
-    }
-
-    function _getStorage() private pure returns (OutrunAaveV3SYStorage storage $) {
-        // slither-disable-next-line assembly
-        assembly {
-            $.slot := OUTRUN_AAVE_V3_SY_STORAGE_LOCATION
-        }
+        outrunAaveV3SYStorage.underlying = IAToken(aToken_).UNDERLYING_ASSET_ADDRESS();
+        outrunAaveV3SYStorage.aavePool = aavePool_;
     }
 
     /// @notice The underlying asset that this SY represents (e.g., USDC for aUSDC)
     /// @return address of the underlying ERC20 token
     function underlying() public view returns (address) {
-        return _getStorage().underlying;
+        return outrunAaveV3SYStorage.underlying;
     }
 
     /// @notice The Aave V3 pool used for supply/withdraw operations
     /// @return address of the Aave V3 pool contract
     function aavePool() public view returns (address) {
-        return _getStorage().aavePool;
+        return outrunAaveV3SYStorage.aavePool;
     }
 
     /// @notice Deposit: supply underlying to Aave or wrap aToken.

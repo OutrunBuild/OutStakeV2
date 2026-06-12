@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 // SY adapter for Lista slisBNB (BSC). The yield-bearing token is slisBNB.
 // Deposit path: native BNB → deposit into Lista StakeManager to receive slisBNB.
@@ -9,16 +9,11 @@ import {IListaStakeManager} from "../../../integrations/lista/interfaces/IListaS
 import {ArrayLib} from "../../../libraries/ArrayLib.sol";
 import {SYBaseUpgradeable} from "../../SYBaseUpgradeable.sol";
 
-contract OutrunSlisBNBSYUpgradeable is SYBaseUpgradeable {
-    /// @custom:storage-location erc7201:outrun.storage.OutrunSlisBNBSY
-    // forge-lint: disable-next-line(pascal-case-struct)
+contract OutrunSlisBNBSYUpgradeable layout at erc7201("outrun.storage.OutrunSlisBNBSY") is SYBaseUpgradeable {
     struct OutrunSlisBNBSYStorage {
         address STAKE_MANAGER;
     }
-
-    // keccak256(abi.encode(uint256(keccak256("outrun.storage.OutrunSlisBNBSY")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant OUTRUN_SLIS_BNB_SY_STORAGE_LOCATION =
-        0x7eac519ceef6d43eab45b04bb8d5ed66a747bcd5dc85b70bf40db56a58a1eb00;
+    OutrunSlisBNBSYStorage private outrunSlisBNBSYStorage;
 
     error InvalidStakeManager();
     error StakeManagerDepositZero();
@@ -29,18 +24,11 @@ contract OutrunSlisBNBSYUpgradeable is SYBaseUpgradeable {
         if (slisBNB_ == address(0) || stakeManager_ == address(0)) revert SYZeroAddress();
         if (IListaStakeManager(stakeManager_).convertSnBnbToBnb(1 ether) < 1 ether) revert InvalidStakeManager();
         __SYBase_init("SY Lista slisBNB", "SY slisBNB", slisBNB_, owner_);
-        _getStorage().STAKE_MANAGER = stakeManager_;
-    }
-
-    function _getStorage() private pure returns (OutrunSlisBNBSYStorage storage $) {
-        // slither-disable-next-line assembly
-        assembly {
-            $.slot := OUTRUN_SLIS_BNB_SY_STORAGE_LOCATION
-        }
+        outrunSlisBNBSYStorage.STAKE_MANAGER = stakeManager_;
     }
 
     function STAKE_MANAGER() public view returns (address) {
-        return _getStorage().STAKE_MANAGER;
+        return outrunSlisBNBSYStorage.STAKE_MANAGER;
     }
 
     // Deposit BNB into Lista StakeManager and measure received slisBNB by balance difference.

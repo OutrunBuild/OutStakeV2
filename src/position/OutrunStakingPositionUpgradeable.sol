@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
@@ -23,7 +23,9 @@ import {AutoIncrementIdUpgradeable} from "../libraries/AutoIncrementIdUpgradeabl
 /// uAsset = universal asset receipt token.
 /// The contract converts between SY and uAsset using the SY's exchange rate,
 /// then rescales across decimal domains.
-contract OutrunStakingPositionUpgradeable is
+// solhint-disable-next-line gas-small-strings
+contract OutrunStakingPositionUpgradeable layout at erc7201("outrun.storage.OutrunStakingPosition")
+    is
     IOutrunStakeManager,
     AutoIncrementIdUpgradeable,
     TokenHelper,
@@ -33,7 +35,6 @@ contract OutrunStakingPositionUpgradeable is
 {
     using SafeERC20 for IERC20;
 
-    /// @custom:storage-location erc7201:outrun.storage.OutrunStakingPosition
     struct OutrunStakingPositionStorage {
         address SY;
         uint256 minStake;
@@ -48,9 +49,7 @@ contract OutrunStakingPositionUpgradeable is
         uint8 uAssetDecimals;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("outrun.storage.OutrunStakingPosition")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant OUTRUN_STAKING_POSITION_STORAGE_LOCATION =
-        0xd6ebf98633cd133425e2ec4f5c3d5a1e15a1a3a82505bb0f6ed101932bed5200;
+    OutrunStakingPositionStorage private outrunStakingPositionStorage;
 
     constructor() {
         _disableInitializers();
@@ -82,7 +81,7 @@ contract OutrunStakingPositionUpgradeable is
         __Pausable_init();
         __Ownable_init(owner_);
 
-        OutrunStakingPositionStorage storage $ = _getStorage();
+        OutrunStakingPositionStorage storage $ = outrunStakingPositionStorage;
         (,, uint8 canonicalAssetDecimals) = IStandardizedYield(sy_).assetInfo();
         $.SY = sy_;
         $.uAsset = uAsset_;
@@ -94,16 +93,9 @@ contract OutrunStakingPositionUpgradeable is
         $.keeper = keeper_;
     }
 
-    function _getStorage() private pure returns (OutrunStakingPositionStorage storage $) {
-        // slither-disable-next-line assembly
-        assembly {
-            $.slot := OUTRUN_STAKING_POSITION_STORAGE_LOCATION
-        }
-    }
-
     // solhint-disable-next-line unwrapped-modifier-logic
     modifier onlyPositionOwner(uint256 positionId) {
-        Position storage position = _getStorage().positions[positionId];
+        Position storage position = outrunStakingPositionStorage.positions[positionId];
         // Only the recorded owner can act on this position.
         if (position.owner == address(0) || position.owner != msg.sender) revert PositionAccessDenied();
         _;
@@ -112,49 +104,49 @@ contract OutrunStakingPositionUpgradeable is
     /// @notice Returns the Standardized Yield token address.
     /// @return SY token address.
     function SY() public view returns (address) {
-        return _getStorage().SY;
+        return outrunStakingPositionStorage.SY;
     }
 
     /// @notice Returns the minimum SY amount required per stake operation.
     /// @return Minimum stake amount in SY.
     function minStake() public view returns (uint256) {
-        return _getStorage().minStake;
+        return outrunStakingPositionStorage.minStake;
     }
 
     /// @notice Returns the total SY staked across all positions and the wrap pool.
     /// @return Total SY staked.
     function syTotalStaking() public view returns (uint256) {
-        return _getStorage().syTotalStaking;
+        return outrunStakingPositionStorage.syTotalStaking;
     }
 
     /// @notice Returns the SY amount currently in the shared wrap pool.
     /// @return SY amount in the wrap pool.
     function syWrapStaking() public view returns (uint256) {
-        return _getStorage().syWrapStaking;
+        return outrunStakingPositionStorage.syWrapStaking;
     }
 
     /// @notice Returns the outstanding uAsset debt incurred by the wrap pool.
     /// @return Wrap pool uAsset debt.
     function wrapUAssetDebt() public view returns (uint256) {
-        return _getStorage().wrapUAssetDebt;
+        return outrunStakingPositionStorage.wrapUAssetDebt;
     }
 
     /// @notice Returns the universal asset receipt token address.
     /// @return uAsset token address.
     function uAsset() public view returns (address) {
-        return _getStorage().uAsset;
+        return outrunStakingPositionStorage.uAsset;
     }
 
     /// @notice Returns the revenue pool address that receives harvested yield.
     /// @return Revenue pool address.
     function revenuePool() public view returns (address) {
-        return _getStorage().revenuePool;
+        return outrunStakingPositionStorage.revenuePool;
     }
 
     /// @notice Returns the keeper address authorized to trigger position redemptions.
     /// @return Keeper address.
     function keeper() public view returns (address) {
-        return _getStorage().keeper;
+        return outrunStakingPositionStorage.keeper;
     }
 
     /// @notice Reads the stored position struct for a given position ID.
@@ -169,7 +161,7 @@ contract OutrunStakingPositionUpgradeable is
         view
         returns (address owner, uint256 syStaked, uint256 UAssetMinted, uint128 startTime, uint128 deadline)
     {
-        Position storage position = _getStorage().positions[positionId];
+        Position storage position = outrunStakingPositionStorage.positions[positionId];
         return (position.owner, position.syStaked, position.UAssetMinted, position.startTime, position.deadline);
     }
 
@@ -199,7 +191,7 @@ contract OutrunStakingPositionUpgradeable is
     /// @param positionId The position identifier.
     /// @return UAssetMintable Additional uAsset amount that can be drawn.
     function previewDrawUAsset(uint256 positionId) public view returns (uint256 UAssetMintable) {
-        Position storage position = _getStorage().positions[positionId];
+        Position storage position = outrunStakingPositionStorage.positions[positionId];
         if (position.owner == address(0)) revert PositionAccessDenied();
         uint256 currentValue = _syToAsset(position.syStaked);
         uint256 minted = position.UAssetMinted;
@@ -220,7 +212,7 @@ contract OutrunStakingPositionUpgradeable is
         view
         returns (uint256 UAssetBurned, uint256 amountTokenOut)
     {
-        Position storage position = _getStorage().positions[positionId];
+        Position storage position = outrunStakingPositionStorage.positions[positionId];
         if (position.owner == address(0)) revert PositionAccessDenied();
         uint128 deadline = position.deadline;
         if (block.timestamp < deadline) revert LockTimeNotExpired(deadline);
@@ -267,7 +259,7 @@ contract OutrunStakingPositionUpgradeable is
 
         // Step 3: convert SY principal to uAsset value at the current exchange rate.
         uint256 principalValue = _syToAsset(amountInSY);
-        OutrunStakingPositionStorage storage $ = _getStorage();
+        OutrunStakingPositionStorage storage $ = outrunStakingPositionStorage;
         unchecked {
             $.syTotalStaking += amountInSY;
         }
@@ -303,7 +295,7 @@ contract OutrunStakingPositionUpgradeable is
         returns (uint256 amountInUAsset)
     {
         if (recipient == address(0)) revert ZeroInput();
-        Position storage position = _getStorage().positions[positionId];
+        Position storage position = outrunStakingPositionStorage.positions[positionId];
         address positionOwner = position.owner;
         if (positionOwner == address(0) || positionOwner != msg.sender) revert PositionAccessDenied();
 
@@ -344,7 +336,7 @@ contract OutrunStakingPositionUpgradeable is
         // The shared wrap pool receives SY directly from the caller; no position owner or deadline is stored.
         _transferIn(_SY, msg.sender, amountInSY);
 
-        OutrunStakingPositionStorage storage $ = _getStorage();
+        OutrunStakingPositionStorage storage $ = outrunStakingPositionStorage;
         unchecked {
             $.syTotalStaking += amountInSY;
             $.syWrapStaking += amountInSY;
@@ -377,7 +369,7 @@ contract OutrunStakingPositionUpgradeable is
     {
         if (receiver == address(0)) revert ZeroInput();
         address _SY = SY();
-        Position storage position = _getStorage().positions[positionId];
+        Position storage position = outrunStakingPositionStorage.positions[positionId];
         address positionOwner = position.owner;
         if (positionOwner == address(0) || positionOwner != msg.sender) revert PositionAccessDenied();
 
@@ -421,7 +413,7 @@ contract OutrunStakingPositionUpgradeable is
         returns (uint256 amountTokenOut)
     {
         if (receiver == address(0) || amountInUAsset == 0) revert ZeroInput();
-        OutrunStakingPositionStorage storage $ = _getStorage();
+        OutrunStakingPositionStorage storage $ = outrunStakingPositionStorage;
 
         address _SY = SY();
         address _uAsset = uAsset();
@@ -461,7 +453,7 @@ contract OutrunStakingPositionUpgradeable is
         if (msg.sender != keeper()) revert PermissionDenied();
         if (receiver == address(0)) revert ZeroInput();
         address _uAsset = uAsset();
-        Position storage position = _getStorage().positions[positionId];
+        Position storage position = outrunStakingPositionStorage.positions[positionId];
         address positionOwner = position.owner;
         if (positionOwner == address(0)) revert PositionAccessDenied();
         uint128 deadline = position.deadline;
@@ -505,7 +497,7 @@ contract OutrunStakingPositionUpgradeable is
         whenNotPaused
         returns (uint256 amountTokenOut)
     {
-        OutrunStakingPositionStorage storage $ = _getStorage();
+        OutrunStakingPositionStorage storage $ = outrunStakingPositionStorage;
         uint256 wrapPoolSY = $.syWrapStaking;
         // Ceil conversion: only SY above the full debt-equivalent is harvestable.
         // Rounding up the debt means enough SY stays in the wrap pool to cover all remaining debt.
@@ -543,19 +535,19 @@ contract OutrunStakingPositionUpgradeable is
     }
 
     function setMinStake(uint256 minStake_) external onlyOwner {
-        _getStorage().minStake = minStake_;
+        outrunStakingPositionStorage.minStake = minStake_;
         emit SetMinStake(minStake_);
     }
 
     function setRevenuePool(address revenuePool_) external onlyOwner {
         if (revenuePool_ == address(0)) revert ZeroInput();
-        _getStorage().revenuePool = revenuePool_;
+        outrunStakingPositionStorage.revenuePool = revenuePool_;
         emit SetRevenuePool(revenuePool_);
     }
 
     function setKeeper(address keeper_) external onlyOwner {
         if (keeper_ == address(0)) revert ZeroInput();
-        _getStorage().keeper = keeper_;
+        outrunStakingPositionStorage.keeper = keeper_;
         emit SetKeeper(keeper_);
     }
 
@@ -614,7 +606,7 @@ contract OutrunStakingPositionUpgradeable is
     }
 
     function _cachedAssetDecimals() internal view returns (uint8 canonicalAssetDecimals, uint8 uAssetDecimals) {
-        OutrunStakingPositionStorage storage $ = _getStorage();
+        OutrunStakingPositionStorage storage $ = outrunStakingPositionStorage;
         return ($.canonicalAssetDecimals, $.uAssetDecimals);
     }
 
@@ -626,7 +618,7 @@ contract OutrunStakingPositionUpgradeable is
         uint256 syStaked,
         uint256 positionUAssetMinted
     ) internal {
-        OutrunStakingPositionStorage storage $ = _getStorage();
+        OutrunStakingPositionStorage storage $ = outrunStakingPositionStorage;
         if (syRedeemed > syStaked) revert ExceedsPositionBalance(syRedeemed, syStaked);
         if (UAssetBurned > positionUAssetMinted) {
             revert ExceedsPositionDebt(UAssetBurned, positionUAssetMinted);
@@ -658,7 +650,7 @@ contract OutrunStakingPositionUpgradeable is
         view
         returns (uint256 UAssetBurned)
     {
-        Position storage position = _getStorage().positions[positionId];
+        Position storage position = outrunStakingPositionStorage.positions[positionId];
         uint128 deadline = position.deadline;
         if (block.timestamp < deadline) revert LockTimeNotExpired(deadline);
 
@@ -672,7 +664,7 @@ contract OutrunStakingPositionUpgradeable is
     function _validateWrapRedeemAmount(uint256 amountInUAsset) internal view returns (uint256 amountInSY) {
         if (amountInUAsset == 0) revert ZeroInput();
 
-        OutrunStakingPositionStorage storage $ = _getStorage();
+        OutrunStakingPositionStorage storage $ = outrunStakingPositionStorage;
         if (amountInUAsset > $.wrapUAssetDebt) revert ExceedsWrapDebt(amountInUAsset, $.wrapUAssetDebt);
 
         // Floor conversion: wrapRedeem never releases more SY than the repaid debt accounts for.

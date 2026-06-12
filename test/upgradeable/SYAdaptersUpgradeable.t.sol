@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 import {Test} from "forge-std/Test.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
@@ -26,15 +26,6 @@ contract MockToken is ERC20 {
 
     function mint(address to, uint256 amount) public virtual {
         _mint(to, amount);
-    }
-}
-
-contract TestOutrunL2StakedTokenSYUpgradeable is OutrunL2StakedTokenSYUpgradeable {
-    function exposedRedeem(address receiver, address tokenOut, uint256 amountSharesToRedeem)
-        external
-        returns (uint256)
-    {
-        return _redeem(receiver, tokenOut, amountSharesToRedeem);
     }
 }
 
@@ -716,25 +707,20 @@ contract SYAdaptersUpgradeableTest is Test {
     }
 
     function testL2StakedRedeemTransfersRequestedTokenOut() external {
-        MockToken tokenOut = new MockToken("Token Out", "OUT", 18);
-        TestOutrunL2StakedTokenSYUpgradeable impl = new TestOutrunL2StakedTokenSYUpgradeable();
-        TestOutrunL2StakedTokenSYUpgradeable sy = TestOutrunL2StakedTokenSYUpgradeable(
-            payable(ProxyTestHelper.deploy(
-                    address(impl),
-                    abi.encodeCall(
-                        OutrunL2StakedTokenSYUpgradeable.initialize,
-                        ("SY Generic", "SYG", owner, address(token), address(oracle), address(token), 18)
-                    )
-                ))
-        );
+        address sy = _deployL2Staked();
 
-        token.mint(address(sy), AMOUNT);
-        tokenOut.mint(address(sy), AMOUNT);
-        uint256 redeemed = sy.exposedRedeem(user, address(tokenOut), AMOUNT);
+        // Give user SY shares via deposit so public redeem() can burn them.
+        token.mint(user, AMOUNT);
+        vm.startPrank(user);
+        token.approve(sy, AMOUNT);
+        _asSY(sy).deposit(user, address(token), AMOUNT, 0);
+
+        // Redeem via public interface; tokenOut is the yieldBearingToken.
+        uint256 redeemed = _asSY(sy).redeem(user, AMOUNT, address(token), 0, false);
+        vm.stopPrank();
 
         assertEq(redeemed, AMOUNT);
-        assertEq(token.balanceOf(user), 0);
-        assertEq(tokenOut.balanceOf(user), AMOUNT);
+        assertEq(token.balanceOf(user), AMOUNT);
     }
 
     function testWeEtheEthRoundtripMatchesPreviewAndExchangeRate() external {

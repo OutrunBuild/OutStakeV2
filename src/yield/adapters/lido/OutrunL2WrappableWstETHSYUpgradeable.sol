@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 // L2 SY adapter where stETH exists natively on the L2 and can be wrapped/unwrapped
 // against wstETH locally. Unlike OutrunL2WstETHSY, this adapter performs actual
@@ -10,9 +10,11 @@ import {SYBaseUpgradeable} from "../../SYBaseUpgradeable.sol";
 import {ArrayLib} from "../../../libraries/ArrayLib.sol";
 import {IL2StETH} from "../../../integrations/lido/interfaces/IL2StETH.sol";
 
-contract OutrunL2WrappableWstETHSYUpgradeable is SYBaseUpgradeable {
-    /// @custom:storage-location erc7201:outrun.storage.OutrunL2WrappableWstETHSY
-    // forge-lint: disable-next-line(pascal-case-struct)
+// solhint-disable-next-line gas-small-strings
+contract OutrunL2WrappableWstETHSYUpgradeable layout at erc7201("outrun.storage.OutrunL2WrappableWstETHSY")
+    is
+    SYBaseUpgradeable
+{
     struct OutrunL2WrappableWstETHSYStorage {
         address STETH;
         // The asset this SY ultimately represents on Ethereum mainnet
@@ -20,10 +22,7 @@ contract OutrunL2WrappableWstETHSYUpgradeable is SYBaseUpgradeable {
         address underlyingAssetOnEthAddr;
         uint8 underlyingAssetOnEthDecimals;
     }
-
-    // keccak256(abi.encode(uint256(keccak256("outrun.storage.OutrunL2WrappableWstETHSY")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant OUTRUN_L2_WRAPPABLE_WST_ETH_SY_STORAGE_LOCATION =
-        0x9da4bc70408d68d126efeec83eb110f8384c649e456fbb92edf8e08a726b7a00;
+    OutrunL2WrappableWstETHSYStorage private outrunL2WrappableWstETHSYStorage;
 
     /// @notice Initializes the SY adapter with L2 stETH/wstETH wrap capability.
     /// @param owner_ The contract owner address.
@@ -42,23 +41,15 @@ contract OutrunL2WrappableWstETHSYUpgradeable is SYBaseUpgradeable {
             revert SYZeroAddress();
         }
         __SYBase_init("SY Lido wstETH", "SY wstETH", wstETH_, owner_);
-        OutrunL2WrappableWstETHSYStorage storage $ = _getStorage();
-        $.STETH = stETH_;
-        $.underlyingAssetOnEthAddr = underlyingAssetOnEthAddr_;
-        $.underlyingAssetOnEthDecimals = underlyingAssetOnEthDecimals_;
-    }
-
-    function _getStorage() private pure returns (OutrunL2WrappableWstETHSYStorage storage $) {
-        // slither-disable-next-line assembly
-        assembly {
-            $.slot := OUTRUN_L2_WRAPPABLE_WST_ETH_SY_STORAGE_LOCATION
-        }
+        outrunL2WrappableWstETHSYStorage.STETH = stETH_;
+        outrunL2WrappableWstETHSYStorage.underlyingAssetOnEthAddr = underlyingAssetOnEthAddr_;
+        outrunL2WrappableWstETHSYStorage.underlyingAssetOnEthDecimals = underlyingAssetOnEthDecimals_;
     }
 
     /// @notice Returns the address of the L2 stETH token.
     /// @return The L2 stETH token address.
     function STETH() public view returns (address) {
-        return _getStorage().STETH;
+        return outrunL2WrappableWstETHSYStorage.STETH;
     }
 
     // If depositing stETH: unwrap to get wstETH shares.
@@ -157,7 +148,10 @@ contract OutrunL2WrappableWstETHSYUpgradeable is SYBaseUpgradeable {
     /// @return assetAddress The underlying asset address on Ethereum mainnet.
     /// @return assetDecimals The decimals of the underlying asset on Ethereum mainnet.
     function assetInfo() external view returns (AssetType assetType, address assetAddress, uint8 assetDecimals) {
-        OutrunL2WrappableWstETHSYStorage storage $ = _getStorage();
-        return (AssetType.TOKEN, $.underlyingAssetOnEthAddr, $.underlyingAssetOnEthDecimals);
+        return (
+            AssetType.TOKEN,
+            outrunL2WrappableWstETHSYStorage.underlyingAssetOnEthAddr,
+            outrunL2WrappableWstETHSYStorage.underlyingAssetOnEthDecimals
+        );
     }
 }

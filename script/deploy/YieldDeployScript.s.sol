@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 // solhint-disable no-console
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 

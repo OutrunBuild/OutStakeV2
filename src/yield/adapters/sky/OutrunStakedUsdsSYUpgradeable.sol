@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 // SY adapter for Sky (Maker) sUSDS on Ethereum mainnet. The yield-bearing token is sUSDS (an ERC4626 vault for USDS).
 // Deposit paths: (a) USDS → deposit into 4626 vault for sUSDS shares, (b) existing sUSDS directly.
@@ -10,32 +10,22 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {SYBaseUpgradeable} from "../../SYBaseUpgradeable.sol";
 import {ArrayLib} from "../../../libraries/ArrayLib.sol";
 
-contract OutrunStakedUsdsSYUpgradeable is SYBaseUpgradeable {
-    /// @custom:storage-location erc7201:outrun.storage.OutrunStakedUsdsSY
-    // forge-lint: disable-next-line(pascal-case-struct)
+// solhint-disable-next-line gas-small-strings
+contract OutrunStakedUsdsSYUpgradeable layout at erc7201("outrun.storage.OutrunStakedUsdsSY") is SYBaseUpgradeable {
     struct OutrunStakedUsdsSYStorage {
         address USDS;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("outrun.storage.OutrunStakedUsdsSY")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant OUTRUN_STAKED_USDS_SY_STORAGE_LOCATION =
-        0x74aedace728c226c8b576fb3084503c20ae3f009148ad8baca9527cdb56df900;
+    OutrunStakedUsdsSYStorage private outrunStakedUsdsSYStorage;
 
     function initialize(address owner_, address USDS_, address sUSDS_) external initializer {
         if (USDS_ == address(0)) revert SYZeroAddress();
         __SYBase_init("SY Sky sUSDS", "SY sUSDS", sUSDS_, owner_);
-        _getStorage().USDS = USDS_;
-    }
-
-    function _getStorage() private pure returns (OutrunStakedUsdsSYStorage storage $) {
-        // slither-disable-next-line assembly
-        assembly {
-            $.slot := OUTRUN_STAKED_USDS_SY_STORAGE_LOCATION
-        }
+        outrunStakedUsdsSYStorage.USDS = USDS_;
     }
 
     function USDS() public view returns (address) {
-        return _getStorage().USDS;
+        return outrunStakedUsdsSYStorage.USDS;
     }
 
     function _deposit(address tokenIn, uint256 amountDeposited) internal override returns (uint256 amountSharesOut) {

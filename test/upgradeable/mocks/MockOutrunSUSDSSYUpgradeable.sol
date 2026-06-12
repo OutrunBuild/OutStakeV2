@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 import {IMockSUSDS} from "../../support/MockSUSDS.sol";
 import {ArrayLib} from "../../../src/libraries/ArrayLib.sol";

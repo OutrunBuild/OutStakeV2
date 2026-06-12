@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.35;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
