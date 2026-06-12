@@ -8,11 +8,10 @@ import {IOutrunRouter} from "../../src/router/interfaces/IOutrunRouter.sol";
 import {OutrunUniversalAssetsUpgradeable} from "../../src/assets/base/OutrunUniversalAssetsUpgradeable.sol";
 import {OutrunL2StakedTokenSYUpgradeable} from "../../src/yield/OutrunL2StakedTokenSYUpgradeable.sol";
 import {OutrunStakingPositionUpgradeable} from "../../src/position/OutrunStakingPositionUpgradeable.sol";
-import {MockLzEndpoint} from "./helpers/OFTTestHelper.sol";
+import {MockLzEndpoint} from "./mocks/OFTMocks.sol";
 import {ProxyTestHelper} from "./helpers/ProxyTestHelper.sol";
-import {PositionMockOracle, PositionMockToken} from "./OutrunStakingPositionUpgradeable.t.sol";
-
-contract RouterProxyMockLauncher {}
+import {PositionMockOracle, PositionMockToken} from "./mocks/PositionMocks.sol";
+import {EmptyMockLauncher} from "./mocks/EmptyMockLauncher.sol";
 
 contract RouterProxyIntegrationTest is Test {
     address internal owner = address(0xA11CE);
@@ -60,7 +59,7 @@ contract RouterProxyIntegrationTest is Test {
         vm.prank(owner);
         uAsset.setMintingCap(address(position), type(uint256).max);
 
-        router = new OutrunRouter(owner, address(new RouterProxyMockLauncher()));
+        router = new OutrunRouter(owner, address(new EmptyMockLauncher()));
         token.mint(user, 100e18);
     }
 

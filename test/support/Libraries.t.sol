@@ -6,6 +6,7 @@ import {WadRayMath} from "../../src/libraries/WadRayMath.sol";
 import {ArrayLib} from "../../src/libraries/ArrayLib.sol";
 import {SYUtils} from "../../src/libraries/SYUtils.sol";
 import {ReentrancyGuard} from "../../src/libraries/ReentrancyGuard.sol";
+import {MockGuarded, WadRayMathHelper} from "./LibraryMocks.sol";
 
 // ============================================================================
 // WadRayMath Tests
@@ -103,35 +104,6 @@ contract WadRayMathTest is Test {
         // Very large wad that overflows when multiplied by WAD_RAY_RATIO
         vm.expectRevert();
         helper.wadToRayOverflow(type(uint256).max / 1e9 + 1);
-    }
-}
-
-// Helper contract for testing WadRayMath reverts
-contract WadRayMathHelper {
-    using WadRayMath for uint256;
-
-    function wadMulOverflow(uint256 a, uint256 b) external pure {
-        a.wadMul(b);
-    }
-
-    function wadDivZero(uint256 a) external pure {
-        a.wadDiv(0);
-    }
-
-    function wadDivOverflow(uint256 a, uint256 b) external pure {
-        a.wadDiv(b);
-    }
-
-    function rayMulOverflow(uint256 a, uint256 b) external pure {
-        a.rayMul(b);
-    }
-
-    function rayDivZero(uint256 a) external pure {
-        a.rayDiv(0);
-    }
-
-    function wadToRayOverflow(uint256 a) external pure {
-        WadRayMath.wadToRay(a);
     }
 }
 
@@ -403,16 +375,6 @@ contract SYUtilsTest is Test {
 // ============================================================================
 // ReentrancyGuard Tests
 // ============================================================================
-
-contract MockGuarded is ReentrancyGuard {
-    function guardedAction() external nonReentrant returns (uint256) {
-        return 42;
-    }
-
-    function tryReenter() external nonReentrant {
-        this.guardedAction(); // should revert
-    }
-}
 
 contract ReentrancyGuardTest is Test {
     MockGuarded internal guarded;

@@ -6,43 +6,9 @@ import {MessagingFee, OFTLimit, SendParam} from "@layerzerolabs/oft-evm/contract
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 import {OutrunUniversalAssetsUpgradeable} from "../../src/assets/base/OutrunUniversalAssetsUpgradeable.sol";
-import {OutrunOFTUpgradeable} from "../../src/assets/omnichain/OutrunOFTUpgradeable.sol";
 import {OutrunRateLimiterUpgradeable} from "../../src/assets/omnichain/OutrunRateLimiterUpgradeable.sol";
-import {MockLzEndpoint} from "./helpers/OFTTestHelper.sol";
+import {MockLzEndpoint, OutrunUpgradeableOftHarness} from "./mocks/OFTMocks.sol";
 import {ProxyTestHelper} from "./helpers/ProxyTestHelper.sol";
-
-/// @dev Test harness that inherits from OutrunOFTUpgradeable (not OutrunUniversalAssetsUpgradeable)
-/// because `layout at erc7201(...)` prevents child contracts from declaring storage.
-/// Minting cap / mint calls go through the real OutrunUniversalAssetsUpgradeable proxy.
-contract OutrunUpgradeableOftHarness is OutrunOFTUpgradeable {
-    uint256 public outflowCalls;
-
-    constructor(uint8 localDecimals, address lzEndpoint) OutrunOFTUpgradeable(localDecimals, lzEndpoint) {}
-
-    /// @dev Minimal initialize — only sets up OFT, not minting cap logic.
-    function initialize(string calldata name_, string calldata symbol_, uint8 decimals_, address owner_)
-        external
-        initializer
-    {
-        __OutrunOFT_init(name_, symbol_, decimals_, owner_);
-    }
-
-    function exposedDebit(address from, uint256 amountLD, uint256 minAmountLD, uint32 dstEid)
-        external
-        returns (uint256 amountSentLD, uint256 amountReceivedLD)
-    {
-        return _debit(from, amountLD, minAmountLD, dstEid);
-    }
-
-    function exposedCredit(address to, uint256 amountLD, uint32 srcEid) external returns (uint256 amountReceivedLD) {
-        return _credit(to, amountLD, srcEid);
-    }
-
-    function _outflow(uint32 dstEid, uint256 amount) internal override {
-        ++outflowCalls;
-        super._outflow(dstEid, amount);
-    }
-}
 
 contract OutrunOFTUpgradeableTest is Test {
     OutrunUpgradeableOftHarness internal oft;

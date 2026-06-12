@@ -4,7 +4,7 @@ pragma solidity ^0.8.35;
 import {Test} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {MockSY, MockERC20, MockUAsset} from "./helpers/PositionTestMocks.sol";
+import {MockSY, MockERC20, MockUAsset} from "./mocks/PositionTestMocks.sol";
 import {OutrunStakingPositionUpgradeable} from "../../src/position/OutrunStakingPositionUpgradeable.sol";
 import {IStandardizedYield} from "../../src/yield/interfaces/IStandardizedYield.sol";
 import {SYUtils} from "../../src/libraries/SYUtils.sol";

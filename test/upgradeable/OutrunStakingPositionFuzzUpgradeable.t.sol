@@ -7,7 +7,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {OutrunStakingPositionUpgradeable} from "../../src/position/OutrunStakingPositionUpgradeable.sol";
 import {SYUtils} from "../../src/libraries/SYUtils.sol";
 import {ProxyTestHelper} from "./helpers/ProxyTestHelper.sol";
-import {MockSY, MockERC20, MockUAsset} from "./helpers/PositionTestMocks.sol";
+import {MockSY, MockERC20, MockUAsset} from "./mocks/PositionTestMocks.sol";
 
 /**
  * @title Fuzz tests for OutrunStakingPosition

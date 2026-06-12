@@ -6,7 +6,7 @@ import {OFTReceipt, SendParam} from "@layerzerolabs/oft-evm/contracts/interfaces
 
 import {OutrunUniversalAssetsUpgradeable} from "../../src/assets/base/OutrunUniversalAssetsUpgradeable.sol";
 import {IUniversalAssets} from "../../src/assets/interfaces/IUniversalAssets.sol";
-import {MockLzEndpoint} from "./helpers/OFTTestHelper.sol";
+import {MockLzEndpoint} from "./mocks/OFTMocks.sol";
 import {MockUAssetUUPSV2, MockUAssetUUPSV2DifferentSharedDecimals} from "./mocks/MockUUPSVersion.sol";
 import {ProxyTestHelper} from "./helpers/ProxyTestHelper.sol";
 

@@ -10,9 +10,8 @@ import {OutrunRouter} from "../../src/router/OutrunRouter.sol";
 import {OutrunUniversalAssetsUpgradeable} from "../../src/assets/base/OutrunUniversalAssetsUpgradeable.sol";
 import {OutrunOFTUpgradeable} from "../../src/assets/omnichain/OutrunOFTUpgradeable.sol";
 import {OutrunRateLimiterUpgradeable} from "../../src/assets/omnichain/OutrunRateLimiterUpgradeable.sol";
-import {MockLzEndpoint} from "../upgradeable/helpers/OFTTestHelper.sol";
-
-contract ScriptMockLauncher {}
+import {MockLzEndpoint} from "../upgradeable/mocks/OFTMocks.sol";
+import {EmptyMockLauncher} from "../upgradeable/mocks/EmptyMockLauncher.sol";
 
 contract OutstakeDeploymentScriptHarness is OutstakeScript {
     uint256 internal rawLimit = 1_000_000 ether;
@@ -184,7 +183,7 @@ contract OutstakeScriptUpgradeableTest is Test {
     }
 
     function testDeployOutrunRouterAcceptsLauncherContract() external {
-        ScriptMockLauncher launcher = new ScriptMockLauncher();
+        EmptyMockLauncher launcher = new EmptyMockLauncher();
         script.setRouterConfig(address(0), address(launcher));
 
         script.exposedDeployOutrunRouter(1);
@@ -197,7 +196,7 @@ contract OutstakeScriptUpgradeableTest is Test {
     }
 
     function testUpdateRouterLauncherRevertsWhenLauncherIsZero() external {
-        OutrunRouter router = new OutrunRouter(owner, address(new ScriptMockLauncher()));
+        OutrunRouter router = new OutrunRouter(owner, address(new EmptyMockLauncher()));
         script.setRouterConfig(address(router), address(0));
 
         vm.expectRevert(OutstakeScript.InvalidAddress.selector);
@@ -205,7 +204,7 @@ contract OutstakeScriptUpgradeableTest is Test {
     }
 
     function testUpdateRouterLauncherRevertsWhenLauncherHasNoCode() external {
-        OutrunRouter router = new OutrunRouter(owner, address(new ScriptMockLauncher()));
+        OutrunRouter router = new OutrunRouter(owner, address(new EmptyMockLauncher()));
         script.setRouterConfig(address(router), address(0x1234));
 
         vm.expectRevert(abi.encodeWithSelector(OutrunRouter.InvalidMemeverseLauncher.selector, address(0x1234)));
@@ -213,8 +212,8 @@ contract OutstakeScriptUpgradeableTest is Test {
     }
 
     function testUpdateRouterLauncherAcceptsLauncherContract() external {
-        OutrunRouter router = new OutrunRouter(owner, address(new ScriptMockLauncher()));
-        ScriptMockLauncher launcher = new ScriptMockLauncher();
+        OutrunRouter router = new OutrunRouter(owner, address(new EmptyMockLauncher()));
+        EmptyMockLauncher launcher = new EmptyMockLauncher();
         script.setRouterConfig(address(router), address(launcher));
 
         script.exposedUpdateRouterLauncher();

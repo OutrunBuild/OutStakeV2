@@ -3,39 +3,15 @@ pragma solidity ^0.8.35;
 
 import {Test} from "forge-std/Test.sol";
 
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {OutrunUniversalAssetsUpgradeable} from "../../src/assets/base/OutrunUniversalAssetsUpgradeable.sol";
 import {IOutrunStakeManager} from "../../src/position/interfaces/IOutrunStakeManager.sol";
 import {OutrunL2StakedTokenSYUpgradeable} from "../../src/yield/OutrunL2StakedTokenSYUpgradeable.sol";
 import {OutrunStakingPositionUpgradeable} from "../../src/position/OutrunStakingPositionUpgradeable.sol";
-import {MockLzEndpoint} from "./helpers/OFTTestHelper.sol";
+import {MockLzEndpoint} from "./mocks/OFTMocks.sol";
 import {ProxyTestHelper} from "./helpers/ProxyTestHelper.sol";
-import {MockSY, MockERC20, MockUAsset} from "./helpers/PositionTestMocks.sol";
+import {MockSY, MockERC20, MockUAsset} from "./mocks/PositionTestMocks.sol";
 import {MockPositionUUPSV2} from "./mocks/MockUUPSVersion.sol";
-
-contract PositionMockToken is ERC20 {
-    constructor() ERC20("Yield Token", "YBT") {}
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-}
-
-contract PositionMockOracle {
-    function getExchangeRate() external pure returns (uint256) {
-        return 1e18;
-    }
-}
-
-contract RejectZeroTransferMockSY is MockSY {
-    constructor(address underlying_) MockSY(underlying_) {}
-
-    function transfer(address to, uint256 amount) public override(ERC20, IERC20) returns (bool) {
-        require(amount != 0, "zero transfer rejected");
-        return super.transfer(to, amount);
-    }
-}
+import {PositionMockToken, PositionMockOracle, RejectZeroTransferMockSY} from "./mocks/PositionMocks.sol";
 
 contract OutrunStakingPositionUpgradeableTest is Test {
     address internal owner = address(0xA11CE);
