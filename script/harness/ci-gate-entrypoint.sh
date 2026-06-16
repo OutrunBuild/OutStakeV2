@@ -24,8 +24,8 @@ mkdir -p "$runner_temp"
 diff_output="$(mktemp "$runner_temp/changed-files.XXXXXX.diff")"
 trap 'rm -f "$diff_output"' EXIT
 
-git diff --unified=0 "$base_sha" "$head_sha" >"$diff_output"
 mapfile -t changed_files < <(git diff --name-only "$base_sha" "$head_sha")
+git diff --unified=0 "$base_sha" "$head_sha" >"$diff_output"
 
 if [ "${#changed_files[@]}" -eq 0 ]; then
     npm run gate:ci -- --all

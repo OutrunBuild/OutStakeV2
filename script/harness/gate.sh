@@ -2,7 +2,6 @@
 set -euo pipefail
 
 profile="fast"
-declare -a changed_files_args=()
 all_mode=0
 classify_only=0
 quiet=0
@@ -10,10 +9,12 @@ log_level="info"
 output_format="auto"
 
 declare -a cleanup_paths=()
+declare -a changed_files_args=()
+declare -a planned_files_args=()
 
 usage() {
     cat >&2 <<'EOF'
-Usage: bash ./script/harness/gate.sh [--profile fast|full|ci] [--changed-files <path> [<path> ...]] [--all] [--classify-only] [--quiet] [--log-level error|warn|info|debug] [--output text|json]
+Usage: bash ./script/harness/gate.sh [--profile fast|full|ci] [--changed-files <path> [<path> ...]] [--planned-files <path> [<path> ...]] [--all] [--classify-only] [--quiet] [--log-level error|warn|info|debug] [--output text|json]
 EOF
 }
 
@@ -195,6 +196,54 @@ list_worktree_changed_files() {
         git ls-files --others --exclude-standard
     } | awk '{ sub(/\r$/, ""); if ($0 != "") print $0 }' | awk '!seen[$0]++'
 }
+
+normalize_changed_files_repo_path() {
+    local value="$1"
+    local absolute_repo_root="${repo_root%/}"
+
+    case "$value" in
+        /*)
+            case "$value" in
+                "$absolute_repo_root"/*)
+                    printf '%s\n' "${value#"$absolute_repo_root"/}"
+                    return
+                    ;;
+                "$absolute_repo_root")
+                    printf '.\n'
+                    return
+                    ;;
+                *)
+                    die "--changed-files path must be inside repo root: $value"
+                    ;;
+            esac
+            ;;
+        *)
+            printf '%s\n' "${value#./}"
+            ;;
+    esac
+}
+
+load_changed_files_from_args() {
+    local raw_value
+    local normalized_value
+    changed_files=()
+    for raw_value in "${changed_files_args[@]}"; do
+        normalized_value="$(normalize_changed_files_repo_path "$raw_value")"
+        append_unique changed_files "$normalized_value"
+    done
+}
+
+load_planned_files_from_args() {
+    local raw_value
+    local normalized_value
+    changed_files=()
+    for raw_value in "${planned_files_args[@]}"; do
+        normalized_value="$(normalize_changed_files_repo_path "$raw_value")"
+        append_unique changed_files "$normalized_value"
+    done
+}
+
+
 
 append_finding() {
     local target_name="$1"
@@ -530,29 +579,6 @@ run_targeted_tests_command() {
     run_looped_command "$id" "$reason" "$scope_json" "forge test --match-path" "${scope[@]}"
 }
 
-normalize_slither_key() {
-    jq -r '
-        def norm_summary:
-            (.description // "")
-            | split("\n")[0]
-            | sub(" \\([^)]*#L?[0-9]+(-L?[0-9]+)?\\)"; "")
-            | sub(" \\([^)]*#[0-9]+(-[0-9]+)?\\)"; "");
-        {
-            id: (.id // ""),
-            check: (.check // ""),
-            impact: (.impact // ""),
-            confidence: (.confidence // ""),
-            location: (.first_markdown_element // ""),
-            summary: norm_summary,
-            key: (
-                (.check // "") + "|" +
-                ((.first_markdown_element // "") | split("#")[0]) + "|" +
-                norm_summary
-            )
-        }
-    '
-}
-
 slither_baseline_path() {
     printf '%s/script/harness/slither-baseline.json' "$repo_root"
 }
@@ -823,26 +849,32 @@ while [ "$#" -gt 0 ]; do
             shift 2
             ;;
         --changed-files)
-            if [ "$#" -lt 2 ]; then
-                usage
-                exit 1
-            fi
             shift
-            while [ "$#" -gt 0 ]; do
-                case "$1" in
-                    --*)
-                        break
-                        ;;
-                    *)
-                        changed_files_args+=("$1")
-                        shift
-                        ;;
-                esac
-            done
-            if [ "${#changed_files_args[@]}" -eq 0 ]; then
+            if [ "$#" -eq 0 ] || [[ "$1" == -* ]]; then
                 usage
                 exit 1
             fi
+            while [ "$#" -gt 0 ]; do
+                if [[ "$1" == -* ]]; then
+                    break
+                fi
+                changed_files_args+=("$1")
+                shift
+            done
+            ;;
+        --planned-files)
+            shift
+            if [ "$#" -eq 0 ] || [[ "$1" == -* ]]; then
+                usage
+                exit 1
+            fi
+            while [ "$#" -gt 0 ]; do
+                if [[ "$1" == -* ]]; then
+                    break
+                fi
+                planned_files_args+=("$1")
+                shift
+            done
             ;;
         --all)
             all_mode=1
@@ -904,13 +936,20 @@ case "$output_format" in
         ;;
 esac
 
-if [ "$all_mode" -eq 1 ] && [ "${#changed_files_args[@]}" -gt 0 ]; then
-    die "--all and --changed-files are mutually exclusive"
+if [ "$all_mode" -eq 1 ] && { [ "${#changed_files_args[@]}" -gt 0 ] || [ "${#planned_files_args[@]}" -gt 0 ]; }; then
+    die "--all cannot be combined with --changed-files or --planned-files"
+fi
+if [ "${#changed_files_args[@]}" -gt 0 ] && [ "${#planned_files_args[@]}" -gt 0 ]; then
+    die "--changed-files and --planned-files are mutually exclusive"
+fi
+if [ "${#planned_files_args[@]}" -gt 0 ] && [ "$classify_only" -ne 1 ]; then
+    die "--planned-files can only be used with --classify-only"
 fi
 
 command -v jq >/dev/null 2>&1 || die "jq is required"
 command -v node >/dev/null 2>&1 || die "node is required"
 
+original_cwd="$(pwd)"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 cd "$repo_root"
@@ -1000,11 +1039,9 @@ if [ "$all_mode" -eq 1 ]; then
     mapfile -t changed_files < <(printf '%s\n' "${solidity_prod_files[@]}" "${solidity_test_files[@]}" "${harness_control_files[@]}" | awk '!seen[$0]++')
 else
     if [ "${#changed_files_args[@]}" -gt 0 ]; then
-        mapfile -t changed_files < <(
-            printf '%s\n' "${changed_files_args[@]}" |
-                awk '{ sub(/\r$/, ""); if ($0 != "") print $0 }' |
-                awk '!seen[$0]++'
-        )
+        load_changed_files_from_args
+    elif [ "${#planned_files_args[@]}" -gt 0 ]; then
+        load_planned_files_from_args
     elif [ "$profile" = "ci" ]; then
         die "--changed-files is required when --profile ci is used"
     else
@@ -1141,12 +1178,16 @@ patch_file="$(mktemp "$repo_root/.harness/tmp/gate.XXXXXX")"
 register_cleanup "$patch_file"
 classification_requires_diff=0
 diff_evidence_error=0
+planned_solidity_classification=0
 
 if [ "$all_mode" -eq 1 ]; then
     : >"$patch_file"
     classification_requires_diff=0
 elif [ "${#classification_solidity_files[@]}" -gt 0 ]; then
-    if [ "${#changed_files_args[@]}" -gt 0 ]; then
+    if [ "${#planned_files_args[@]}" -gt 0 ]; then
+        planned_solidity_classification=1
+        : >"$patch_file"
+    elif [ "${#changed_files_args[@]}" -gt 0 ]; then
         if [ -n "${CHANGE_CLASSIFIER_DIFF_FILE:-}" ]; then
             if [ ! -r "${CHANGE_CLASSIFIER_DIFF_FILE}" ]; then
                 diff_evidence_error=1
@@ -1265,11 +1306,17 @@ if [ "$all_mode" -eq 0 ]; then
     fi
 fi
 
+if [ "$planned_solidity_classification" -eq 1 ]; then
+    append_finding residual_risks_json "main-orchestrator" "planned Solidity classification has no diff evidence; Solidity files are conservatively treated as semantic for pre-edit routing" "planned-solidity-classification" "info"
+fi
+
 classification_json="$(
     PROD_FILES_JSON="$solidity_prod_json" \
     TEST_FILES_JSON="$solidity_test_json" \
     PATCH_FILE="$patch_file" \
     ALL_MODE="$all_mode" \
+    PLANNED_SOLIDITY_CLASSIFICATION="$planned_solidity_classification" \
+    DIFF_EVIDENCE_MISSING="$classification_requires_diff" \
     node <<'EOF'
 const fs = require('fs');
 
@@ -1277,6 +1324,8 @@ const prodFiles = JSON.parse(process.env.PROD_FILES_JSON || '[]');
 const testFiles = JSON.parse(process.env.TEST_FILES_JSON || '[]');
 const patchPath = process.env.PATCH_FILE || '';
 const allMode = process.env.ALL_MODE === '1';
+const plannedSolidityClassification = process.env.PLANNED_SOLIDITY_CLASSIFICATION === '1';
+const diffEvidenceMissing = process.env.DIFF_EVIDENCE_MISSING === '1';
 const patch = patchPath && fs.existsSync(patchPath) ? fs.readFileSync(patchPath, 'utf8') : '';
 const trackedFiles = [...prodFiles, ...testFiles];
 
@@ -1295,7 +1344,15 @@ function isNonSemanticLine(line) {
 
 const analysis = new Map(trackedFiles.map((file) => [file, { semantic: false, semanticLines: 0 }]));
 
-if (allMode) {
+if (diffEvidenceMissing) {
+  // Leave all Solidity files unclassified; the shell layer blocks the record.
+} else if (allMode) {
+  for (const file of trackedFiles) {
+    const entry = analysis.get(file);
+    entry.semantic = true;
+    entry.semanticLines = 1;
+  }
+} else if (plannedSolidityClassification) {
   for (const file of trackedFiles) {
     const entry = analysis.get(file);
     entry.semantic = true;
@@ -1324,15 +1381,17 @@ if (allMode) {
   }
 }
 
-const semanticProdFiles = prodFiles.filter((file) => analysis.get(file)?.semantic);
-const semanticTestFiles = testFiles.filter((file) => analysis.get(file)?.semantic);
-const nonSemanticProdFiles = prodFiles.filter((file) => !analysis.get(file)?.semantic);
-const nonSemanticTestFiles = testFiles.filter((file) => !analysis.get(file)?.semantic);
+const semanticProdFiles = diffEvidenceMissing ? [] : prodFiles.filter((file) => analysis.get(file)?.semantic);
+const semanticTestFiles = diffEvidenceMissing ? [] : testFiles.filter((file) => analysis.get(file)?.semantic);
+const nonSemanticProdFiles = diffEvidenceMissing ? [] : prodFiles.filter((file) => !analysis.get(file)?.semantic);
+const nonSemanticTestFiles = diffEvidenceMissing ? [] : testFiles.filter((file) => !analysis.get(file)?.semantic);
 const semanticProdLineCount = semanticProdFiles.reduce((sum, file) => sum + (analysis.get(file)?.semanticLines || 0), 0);
 const semanticTestLineCount = semanticTestFiles.reduce((sum, file) => sum + (analysis.get(file)?.semanticLines || 0), 0);
 
 let changeClass = 'no-op';
-if (semanticProdFiles.length > 0) {
+if (diffEvidenceMissing && trackedFiles.length > 0) {
+  changeClass = 'blocked';
+} else if (semanticProdFiles.length > 0) {
   changeClass = 'prod-semantic';
 } else if (semanticTestFiles.length > 0) {
   changeClass = 'test-semantic';
@@ -1555,11 +1614,20 @@ code_review_roles_json="$(json_array_from_values "${code_review_roles[@]}")"
 
 orchestration_reasons_json="$(json_array_from_values "${orchestration_reasons[@]}")"
 dispatch_summary="$(build_dispatch_summary "$harness_writer_roles_json" "$code_writer_roles_json" "$code_review_roles_json")"
+file_input_mode="worktree"
+if [ "$all_mode" -eq 1 ]; then
+    file_input_mode="all"
+elif [ "${#planned_files_args[@]}" -gt 0 ]; then
+    file_input_mode="planned-files"
+elif [ "${#changed_files_args[@]}" -gt 0 ]; then
+    file_input_mode="changed-files"
+fi
 
 classification_record_json="$(jq -cn \
     --arg repo "$(jq -r '.repo' "$policy_file")" \
     --arg mode "$([ "$classify_only" -eq 1 ] && printf 'classify-only' || printf 'verify')" \
     --arg profile "$profile" \
+    --arg file_input_mode "$file_input_mode" \
     --argjson changed_files "$(json_array_from_values "${changed_files[@]}")" \
     --argjson surfaces "$surface_json" \
     --arg change_class "$change_class" \
@@ -1594,6 +1662,7 @@ classification_record_json="$(jq -cn \
       repo: $repo,
       mode: $mode,
       profile: $profile,
+      file_input_mode: $file_input_mode,
       changed_files: $changed_files,
       surfaces: $surfaces,
       change_class: $change_class,
@@ -1642,10 +1711,9 @@ if [ "$classify_only" -eq 1 ]; then
 fi
 
 declare -a targeted_test_files=()
-fork_only_test_file="test/upgradeable/SYAdaptersFork.t.sol"
 if [ "$verification_profile" = "fast" ] && [ "$hard_blocked" -eq 0 ]; then
     for changed_test_file in "${solidity_test_files[@]}"; do
-        if [ -f "$changed_test_file" ] && [ "$changed_test_file" != "$fork_only_test_file" ]; then
+        if [ -f "$changed_test_file" ]; then
             append_unique targeted_test_files "$changed_test_file"
         fi
     done
@@ -1673,7 +1741,7 @@ if [ "$verification_profile" = "fast" ] && [ "$hard_blocked" -eq 0 ]; then
               + (.test_mapping[$key].rules[]? | select(.id == $rule_id) | .evidence_tests)
             )[]' "$policy_file")
         for mapped_test in "${mapped_tests[@]}"; do
-            if [ -f "$mapped_test" ] && [ "$mapped_test" != "$fork_only_test_file" ]; then
+            if [ -f "$mapped_test" ]; then
                 append_unique targeted_test_files "$mapped_test"
             fi
         done
@@ -1712,20 +1780,20 @@ if [ "${#changed_files[@]}" -gt 0 ]; then
                 src_scope_json="$(json_array_from_values "${existing_src_solidity_files[@]}")"
                 test_scope_json="$(json_array_from_values "${existing_test_solidity_files[@]}")"
                 if [ "$hard_blocked" -eq 1 ]; then
-                    record_blocked_command "$command_id" "npx solhint -c solhint.config.js <src-solidity> && npx solhint -c solhint-test.config.js <test-solidity>" "lint selected Solidity files" "$selected_solidity_json" "command blocked before execution by policy hard-block"
+                    record_blocked_command "$command_id" "npx solhint --disc --noPoster -c solhint.config.js <src-solidity> && npx solhint --disc --noPoster -c solhint-test.config.js <test-solidity>" "lint selected Solidity files" "$selected_solidity_json" "command blocked before execution by policy hard-block"
                 elif [ "${#existing_src_solidity_files[@]}" -gt 0 ]; then
-                    lint_command="npx solhint -c solhint.config.js $(shell_join "${existing_src_solidity_files[@]}")"
+                    lint_command="npx solhint --disc --noPoster -c solhint.config.js $(shell_join "${existing_src_solidity_files[@]}")"
                     if [ "${#existing_test_solidity_files[@]}" -gt 0 ]; then
-                        lint_command="$lint_command && npx solhint -c solhint-test.config.js $(shell_join "${existing_test_solidity_files[@]}")"
+                        lint_command="$lint_command && npx solhint --disc --noPoster -c solhint-test.config.js $(shell_join "${existing_test_solidity_files[@]}")"
                         lint_scope_json="$(jq -cn --argjson src "$src_scope_json" --argjson test "$test_scope_json" '$src + $test')"
                     else
                         lint_scope_json="$src_scope_json"
                     fi
                     run_single_command "$command_id" "lint selected Solidity files" "$lint_scope_json" bash -lc "$lint_command"
                 elif [ "${#existing_src_solidity_files[@]}" -eq 0 ] && [ "${#existing_test_solidity_files[@]}" -gt 0 ]; then
-                    run_single_command "$command_id" "lint selected Solidity files" "$test_scope_json" npx solhint -c solhint-test.config.js "${existing_test_solidity_files[@]}"
+                    run_single_command "$command_id" "lint selected Solidity files" "$test_scope_json" npx solhint --disc --noPoster -c solhint-test.config.js "${existing_test_solidity_files[@]}"
                 else
-                    record_not_applicable_command "$command_id" "npx solhint -c solhint.config.js && npx solhint -c solhint-test.config.js" "lint selected Solidity files" "$selected_solidity_json" "no Solidity files in scope"
+                    record_not_applicable_command "$command_id" "npx solhint --disc --noPoster -c solhint.config.js && npx solhint --disc --noPoster -c solhint-test.config.js" "lint selected Solidity files" "$selected_solidity_json" "no Solidity files in scope"
                 fi
                 ;;
             forge_build)
@@ -1754,11 +1822,11 @@ if [ "${#changed_files[@]}" -gt 0 ]; then
                 ;;
             coverage_when_required)
                 if [ "$hard_blocked" -eq 1 ]; then
-                    record_blocked_command "$command_id" "forge coverage --report summary" "run coverage for semantic production Solidity changes" '[]' "command blocked before execution by policy hard-block"
+                    record_blocked_command "$command_id" "forge coverage --report summary --ir-minimum" "run coverage for semantic production Solidity changes" '[]' "command blocked before execution by policy hard-block"
                 elif [ "$coverage_required_full_ci" = true ]; then
-                    run_single_command "$command_id" "run coverage for semantic production Solidity changes" '[]' forge coverage --report summary
+                    run_single_command "$command_id" "run coverage for semantic production Solidity changes" '[]' forge coverage --report summary --ir-minimum
                 else
-                    record_not_applicable_command "$command_id" "forge coverage --report summary" "run coverage for semantic production Solidity changes" '[]' "coverage not required for current change class and surface sensitivity"
+                    record_not_applicable_command "$command_id" "forge coverage --report summary --ir-minimum" "run coverage for semantic production Solidity changes" '[]' "coverage not required for current change class and surface sensitivity"
                 fi
                 ;;
             slither_when_required)

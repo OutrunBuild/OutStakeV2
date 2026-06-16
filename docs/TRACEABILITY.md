@@ -7,4 +7,6 @@
 - Codex agents: .codex/agents/*
 - Enforcement entrypoint: script/harness/gate.sh
 
+The gate reports phase fields for `harness_writer_roles`, `code_writer_roles`, and `code_review_roles`.
+
 For `prod-semantic` work, classification precedes dispatch. The main session decides whether spec/docs changes are needed before doc writers, `spec-reviewer`, code writers, or code reviewers are dispatched. Gate only classifies changed files and verification requirements.
