@@ -54,6 +54,16 @@ Do not override policy or gate evidence with natural-language guesses.
 - If `prepare-worktree-libs.sh` fails, report the environment blocker. Do not clone, repair, delete, or overwrite submodules from the worktree.
 - If a task intentionally modifies `.gitmodules` or `lib/**`, stop and get explicit human direction before dependency setup.
 
+## Forge Build Rules
+
+- `via_ir = true`; full rebuild takes 12-15 minutes. Do not use `forge build --force` unless one of:
+  - compiler settings changed (solc version, via_ir, optimizer, evm_version)
+  - library versions updated (`forge update` or `lib/` changes)
+  - build output is suspect (ABI mismatch, unexplained test failures)
+  - CI or pre-release clean build
+  - after `forge clean`
+- For routine code/test edits, use plain `forge build`. When unsure, try without `--force` first.
+
 ## High-Priority Beginner-Readable Code
 
 - This section is high-priority. Optimize for code a beginner or non-programmer can read top to bottom.
