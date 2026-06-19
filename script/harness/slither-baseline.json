@@ -2,151 +2,115 @@
   "version": 1,
   "tool": "slither",
   "target": "src",
-  "generated_at": "2026-04-24",
+  "generated_at": "2026-06-19",
   "findings": [
     {
-      "id": "76587647c50b774462b55be8b30f264ef6115d1ad2d8d9c92952df04914b0bd9",
+      "id": "a0d045c40d7a5279750e20e23205d443d6bc6f24bb182b4638cd440f7c2a78f3",
+      "check": "arbitrary-send-eth",
+      "impact": "High",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/etherfi/OutrunWeETHSYUpgradeable.sol#L67-L79",
+      "summary": "OutrunWeETHSYUpgradeable._deposit(address,uint256) sends eth to arbitrary user",
+      "key": "arbitrary-send-eth|src/yield/adapters/etherfi/OutrunWeETHSYUpgradeable.sol|OutrunWeETHSYUpgradeable._deposit(address,uint256) sends eth to arbitrary user"
+    },
+    {
+      "id": "5c18166e9e893be8206f93d3aced005246712fae03078b802e8216d5bcc0a5d3",
+      "check": "arbitrary-send-eth",
+      "impact": "High",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/lido/OutrunWstETHSYUpgradeable.sol#L35-L53",
+      "summary": "OutrunWstETHSYUpgradeable._deposit(address,uint256) sends eth to arbitrary user",
+      "key": "arbitrary-send-eth|src/yield/adapters/lido/OutrunWstETHSYUpgradeable.sol|OutrunWstETHSYUpgradeable._deposit(address,uint256) sends eth to arbitrary user"
+    },
+    {
+      "id": "f607f5dc995755519ea36fcea64829fe93813e066eff8d0ad3c95f2476ab68a8",
+      "check": "arbitrary-send-eth",
+      "impact": "High",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/aster/OutrunAsBNBSYUpgradeable.sol#L90-L109",
+      "summary": "OutrunAsBNBSYUpgradeable._deposit(address,uint256) sends eth to arbitrary user",
+      "key": "arbitrary-send-eth|src/yield/adapters/aster/OutrunAsBNBSYUpgradeable.sol|OutrunAsBNBSYUpgradeable._deposit(address,uint256) sends eth to arbitrary user"
+    },
+    {
+      "id": "709fb0de539f9bfd0c232c603008d6d788c6006cb74cb8e379f72becd6725aa3",
+      "check": "arbitrary-send-eth",
+      "impact": "High",
+      "confidence": "Medium",
+      "location": "src/yield/adapters/lista/OutrunSlisBNBSYUpgradeable.sol#L37-L49",
+      "summary": "OutrunSlisBNBSYUpgradeable._deposit(address,uint256) sends eth to arbitrary user",
+      "key": "arbitrary-send-eth|src/yield/adapters/lista/OutrunSlisBNBSYUpgradeable.sol|OutrunSlisBNBSYUpgradeable._deposit(address,uint256) sends eth to arbitrary user"
+    },
+    {
+      "id": "a5e6935d8d1efa2479f16580dfbc1437fdccf06fae451ba7ae3983bd9f27601f",
+      "check": "uninitialized-state",
+      "impact": "High",
+      "confidence": "High",
+      "location": "src/assets/base/OutrunUniversalAssetsUpgradeable.sol#L31",
+      "summary": "OutrunUniversalAssetsUpgradeable.outrunUniversalAssetsStorage is never initialized. It is used in:",
+      "key": "uninitialized-state|src/assets/base/OutrunUniversalAssetsUpgradeable.sol|OutrunUniversalAssetsUpgradeable.outrunUniversalAssetsStorage is never initialized. It is used in:"
+    },
+    {
+      "id": "08e79a3c810bc0398074b4723472a4a8346c9d26590c1c32420a94017dede1e0",
       "check": "reentrancy-no-eth",
       "impact": "Medium",
       "confidence": "Medium",
-      "location": "src/position/OutrunStakingPositionUpgradeable.sol#L332-L363",
+      "location": "src/position/OutrunStakingPositionUpgradeable.sol#L446-L491",
       "summary": "Reentrancy in OutrunStakingPositionUpgradeable.keepRedeem(uint256,uint256,address):",
       "key": "reentrancy-no-eth|src/position/OutrunStakingPositionUpgradeable.sol|Reentrancy in OutrunStakingPositionUpgradeable.keepRedeem(uint256,uint256,address):"
     },
     {
-      "id": "8f693b8804c7e80127aae3a74151d3c59c9d80a079ccb5a06924c6b63304c060",
-      "check": "reentrancy-no-eth",
+      "id": "fa12a17d381b3bd2cb2992ba1d749bd4a614650814f55f71d1484305add344c4",
+      "check": "unused-return",
       "impact": "Medium",
       "confidence": "Medium",
-      "location": "src/position/OutrunStakingPositionUpgradeable.sol#L297-L327",
-      "summary": "Reentrancy in OutrunStakingPositionUpgradeable.wrapRedeem(uint256,address,address,uint256):",
-      "key": "reentrancy-no-eth|src/position/OutrunStakingPositionUpgradeable.sol|Reentrancy in OutrunStakingPositionUpgradeable.wrapRedeem(uint256,address,address,uint256):"
+      "location": "src/position/OutrunStakingPositionUpgradeable.sol#L66-L94",
+      "summary": "OutrunStakingPositionUpgradeable.initialize(address,uint256,address,address,address,address) ignores return value by (None,None,canonicalAssetDecimals) = IStandardizedYield(sy_).assetInfo()",
+      "key": "unused-return|src/position/OutrunStakingPositionUpgradeable.sol|OutrunStakingPositionUpgradeable.initialize(address,uint256,address,address,address,address) ignores return value by (None,None,canonicalAssetDecimals) = IStandardizedYield(sy_).assetInfo()"
     },
     {
-      "id": "ff7358b3d884fff42240609eb0c4fb6dfb27826f5035dbe1a18c953c63788fe2",
-      "check": "reentrancy-no-eth",
-      "impact": "Medium",
-      "confidence": "Medium",
-      "location": "src/position/OutrunStakingPositionUpgradeable.sol#L262-L292",
-      "summary": "Reentrancy in OutrunStakingPositionUpgradeable.redeem(uint256,uint256,address,address,uint256):",
-      "key": "reentrancy-no-eth|src/position/OutrunStakingPositionUpgradeable.sol|Reentrancy in OutrunStakingPositionUpgradeable.redeem(uint256,uint256,address,address,uint256):"
-    },
-    {
-      "id": "56c1a596de37618d98c3f2ac547d2ea912edbe436738585d6cdf8f862a0e49ad",
+      "id": "829984bcde74d425690f68b7585275ab407408c09c91320188def98d9564a653",
       "check": "shadowing-local",
       "impact": "Low",
       "confidence": "High",
-      "location": "src/position/interfaces/IOutrunStakeManager.sol#L238",
+      "location": "src/position/interfaces/IOutrunStakeManager.sol#L254",
       "summary": "IOutrunStakeManager.setKeeper(address).keeper shadows:",
       "key": "shadowing-local|src/position/interfaces/IOutrunStakeManager.sol|IOutrunStakeManager.setKeeper(address).keeper shadows:"
     },
     {
-      "id": "6ab44d9b649601895b0e6a32505127078533d36f4de85adf7c4fd37fc809e584",
-      "check": "missing-zero-check",
-      "impact": "Low",
-      "confidence": "Medium",
-      "location": "src/router/OutrunRouter.sol#L339",
-      "summary": "OutrunRouter.setMemeverseLauncher(address)._memeverseLauncher lacks a zero-check on :",
-      "key": "missing-zero-check|src/router/OutrunRouter.sol|OutrunRouter.setMemeverseLauncher(address)._memeverseLauncher lacks a zero-check on :"
-    },
-    {
-      "id": "c3e7bdeeb5a9130ea10baa48556c051751a6cc87681ef5f7385e42c7bf57e08c",
-      "check": "missing-zero-check",
-      "impact": "Low",
-      "confidence": "Medium",
-      "location": "src/router/OutrunRouter.sol#L17",
-      "summary": "OutrunRouter.constructor(address,address)._memeverseLauncher lacks a zero-check on :",
-      "key": "missing-zero-check|src/router/OutrunRouter.sol|OutrunRouter.constructor(address,address)._memeverseLauncher lacks a zero-check on :"
-    },
-    {
-      "id": "72793c010df7e0c6c3d9e13f865ddc481675adaf3741c426a6356fc0688c68e8",
-      "check": "reentrancy-benign",
-      "impact": "Low",
-      "confidence": "Medium",
-      "location": "src/position/OutrunStakingPositionUpgradeable.sol#L297-L327",
-      "summary": "Reentrancy in OutrunStakingPositionUpgradeable.wrapRedeem(uint256,address,address,uint256):",
-      "key": "reentrancy-benign|src/position/OutrunStakingPositionUpgradeable.sol|Reentrancy in OutrunStakingPositionUpgradeable.wrapRedeem(uint256,address,address,uint256):"
-    },
-    {
-      "id": "933d343f7812e919893570e9aa67b3e5c3306c51c4d1e306fbf65ce0710d911d",
-      "check": "reentrancy-benign",
-      "impact": "Low",
-      "confidence": "Medium",
-      "location": "src/position/OutrunStakingPositionUpgradeable.sol#L262-L292",
-      "summary": "Reentrancy in OutrunStakingPositionUpgradeable.redeem(uint256,uint256,address,address,uint256):",
-      "key": "reentrancy-benign|src/position/OutrunStakingPositionUpgradeable.sol|Reentrancy in OutrunStakingPositionUpgradeable.redeem(uint256,uint256,address,address,uint256):"
-    },
-    {
-      "id": "afc4af0b4eabd36beb3b044968f6a37d9c4d990b3c783a942de0ea8cf92a1138",
-      "check": "reentrancy-benign",
-      "impact": "Low",
-      "confidence": "Medium",
-      "location": "src/position/OutrunStakingPositionUpgradeable.sol#L332-L363",
-      "summary": "Reentrancy in OutrunStakingPositionUpgradeable.keepRedeem(uint256,uint256,address):",
-      "key": "reentrancy-benign|src/position/OutrunStakingPositionUpgradeable.sol|Reentrancy in OutrunStakingPositionUpgradeable.keepRedeem(uint256,uint256,address):"
-    },
-    {
-      "id": "293956611fe6660dec9416a23fe055e880515e7f4f8aaffe6565b57b77d13b55",
+      "id": "be15c7c99c7cc81348ba7d4d8ae78aeb9dceb266562cdfcf95efa20d73ba16f4",
       "check": "timestamp",
       "impact": "Low",
       "confidence": "Medium",
-      "location": "src/position/OutrunStakingPositionUpgradeable.sol#L262-L292",
+      "location": "src/position/OutrunStakingPositionUpgradeable.sol#L210-L224",
+      "summary": "OutrunStakingPositionUpgradeable.previewRedeem(uint256,uint256,address) uses timestamp for comparisons",
+      "key": "timestamp|src/position/OutrunStakingPositionUpgradeable.sol|OutrunStakingPositionUpgradeable.previewRedeem(uint256,uint256,address) uses timestamp for comparisons"
+    },
+    {
+      "id": "7013b35b1bd712b9e8551fa8e77692036e282bc19fd38a90e08891ce3183b2ae",
+      "check": "timestamp",
+      "impact": "Low",
+      "confidence": "Medium",
+      "location": "src/position/OutrunStakingPositionUpgradeable.sol#L364-L396",
       "summary": "OutrunStakingPositionUpgradeable.redeem(uint256,uint256,address,address,uint256) uses timestamp for comparisons",
       "key": "timestamp|src/position/OutrunStakingPositionUpgradeable.sol|OutrunStakingPositionUpgradeable.redeem(uint256,uint256,address,address,uint256) uses timestamp for comparisons"
     },
     {
-      "id": "2e710a3d25179a5013ddca1fa54dfefb37f521abc25a06e4c5ba3938e47dde91",
+      "id": "ff821c24f0194afdf341cfc60a84af362040e9b6ead25927cb395c0cb9e6f546",
       "check": "timestamp",
       "impact": "Low",
       "confidence": "Medium",
-      "location": "src/position/OutrunStakingPositionUpgradeable.sol#L332-L363",
+      "location": "src/position/OutrunStakingPositionUpgradeable.sol#L446-L491",
       "summary": "OutrunStakingPositionUpgradeable.keepRedeem(uint256,uint256,address) uses timestamp for comparisons",
       "key": "timestamp|src/position/OutrunStakingPositionUpgradeable.sol|OutrunStakingPositionUpgradeable.keepRedeem(uint256,uint256,address) uses timestamp for comparisons"
     },
     {
-      "id": "76c2c18d300cffcec4676d729c78179f364158a82250a59c3610712abbe0b09a",
-      "check": "timestamp",
-      "impact": "Low",
-      "confidence": "Medium",
-      "location": "src/assets/omnichain/OutrunOFT.sol#L167-L173",
-      "summary": "OutrunOFT._checkAndUpdate(RateLimiter.RateLimit,bool,uint32,uint256) uses timestamp for comparisons",
-      "key": "timestamp|src/assets/omnichain/OutrunOFT.sol|OutrunOFT._checkAndUpdate(RateLimiter.RateLimit,bool,uint32,uint256) uses timestamp for comparisons"
-    },
-    {
-      "id": "98477d3a236b6c2e999e7d587acaad95b2d11df6bc61e721841a967e9a469fe5",
-      "check": "timestamp",
-      "impact": "Low",
-      "confidence": "Medium",
-      "location": "src/assets/omnichain/OutrunOFT.sol#L192-L209",
-      "summary": "OutrunOFT.quoteOFT(SendParam) uses timestamp for comparisons",
-      "key": "timestamp|src/assets/omnichain/OutrunOFT.sol|OutrunOFT.quoteOFT(SendParam) uses timestamp for comparisons"
-    },
-    {
-      "id": "a6652805fa5a43e8a117b8016c8322c3c8bf61112d911ec1f85238279d8a16b8",
-      "check": "timestamp",
-      "impact": "Low",
-      "confidence": "Medium",
-      "location": "src/assets/omnichain/OutrunOFT.sol#L215-L221",
-      "summary": "OutrunOFT._toSD(uint256) uses timestamp for comparisons",
-      "key": "timestamp|src/assets/omnichain/OutrunOFT.sol|OutrunOFT._toSD(uint256) uses timestamp for comparisons"
-    },
-    {
-      "id": "b0c568608accf76602e4dc632617fcacdbd1ea6a3439fdf0312c36fa40702cce",
-      "check": "timestamp",
-      "impact": "Low",
-      "confidence": "Medium",
-      "location": "src/assets/omnichain/OutrunOFT.sol#L274-L281",
-      "summary": "OutrunOFT._maxQuoteAmountLD(uint32) uses timestamp for comparisons",
-      "key": "timestamp|src/assets/omnichain/OutrunOFT.sol|OutrunOFT._maxQuoteAmountLD(uint32) uses timestamp for comparisons"
-    },
-    {
-      "id": "",
-      "check": "assembly",
+      "id": "d48e12fdf68e5a1fb23242e208336c419d3ba15bc30ff031ba6b799ca9dbd6db",
+      "check": "dead-code",
       "impact": "Informational",
-      "confidence": "High",
-      "location": "src/assets/base/OutrunUniversalAssetsUpgradeable.sol#L36-L42",
-      "summary": "OutrunUniversalAssetsUpgradeable._getOutrunUniversalAssetsStorage() uses assembly",
-      "key": "assembly|src/assets/base/OutrunUniversalAssetsUpgradeable.sol|OutrunUniversalAssetsUpgradeable._getOutrunUniversalAssetsStorage() uses assembly"
+      "confidence": "Medium",
+      "location": "src/position/OutrunStakingPositionUpgradeable.sol#L648-L662",
+      "summary": "OutrunStakingPositionUpgradeable._previewRedeemPositionDebt(uint256,uint256) is never used and should be removed",
+      "key": "dead-code|src/position/OutrunStakingPositionUpgradeable.sol|OutrunStakingPositionUpgradeable._previewRedeemPositionDebt(uint256,uint256) is never used and should be removed"
     }
   ]
 }

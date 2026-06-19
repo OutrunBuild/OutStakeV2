@@ -6,8 +6,6 @@ import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {MockSY, MockERC20, MockUAsset} from "./mocks/PositionTestMocks.sol";
 import {OutrunStakingPositionUpgradeable} from "../../src/position/OutrunStakingPositionUpgradeable.sol";
-import {IStandardizedYield} from "../../src/yield/interfaces/IStandardizedYield.sol";
-import {SYUtils} from "../../src/libraries/SYUtils.sol";
 import {ProxyTestHelper} from "./helpers/ProxyTestHelper.sol";
 
 /**
@@ -294,14 +292,7 @@ contract PositionHandler is Test {
      */
     function harvestWrapYield() external {
         vm.prank(owner);
-        try position.harvestWrapYield(address(sy), 0) returns (
-            uint256
-        ) {
-        // Harvest succeeded
-        }
-            catch {
-            // No yield to harvest is fine
-        }
+        position.harvestWrapYield(address(sy), 0);
     }
 
     // Helper to estimate uAsset burn for redemption
@@ -413,37 +404,23 @@ contract OutrunStakingPositionInvariantTest is StdInvariant, Test {
     }
 
     /**
-     * @notice Invariant 2: Wrap pool collateralization is maintained
-     * @dev Note: The wrap pool CAN become temporarily undercollateralized when exchange rate increases.
-     * This is by design - the system handles this by:
-     * 1. Reverting redemptions that would exceed available wrap pool SY
-     * 2. Only harvesting yield when there's excess SY above debt
-     * This invariant verifies the system state is consistent, not that it's always fully collateralized.
+     * @notice Invariant 2: Wrap pool accounting bounds (rate-independent)
+     * @dev The wrap pool is INTENTIONALLY allowed to be temporarily undercollateralized
+     * when the exchange rate moves — wrapRedeem reverts over-releases and harvestWrapYield
+     * only removes excess SY above the debt ceiling. A collateral ratio is therefore NOT
+     * a valid invariant (it tracks the external rate). We assert only that the two
+     * accounting quantities stay within legal, non-wrapped-around bounds.
      */
-    function invariant_wrapPoolCollateralizationConsistent() public view {
-        uint256 wrapDebt = position.wrapUAssetDebt();
+    function invariant_wrapPoolAccountingBounded() public view {
         uint256 syWrap = position.syWrapStaking();
+        uint256 wrapDebt = position.wrapUAssetDebt();
 
-        // The wrap pool may be undercollateralized, but syWrapStaking should never exceed syTotalStaking
+        // underflow 回绕的 syWrap 会接近 2^256,必然超过 syTotalStaking。
         assertLe(syWrap, position.syTotalStaking(), "Invariant violation: syWrapStaking > syTotalStaking");
 
-        // Calculate debt in SY terms
-        if (wrapDebt > 0) {
-            SYUtils.assetToSy(IStandardizedYield(address(sy)).exchangeRate(), wrapDebt);
-
-            // If there's wrap debt, there must be some wrap SY (can't have debt with zero SY)
-            // Unless all SY has been harvested after rate decrease
-            if (syWrap == 0 && wrapDebt > 0) {
-                // This can happen after harvest when rate has decreased significantly
-                // This is a valid state but should be rare - log it for review
-                // In production, this would require rate to drop by >50%
-            }
-        } else if (syWrap > 0) {
-            // If there's no wrap debt, there can be leftover SY from:
-            // 1. Rounding during redemptions
-            // 2. Yield that hasn't been harvested yet
-            // This is a valid state
-        }
+        // wrapUAssetDebt 是 position 合约净铸币的一部分(见 invariant 4),不能超过净额。
+        (, uint256 positionNetMinted) = uAsset.mintingStatusTable(address(position));
+        assertLe(wrapDebt, positionNetMinted, "Invariant violation: wrapUAssetDebt > position net minted");
     }
 
     /**
@@ -477,18 +454,16 @@ contract OutrunStakingPositionInvariantTest is StdInvariant, Test {
             }
         }
 
-        totalPositionDebt + position.wrapUAssetDebt();
+        // position 合约的净铸币(按 minter 账本)。读 mintingStatusTable[address(position)]
+        // 而非 totalSupply() —— handler 在 redeem/keepRedeem 时直接 mint uAsset 给 actor/keeper
+        // 补 burn 余额,会污染 totalSupply;per-minter 账本隔离了 position 合约的净额。
+        (, uint256 positionNetMinted) = uAsset.mintingStatusTable(address(position));
 
-        // The total minted tracked by the handler should match
-        // Note: We can't directly check MockUAsset.mintingStatusTable because
-        // the position contract is the minter, not the handler.
-        // Instead, we verify the position contract's accounting is consistent.
-
-        // Verify ghost tracking is consistent with contract state
+        // position 合约的净铸币必须等于当前 outstanding 的 position debt + wrap debt。
         assertEq(
-            handler.getGhostTotalUAssetMinted(),
-            totalPositionDebt,
-            "Invariant violation: ghost uAsset tracking mismatch"
+            positionNetMinted,
+            totalPositionDebt + position.wrapUAssetDebt(),
+            "Invariant violation: position net minted != sum(position debt) + wrap debt"
         );
     }
 

@@ -771,8 +771,15 @@ validate_json_file_against_schema() {
 import json
 import pathlib
 import sys
+import warnings
 
-from jsonschema import Draft202012Validator, RefResolver
+with warnings.catch_warnings():
+    warnings.filterwarnings(
+        "ignore",
+        message=r"jsonschema\.RefResolver is deprecated.*",
+        category=DeprecationWarning,
+    )
+    from jsonschema import Draft202012Validator, RefResolver
 
 instance_path = pathlib.Path(sys.argv[1]).resolve()
 schema_path = pathlib.Path(sys.argv[2]).resolve()

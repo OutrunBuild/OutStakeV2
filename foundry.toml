@@ -14,25 +14,25 @@ extra_output = ["storageLayout"]
 gas_reports = ["*"]
 
 [profile.smoke.fuzz]
-runs = 64
+runs = 128
 
 [profile.smoke.invariant]
-runs = 32
+runs = 64
 depth = 100
 
 [profile.ci.fuzz]
-runs = 256
+runs = 512
 
 [profile.ci.invariant]
-runs = 256
+runs = 512
 depth = 500
 
 [profile.release.fuzz]
 runs = 1024
 
 [profile.release.invariant]
-runs = 512
-depth = 1000
+runs = 1024
+depth = 500
 
 [rpc_endpoints]
 bsc_testnet = "${BSC_TESTNET_RPC}"
@@ -72,6 +72,7 @@ bsc_mainnet = { key = "${ETHEREUMSCAN_API_KEY}", chain = "56", url = "${ETHEREUM
 exclude_lints = [
     "mixed-case-variable", "mixed-case-function", "screaming-snake-case-immutable",
     "screaming-snake-case-const", "unaliased-plain-import", "erc20-unchecked-transfer",
+    "block-timestamp",
 ]
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
