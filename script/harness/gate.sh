@@ -632,14 +632,27 @@ run_slither_with_baseline() {
         --json - \
         --json-types detectors \
         --fail-none \
-        --disable-color > "$raw_output_file" 2>&1
+        --disable-color > "$raw_output_file" 2>/dev/null
     exit_code=$?
     set -e
 
     if [ "$exit_code" -ne 0 ]; then
-        filter_command_output "$raw_output_file" "$exit_code"
+        echo "[gate] slither (id=$id) exited with code $exit_code" >&2
+        # slither --json enables StandardOutputCapture (Python sys.stdout/stderr
+        # redirect). Tracebacks from uncaught exceptions are lost when the
+        # process exits before disable() flushes the buffer. Re-run without
+        # --json so the real traceback reaches fd 2.
+        echo "[gate] re-running slither without --json to surface the real error:" >&2
+        set +e
+        slither src \
+            --filter-paths "$slither_filter_paths" \
+            --exclude-dependencies \
+            --exclude "$slither_exclude_detectors" \
+            --fail-none \
+            --disable-color 2>&1 | head -n 80 >&2
+        set -e
         verification_failed=1
-        record_command_result "$id" "failed" "$exit_code" "slither command failed" "verifier"
+        record_command_result "$id" "failed" "$exit_code" "slither command failed (exit $exit_code; see output above)" "verifier"
         append_finding blocking_findings_json "verifier" "verification command failed: $id" "$id" "error"
         return
     fi
