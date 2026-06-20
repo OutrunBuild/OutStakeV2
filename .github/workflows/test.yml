@@ -43,6 +43,12 @@ jobs:
       - name: Install Slither
         run: python3 -m pip install slither-analyzer==0.11.5 jsonschema
 
+      - name: Patch slither source_mapping bug
+        run: |
+          SITE=$(python3 -c "import slither, os; print(os.path.dirname(slither.__file__))")
+          sed -i 's/contract.source_mapping.to_detailed_str()/contract.source_mapping.to_detailed_str() if contract.source_mapping else "unknown"/' \
+            "$SITE/solc_parsing/expressions/find_variable.py"
+
       - name: Show Forge version
         run: forge --version
 

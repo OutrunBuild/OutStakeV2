@@ -10,6 +10,7 @@ optimizer_runs = 200
 via_ir = true
 build_info = true
 evm_version = "prague"
+extra_output = ["storageLayout"]
 ignored_error_codes = [6335, 2424]
 
 [profile.smoke.fuzz]
