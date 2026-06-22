@@ -8,6 +8,7 @@
 4. `docs/TRACEABILITY.md` when you need control-file or artifact locations
 5. `docs/VERIFICATION.md` when you need verification profile or verdict rules
 6. `script/harness/gate.sh` when you need enforcement details or emitted evidence
+7. `.claude/rules/*.md` — Solidity style/best-practices, auto-loaded by `paths:` scope (`src/` / `test/` / `script/`) when editing `.sol` files; consult directly only for cross-scope reference
 
 ## Truth Precedence
 

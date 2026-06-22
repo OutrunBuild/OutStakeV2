@@ -28,6 +28,8 @@
       "^\\.gitmodules$",
       "^\\.claude/settings\\.json$",
       "^\\.claude/agents/.*$",
+      "^\\.claude/rules/.*$",
+      "^(src|test|script)/AGENTS\\.md$",
       "^\\.codex/agents/.*$",
       "^docs/.*$",
       "^lib/ds-test$",

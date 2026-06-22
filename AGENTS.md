@@ -73,6 +73,7 @@ Do not override policy or gate evidence with natural-language guesses.
 - Many tiny single-use helpers often reduce readability because readers must jump around.
 - Extract a helper only when it clearly improves readability, naming, reuse, or testability.
 - Inline trivial single-use logic unless extraction clearly improves readability, naming, reuse, or testability.
+- Solidity style and best practices auto-load by scope from `.claude/rules/` (`solidity-contracts.md` for `src/`, `solidity-tests.md` for `test/`, `solidity-scripts.md` for `script/`) when editing `.sol` files. Follow them when writing or modifying Solidity code; no manual read needed.
 
 ## Test Code Rules
 
