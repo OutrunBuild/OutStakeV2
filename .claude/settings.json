@@ -23,6 +23,10 @@
     "deny": [
       "Bash(git push *)",
       "Bash(rm -rf *)",
+      "Bash(git restore *)",
+      "Bash(git checkout *)",
+      "Bash(git clean *)",
+      "Bash(git stash drop*)",
       "Read(.env)",
       "Read(.env.*)"
     ]
@@ -35,6 +39,15 @@
           {
             "type": "command",
             "command": "bash ./script/harness/pre-edit-check.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "EnterWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'OutStakeV2 禁用 EnterWorktree（默认建到 .claude/worktrees/）。worktree 用: git worktree add .worktrees/<name>' >&2; exit 2"
           }
         ]
       }
