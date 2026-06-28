@@ -44,5 +44,8 @@ node_modules/
 
 .worktrees/
 
+# Claude Code agent worktrees (must never be created here — project uses .worktrees/)
+.claude/worktrees/
+
 skills/
 lcov.info
