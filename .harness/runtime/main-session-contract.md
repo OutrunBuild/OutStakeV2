@@ -53,10 +53,20 @@
 When dispatching a reviewer, choose the diff handoff by size:
 
 - **Multi-file or large diff** (e.g. prod-semantic changes spanning several contracts): run `script/harness/review-package.sh BASE` and pass the printed file path. The diff content never enters the main session's context; the reviewer reads the file once.
+- **refinement-reviewer**: write the exact byte-sorted canonical `changed_files` paths to a temporary changed-files file, then generate its package with `script/harness/review-package.sh BASE [HEAD] [OUTFILE] --files <each changed_files path>`. `--files` is mandatory. The changed-files file and readable package are this reviewer's only inputs; retain the same file for response validation.
 - **Single-file small change, already read by the main session**: the diff snippet may be passed inline to save the reviewer a Read.
 - **BASE**: the commit recorded before dispatching the implementer (run `git rev-parse HEAD` at that moment); it must be an ancestor of HEAD. Never `HEAD~1` — it silently truncates a multi-commit task.
 
 Never paste accumulated prior-round summaries into later dispatches — hand the reviewer its diff as a file path and the current findings list only.
+
+## Handling Refinement Reviewer Output
+
+- Before dispatching `refinement-reviewer`, require the package's authoritative `## Scope Manifest` to exactly equal the supplied `changed_files` set. Generate it with `review-package.sh --files` and retain the exact changed-files file. Repair a missing or mismatched input before dispatching.
+- Before reading, deciding, or routing any `refinement-reviewer` JSON, run `bash script/harness/validate-refinement-review.sh RESPONSE_JSON REVIEW_PACKAGE CHANGED_FILES_FILE`. A nonzero result is `blocked`: do not consume the response or route work until inputs are repaired and the reviewer is re-dispatched.
+- Process `handoffs` first. Dispatch `security-reviewer` for a `security` handoff and `logic-reviewer` for a `correctness` handoff. Do not route a writer from a handoff, and do not process findings until all handoffs are triaged.
+- After handoff triage, route only proven actionable `findings` to the owning writer. Every resulting fix requires a new `refinement-reviewer` review.
+- A `candidate` never routes a writer and is a valid final output. Record its `hypothesis` and exact `required_evidence`. Re-dispatch `refinement-reviewer` only if the caller later supplies that evidence.
+- Interpret verdicts strictly: `pass` has empty report arrays and complete `reviewed_files`; `action-required` has at least one report item and complete `reviewed_files`; `blocked` has empty report arrays and means a required input or skill is unavailable or invalid, or the supplied scope cannot be completely inspected or reviewed; its `reviewed_files` is the actual completed subset, and its `summary` identifies the reason and unreviewed paths.
 
 ## Handling Reviewer needs_cross_check
 

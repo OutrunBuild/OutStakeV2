@@ -187,8 +187,6 @@ EOF
 run_ci_entrypoint_capture() {
     local name="$1"
     local event_name="$2"
-    local base_sha="$3"
-    local head_sha="$4"
     local fake_bin="$tmp_dir/$name.bin"
     local capture_dir="$tmp_dir/$name.capture"
     local runner_temp="$tmp_dir/$name.runner"
@@ -226,8 +224,6 @@ EOF
 
     HARNESS_CAPTURE_DIR="$capture_dir" \
     HARNESS_EVENT_NAME="$event_name" \
-    HARNESS_EVENT_BASE_SHA="$base_sha" \
-    HARNESS_EVENT_HEAD_SHA="$head_sha" \
     RUNNER_TEMP="$runner_temp" \
     PATH="$fake_bin:$PATH" \
     bash script/harness/ci-gate-entrypoint.sh
@@ -497,7 +493,7 @@ jq -e '
   .harness_writer_roles == [] and
   (has("spec_review_required") | not) and
   .code_writer_roles == ["solidity-implementer"] and
-  (.code_review_roles | sort) == ["gas-reviewer", "logic-reviewer", "security-reviewer"]
+  (.code_review_roles | sort) == ["logic-reviewer", "refinement-reviewer", "security-reviewer"]
 ' "$src_record" >/dev/null
 assert_no_removed_fields "$src_record"
 
@@ -509,7 +505,7 @@ jq -e '
   .orchestration_profile == "full-review" and
   .harness_writer_roles == [] and
   .code_writer_roles == ["solidity-implementer"] and
-  (.code_review_roles | sort) == ["gas-reviewer", "logic-reviewer", "security-reviewer"] and
+  (.code_review_roles | sort) == ["logic-reviewer", "refinement-reviewer", "security-reviewer"] and
   (.residual_risks[] | select(.rule_id == "planned-solidity-classification"))
 ' "$planned_src_record" >/dev/null
 assert_no_removed_fields "$planned_src_record"
@@ -535,7 +531,7 @@ jq -e '
   .harness_writer_roles == ["process-implementer"] and
   (has("spec_review_required") | not) and
   .code_writer_roles == ["solidity-implementer"] and
-  (.code_review_roles | sort) == ["gas-reviewer", "logic-reviewer", "security-reviewer"] and
+  (.code_review_roles | sort) == ["logic-reviewer", "refinement-reviewer", "security-reviewer"] and
   .requires_human_confirmation == true
 ' "$mixed_record" >/dev/null
 assert_no_removed_fields "$mixed_record"
@@ -548,7 +544,7 @@ jq -e '
   .harness_writer_roles == ["process-implementer"] and
   (has("spec_review_required") | not) and
   .code_writer_roles == ["solidity-implementer"] and
-  (.code_review_roles | sort) == ["gas-reviewer", "logic-reviewer", "security-reviewer"] and
+  (.code_review_roles | sort) == ["logic-reviewer", "refinement-reviewer", "security-reviewer"] and
   .requires_human_confirmation == false
 ' "$mixed_non_spec_record" >/dev/null
 assert_no_removed_fields "$mixed_non_spec_record"
@@ -617,10 +613,7 @@ assert_no_removed_fields "$default_record"
 
 assert_ci_workflow_expressions
 
-current_head="$(git rev-parse HEAD)"
-empty_tree="4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-
-zero_base_capture="$(run_ci_entrypoint_capture zero-base workflow_dispatch "" "$current_head")"
+zero_base_capture="$(run_ci_entrypoint_capture zero-base workflow_dispatch)"
 grep -qx -- "run" "$zero_base_capture/argv"
 grep -qx -- "gate:ci" "$zero_base_capture/argv"
 grep -qx -- "--" "$zero_base_capture/argv"
@@ -630,17 +623,18 @@ if grep -qx -- "--changed-files" "$zero_base_capture/argv"; then
     exit 1
 fi
 [ ! -s "$zero_base_capture/diff_path" ]
-[ ! -f "$zero_base_capture/changed_files" ]
+[ ! -s "$zero_base_capture/changed_files_args" ]
 
-diff_capture="$(run_ci_entrypoint_capture diff-based push "$empty_tree" "$current_head")"
+diff_capture="$(run_ci_entrypoint_capture diff-based push)"
 grep -qx -- "run" "$diff_capture/argv"
 grep -qx -- "gate:ci" "$diff_capture/argv"
 grep -qx -- "--" "$diff_capture/argv"
-grep -qx -- "--changed-files" "$diff_capture/argv"
-[ -s "$diff_capture/changed_files_args" ]
-[ -s "$diff_capture/diff_path" ]
-[ -s "$diff_capture/diff_file" ]
-diff -u <(git diff --name-only "$empty_tree" "$current_head") "$diff_capture/changed_files_args"
+grep -qx -- "--all" "$diff_capture/argv"
+if grep -qx -- "--changed-files" "$diff_capture/argv"; then
+    echo "CI entrypoint must not pass --changed-files (it always runs --all)" >&2
+    exit 1
+fi
+[ ! -s "$diff_capture/diff_path" ]
 
 pre_edit_output="$(run_pre_edit_check "$repo_root/script/harness/test-orchestration.sh")"
 assert_pre_edit_check_guidance "$pre_edit_output"

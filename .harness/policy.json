@@ -27,6 +27,9 @@
       "^\\.harness/schemas/.*$",
       "^\\.gitmodules$",
       "^\\.claude/settings\\.json$",
+      "^\\.pi/agents/.*$",
+      "^\\.pi/extensions/.*$",
+      "^\\.pi/settings\\.json$",
       "^\\.claude/agents/.*$",
       "^\\.claude/rules/.*$",
       "^(src|test|script)/AGENTS\\.md$",
@@ -81,7 +84,7 @@
     "no-op": [],
     "non-semantic": [],
     "test-semantic": ["logic-reviewer"],
-    "prod-semantic": ["logic-reviewer", "security-reviewer", "gas-reviewer"]
+    "prod-semantic": ["logic-reviewer", "security-reviewer", "refinement-reviewer"]
   },
   "orchestration_rules": {
     "spec_paths": ["(^|.*/)(spec|specs)/.*\\.(md|mdx)$"],
