@@ -88,7 +88,7 @@
 
 1. 前置状态：合约未 paused；输入合法；记 `uAssetDebtUnits = amountInUAsset`，且 `uAssetDebtUnits <= wrapUAssetDebt`。
 2. 份额换算（本次修复目标/修复后语义）：先计算 `canonicalAssetValue = uAsset -> canonical asset`，再计算 `amountInSY = canonical asset -> SY`。
-3. wrap 池余额校验：若 `amountInSY > syWrapStaking` 则回退。
+3. 分支换算：池子健康（债务等值 SY ≤ 池子 SY）时 `amountInSY = uAsset -> canonical -> SY`（down，面值兑付）；池子不足时 `amountInSY = amountInUAsset × syWrapStaking / wrapUAssetDebt`（按池子份额比例，down，不因池子不足回退）。
 4. debt 清偿：对调用者执行 `uAsset.repay(msg.sender, uAssetDebtUnits)`。
 5. 聚合账务更新：
    - `syTotalStaking -= amountInSY`

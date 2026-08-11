@@ -360,19 +360,23 @@ contract OutrunStakingPositionFuzzTest is Test {
         // Change rate
         sy.setExchangeRate(newRate);
 
-        // Calculate max redeemable uAsset:
-        // syOut = uAsset * 1e18 / rate
-        // We need syOut <= syWrapStaking (which is amountInSY)
-        // So: uAsset * 1e18 / rate <= amountInSY
-        // uAsset <= amountInSY * rate / 1e18
-        uint256 maxRedeemUAsset = Math.mulDiv(amountInSY, newRate, 1e18);
-        if (maxRedeemUAsset > uAssetMinted) maxRedeemUAsset = uAssetMinted;
+        // Redeem amount is bounded by the debt face value; the contract picks pro-rata vs face-value
+        // redemption from pool health, so it never reverts on pool insufficiency.
+        redeemUAsset = bound(redeemUAsset, 1, uAssetMinted);
 
-        // Skip if max redeem is 0
-        vm.assume(maxRedeemUAsset > 0);
-
-        redeemUAsset = bound(redeemUAsset, 1, maxRedeemUAsset);
-        uint256 expectedSYOut = _assetToSy(redeemUAsset, newRate);
+        // Independent expectation, not the contract's own preview: healthy pool redeems at face
+        // value (_assetToSy), undercollateralized pool redeems pro-rata by pool share. Computing
+        // this separately from `_validateWrapRedeemAmount` means a wrong pro-rata formula or a
+        // regression back to the pool-balance revert cannot silently pass.
+        uint256 rate = sy.exchangeRate();
+        uint256 poolSy = position.syWrapStaking();
+        uint256 poolDebt = position.wrapUAssetDebt();
+        uint256 expectedSYOut;
+        if (_assetToSyUp(poolDebt, rate) <= poolSy) {
+            expectedSYOut = _assetToSy(redeemUAsset, rate);
+        } else {
+            expectedSYOut = Math.mulDiv(redeemUAsset, poolSy, poolDebt, Math.Rounding.Floor);
+        }
         vm.assume(expectedSYOut > 0);
 
         // WrapRedeem
@@ -657,30 +661,30 @@ contract OutrunStakingPositionFuzzTest is Test {
     // 10. Edge Cases - Rate Below 1
     // ============================================
 
-    function testFuzz_WrapRedeemAtLowRate(uint256 amountInSY, uint256 lowRate) public {
+    function testFuzz_WrapRedeemAtLowRate(uint256 amountInSY, uint256 lowRate, uint256 redeemBp) public {
         amountInSY = _boundAmount(amountInSY);
         lowRate = bound(lowRate, RATE_MIN, 9e17); // Rate < 1e18
+        redeemBp = bound(redeemBp, 1, 100);
 
         // WrapStake at rate 1e18
         vm.prank(owner);
         uint256 uAssetMinted = position.wrapStake(amountInSY, owner);
 
-        // Drop rate below 1
+        // Drop rate below 1: pool value < debt face → pro-rata branch.
         sy.setExchangeRate(lowRate);
 
-        // Calculate max redeemable without exceeding syWrapStaking
-        // At low rate: syOut = uAsset * 1e18 / lowRate > uAsset
-        // Max redeem = syWrapStaking * lowRate / 1e18
-        uint256 maxRedeemUAsset = Math.mulDiv(amountInSY, lowRate, 1e18);
-        if (maxRedeemUAsset > uAssetMinted) maxRedeemUAsset = uAssetMinted;
+        // Partial redeem: pro-rata share = syWrapStaking/wrapUAssetDebt (= 1 since minted at rate 1e18).
+        uint256 redeemUAsset = Math.mulDiv(uAssetMinted, redeemBp, 100, Math.Rounding.Floor);
+        vm.assume(redeemUAsset > 0); // skip dust redeem amounts (floor to zero)
+        uint256 expectedSYOut = Math.mulDiv(redeemUAsset, amountInSY, uAssetMinted, Math.Rounding.Floor);
+        vm.assume(expectedSYOut > 0);
 
-        if (maxRedeemUAsset > 0) {
-            vm.prank(owner);
-            uint256 syOut = position.wrapRedeem(maxRedeemUAsset, owner, address(sy), 0);
+        vm.prank(owner);
+        uint256 syOut = position.wrapRedeem(redeemUAsset, owner, address(sy), 0);
 
-            uint256 expectedSYOut = _assetToSy(maxRedeemUAsset, lowRate);
-            assertEq(syOut, expectedSYOut, "wrap redeem at low rate incorrect");
-        }
+        assertEq(syOut, expectedSYOut, "low-rate redemption prorates by pool share");
+        assertEq(position.syWrapStaking(), amountInSY - expectedSYOut, "pool reduced by redeemed SY");
+        assertEq(position.wrapUAssetDebt(), amountInSY - redeemUAsset, "debt reduced by burned uAsset");
     }
 
     // ============================================

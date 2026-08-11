@@ -305,7 +305,7 @@ contract OutrunStakingPositionUpgradeableTest is Test {
         position.previewWrapRedeem(101e18, address(sy));
     }
 
-    function testPreviewWrapRedeemRevertsWhenPoolSYIsInsufficient() external {
+    function testPreviewWrapRedeemProratesWhenPoolSYIsInsufficient() external {
         _setupMixedDecimalsPosition();
 
         vm.prank(user);
@@ -313,8 +313,9 @@ contract OutrunStakingPositionUpgradeableTest is Test {
 
         mixedSy.setExchangeRate(5e17);
 
-        vm.expectRevert(abi.encodeWithSelector(IOutrunStakeManager.ExceedsWrapPoolBalance.selector, 2e6, 1e6));
-        mixedPosition.previewWrapRedeem(1e18, address(mixedSy));
+        // Rate 0.5: pool 1e6 SY (worth 5e5) < debt 1e18 uAsset (face 1e6 canonical).
+        // Pro-rata: 1e18 × 1e6 / 1e18 = 1e6 SY — no revert.
+        assertEq(mixedPosition.previewWrapRedeem(1e18, address(mixedSy)), 1e6);
     }
 
     function testPreviewWrapRedeemRevertsWhenDustUAssetRoundsToZeroSY() external {

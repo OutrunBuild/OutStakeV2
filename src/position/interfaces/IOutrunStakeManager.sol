@@ -27,7 +27,6 @@ interface IOutrunStakeManager {
     error ExceedsPositionBalance(uint256 requested, uint256 available);
     error ExceedsPositionDebt(uint256 requested, uint256 available);
     error ExceedsWrapDebt(uint256 requested, uint256 available);
-    error ExceedsWrapPoolBalance(uint256 requested, uint256 available);
     error NothingToDraw();
     error PartialRedeemMustLeaveDebt();
     error InsufficientTokenOut(uint256 actual, uint256 minExpected);
@@ -134,8 +133,9 @@ interface IOutrunStakeManager {
 
     /**
      * @notice Previews a wrap-pool redemption into SY or another output token.
-     * @dev Quote-only. Converts uAsset debt to SY with the current exchange rate, then previews optional SY
-     * redemption into `tokenOut`.
+     * @dev Quote-only. Healthy pool: converts uAsset debt to SY at the current exchange rate.
+     * Undercollateralized pool: rate-independent pro-rata (amountInUAsset × syWrapStaking / wrapUAssetDebt).
+     * Then previews optional SY redemption into `tokenOut`.
      * @param amountInUAsset Amount of uAsset to redeem.
      * @param tokenOut Token requested on redemption.
      * @return amountTokenOut Amount of output token expected to be received.

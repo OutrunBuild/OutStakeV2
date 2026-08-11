@@ -104,9 +104,10 @@ rounding matrix：
 - draw：
   - `SY -> canonical asset` 用 down
   - `canonical asset -> uAsset` 用 down
-- wrap redeem：
+- wrap redeem（健康池，债务等值 SY ≤ 池子 SY）：
   - `uAsset -> canonical asset` 用 down
   - `canonical asset -> SY` 用 down
+- wrap redeem（不足池，池值 < 债务面值）：按比例 `amountInSY = amountInUAsset × syWrapStaking / wrapUAssetDebt`（down），不经过 exchangeRate，不因池子不足回退
 - keeper redeem：
   - `uAsset -> canonical asset` 用 down
   - `canonical asset -> SY` 用 down
@@ -114,9 +115,7 @@ rounding matrix：
   - full redeem 直接返回全部剩余 `position.UAssetMinted`
   - partial redeem 对 `position.UAssetMinted * syRedeemed / syStaked` 用 up
   - 若 partial 结果会耗尽剩余 debt，则 preview 必须拒绝该报价
-- `previewWrapRedeem(amountInUAsset, tokenOut)`：
-  - `uAsset -> canonical asset` 用 down
-  - `canonical asset -> SY` 用 down
+- `previewWrapRedeem(amountInUAsset, tokenOut)`：健康池同上 down 双段换算；不足池按 `amountInUAsset × syWrapStaking / wrapUAssetDebt`（down）
 - harvest coverage：
   - `uAsset -> canonical asset` 用 up
   - `canonical asset -> SY` 用 up

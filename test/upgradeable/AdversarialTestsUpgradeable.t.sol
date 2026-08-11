@@ -464,9 +464,11 @@ contract AdversarialTests is Test {
     }
 
     /**
-     * @notice Wrap redeem respects wrap pool SY balance
+     * @notice Wrap redeem prorates when pool is undercollateralized (no revert)
+     * @dev Rate drops to 0.5x: pool 100 SY (worth 50) < debt 100 uAsset (face 100). Redeeming
+     *      100 uAsset returns 100×100/100 = 100 SY pro-rata instead of reverting.
      */
-    function test_Adversarial_WrapRedeemRevertsWhenSYInsufficient() external {
+    function test_Adversarial_WrapRedeemProratesWhenPoolInsufficient() external {
         vm.prank(alice);
         position.wrapStake(100e18, alice);
 
@@ -476,10 +478,143 @@ contract AdversarialTests is Test {
         vm.prank(alice);
         uAsset.approve(address(position), type(uint256).max);
 
-        // At rate 0.5, 100 uAsset = 200 SY, but wrap pool only has 100 SY
+        // At rate 0.5 the pool cannot cover the full debt at face value (needs 200 SY, has 100).
+        // Pro-rata: each uAsset redeems syWrapStaking/wrapUAssetDebt = 1 SY → 100 SY.
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(IOutrunStakeManager.ExceedsWrapPoolBalance.selector, 200e18, 100e18));
-        position.wrapRedeem(100e18, alice, address(sy), 0);
+        uint256 syOut = position.wrapRedeem(100e18, alice, address(sy), 0);
+
+        assertEq(syOut, 100e18, "Alice gets all 100 SY pro-rata");
+        assertEq(position.syWrapStaking(), 0, "Pool emptied");
+        assertEq(position.wrapUAssetDebt(), 0, "Debt cleared");
+        assertEq(uAsset.balanceOf(alice), 0, "uAsset burned");
+    }
+
+    /**
+     * @notice Pro-rata redemption is fair: early redeemer gains no advantage
+     * @dev Alice and Bob each wrap 100 SY → pool 200 SY, debt 200 uAsset. Rate drops to 0.5.
+     *      Alice redeems first (100 SY pro-rata), Bob redeems second (100 SY pro-rata).
+     *      Both get the same pro-rata value; no one is blocked or front-runs the other.
+     */
+    function test_Adversarial_WrapRedeemProrataFairAcrossHolders() external {
+        vm.prank(alice);
+        position.wrapStake(100e18, alice);
+        vm.prank(bob);
+        position.wrapStake(100e18, bob);
+
+        sy.setExchangeRate(5e17);
+
+        vm.prank(alice);
+        uAsset.approve(address(position), type(uint256).max);
+        vm.prank(bob);
+        uAsset.approve(address(position), type(uint256).max);
+
+        uint256 aliceSYBefore = sy.balanceOf(alice);
+        uint256 bobSYBefore = sy.balanceOf(bob);
+
+        // Alice redeems first: 100 uAsset → 100×200/200 = 100 SY pro-rata.
+        vm.prank(alice);
+        uint256 aliceOut = position.wrapRedeem(100e18, alice, address(sy), 0);
+        assertEq(aliceOut, 100e18, "Alice redeems 100 SY pro-rata");
+
+        // Bob redeems after: pool still covers his share pro-rata, no revert.
+        vm.prank(bob);
+        uint256 bobOut = position.wrapRedeem(100e18, bob, address(sy), 0);
+        assertEq(bobOut, 100e18, "Bob redeems 100 SY pro-rata");
+
+        assertEq(position.syWrapStaking(), 0, "Pool fully distributed");
+        assertEq(position.wrapUAssetDebt(), 0, "Debt cleared");
+        assertEq(sy.balanceOf(alice) - aliceSYBefore, 100e18, "Alice got 100 SY");
+        assertEq(sy.balanceOf(bob) - bobSYBefore, 100e18, "Bob got 100 SY");
+    }
+
+    /**
+     * @notice Pro-rata redemptions recover the anchor when the rate returns
+     * @dev Rate 1.0 → 0.5: pool 100 SY (worth 50) < debt 100. Alice redeems half pro-rata
+     *      (50 uAsset → 50 SY). Rate recovers to 1.0: pool value = debt, remaining uAsset
+     *      redeems 1:1 again.
+     */
+    function test_Adversarial_WrapRedeemRecoversWhenRateReturns() external {
+        vm.prank(alice);
+        position.wrapStake(100e18, alice);
+
+        // Rate drops to 0.5: pool 100 SY (worth 50) < debt 100 uAsset.
+        sy.setExchangeRate(5e17);
+
+        vm.prank(alice);
+        uAsset.approve(address(position), type(uint256).max);
+
+        // Alice redeems half pro-rata: 50 uAsset → 50×100/100 = 50 SY.
+        vm.prank(alice);
+        uint256 out1 = position.wrapRedeem(50e18, alice, address(sy), 0);
+        assertEq(out1, 50e18, "First redemption prorates");
+        assertEq(position.syWrapStaking(), 50e18, "Pool has 50 SY left");
+        assertEq(position.wrapUAssetDebt(), 50e18, "Debt 50 uAsset left");
+
+        // Rate recovers to 1.0: pool value = debt, anchor restored.
+        sy.setExchangeRate(1e18);
+
+        vm.prank(alice);
+        uint256 out2 = position.wrapRedeem(50e18, alice, address(sy), 0);
+        assertEq(out2, 50e18, "Second redemption at face value after recovery");
+        assertEq(position.syWrapStaking(), 0, "Pool empty");
+        assertEq(position.wrapUAssetDebt(), 0, "Debt cleared");
+    }
+
+    /**
+     * @notice Pro-rata applies after harvest when the rate falls below the harvest level
+     * @dev Alice wraps 100 SY at rate 1.0 → pool 100 SY, debt 100 uAsset. Rate rises to 2.0,
+     *      owner harvests the 50 SY excess (pool → 50 SY, debt still 100). Rate falls back to
+     *      1.0: pool value (50) < debt (100) → pro-rata at 0.5. Redeeming all 100 uAsset
+     *      returns 100×50/100 = 50 SY (worth 50), no revert.
+     */
+    function test_Adversarial_WrapRedeemProrataAfterHarvestAndRateFall() external {
+        vm.prank(alice);
+        position.wrapStake(100e18, alice);
+
+        // Rate rises 2x; owner harvests the excess (50 SY), pool → 50 SY, debt stays 100.
+        sy.setExchangeRate(2e18);
+        vm.prank(owner);
+        uint256 harvested = position.harvestWrapYield(address(sy), 0);
+        assertEq(harvested, 50e18, "harvest removes excess above debt-equivalent");
+        assertEq(position.syWrapStaking(), 50e18, "pool trimmed to debt-equivalent");
+
+        // Rate falls back to 1.0: pool value 50 < debt 100 → pro-rata 0.5.
+        sy.setExchangeRate(1e18);
+
+        vm.prank(alice);
+        uAsset.approve(address(position), type(uint256).max);
+
+        vm.prank(alice);
+        uint256 syOut = position.wrapRedeem(100e18, alice, address(sy), 0);
+
+        assertEq(syOut, 50e18, "redeem prorates to pool share after harvest + rate fall");
+        assertEq(position.syWrapStaking(), 0, "pool emptied");
+        assertEq(position.wrapUAssetDebt(), 0, "Debt cleared");
+    }
+
+    /**
+     * @notice Pro-rata floors a non-integer pool share
+     * @dev Alice wraps 100 SY at rate 1.0 (S=100, D=100), Bob wraps 100 SY at rate 0.5
+     *      (S=200, D=150, share 4/3). Pool value 100 < debt 150 → pro-rata. Redeeming 100 uAsset
+     *      → floor(100×200/150) = floor(133.33) = 133 SY, never 134 (ceil would over-release).
+     */
+    function test_Adversarial_WrapRedeemProrataNonIntegerShare() external {
+        vm.prank(alice);
+        position.wrapStake(100e18, alice); // rate 1.0 → S=100, D=100
+
+        sy.setExchangeRate(5e17);
+        vm.prank(bob);
+        position.wrapStake(100e18, bob); // rate 0.5 → S=200, D=150
+
+        vm.prank(alice);
+        uAsset.approve(address(position), type(uint256).max);
+
+        vm.prank(alice);
+        uint256 syOut = position.wrapRedeem(100e18, alice, address(sy), 0);
+
+        assertEq(syOut, 133333333333333333333, "pro-rata floors the non-integer share (133.33 -> 133)");
+        assertEq(position.syWrapStaking(), 200e18 - 133333333333333333333, "pool residue after floor");
+        assertEq(position.wrapUAssetDebt(), 50e18, "debt 50 uAsset left");
     }
 
     // ============================================================

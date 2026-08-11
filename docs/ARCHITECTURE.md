@@ -114,7 +114,7 @@
 
 ### 2.5 Wrap Redeem
 
-调用者授权 uAsset -> router 代收 uAsset -> position.wrapRedeem() -> uAsset.repay() burn debt -> 按 exchangeRate 换算 SY -> 减少池账务 -> 输出 SY 或目标 token 给 receiver。
+调用者授权 uAsset -> router 代收 uAsset -> position.wrapRedeem() -> uAsset.repay() burn debt -> 换算 SY（健康池按 exchangeRate；不足池按池子份额比例 pro-rata）-> 减少池账务 -> 输出 SY 或目标 token 给 receiver。
 
 ### 2.6 Position Redeem (到期)
 
