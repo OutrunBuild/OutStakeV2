@@ -6,6 +6,6 @@ isolation=$(jq -r '.tool_input.isolation // empty' <<<"$hook_json")
 
 if [[ "$isolation" == "worktree" ]]; then
   jq -n \
-    --arg stopReason 'OutStakeV2 禁止 Agent(isolation:"worktree")，因为 Claude Code 会自动创建 .claude/worktrees/*。如需隔离写入，请先手动创建 git worktree 到 .worktrees/<name>，再让 subagent cd 到该绝对路径；只读 Agent 不要设置 isolation。' \
+    --arg stopReason 'OutStakeV2 forbids Agent(isolation:"worktree") because Claude Code auto-creates .claude/worktrees/*. For isolated writes, first manually create a git worktree at .worktrees/<name>, then have the subagent cd into that absolute path. Read-only Agents should not set isolation.' \
     '{continue: false, stopReason: $stopReason}'
 fi

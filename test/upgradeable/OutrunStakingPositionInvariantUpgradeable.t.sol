@@ -183,7 +183,8 @@ contract PositionHandler is Test {
         // Redemption succeeded
         }
             catch {
-            // Redemption can fail if wrap pool is undercollateralized due to rate change
+            // Redemption can fail on dust rounding or debt ceiling, not pool insufficiency
+            // (pro-rata redemption always clears within the pool balance).
         }
     }
 
@@ -405,20 +406,21 @@ contract OutrunStakingPositionInvariantTest is StdInvariant, Test {
 
     /**
      * @notice Invariant 2: Wrap pool accounting bounds (rate-independent)
-     * @dev The wrap pool is INTENTIONALLY allowed to be temporarily undercollateralized
-     * when the exchange rate moves — wrapRedeem reverts over-releases and harvestWrapYield
-     * only removes excess SY above the debt ceiling. A collateral ratio is therefore NOT
-     * a valid invariant (it tracks the external rate). We assert only that the two
-     * accounting quantities stay within legal, non-wrapped-around bounds.
+     * @dev The wrap pool can be temporarily undercollateralized when the exchange rate
+     * drops — wrapRedeem then pays pro-rata (each uAsset redeems syWrapStaking/wrapUAssetDebt
+     * SY) instead of reverting, and harvestWrapYield only removes excess SY above the debt
+     * ceiling. A collateral ratio is therefore NOT a valid invariant (it tracks the external
+     * rate). We assert only that the two accounting quantities stay within legal,
+     * non-wrapped-around bounds.
      */
     function invariant_wrapPoolAccountingBounded() public view {
         uint256 syWrap = position.syWrapStaking();
         uint256 wrapDebt = position.wrapUAssetDebt();
 
-        // underflow 回绕的 syWrap 会接近 2^256,必然超过 syTotalStaking。
+        // An underflow-wrapped syWrap approaches 2^256 and necessarily exceeds syTotalStaking.
         assertLe(syWrap, position.syTotalStaking(), "Invariant violation: syWrapStaking > syTotalStaking");
 
-        // wrapUAssetDebt 是 position 合约净铸币的一部分(见 invariant 4),不能超过净额。
+        // wrapUAssetDebt is part of the position contract's net minted amount (see invariant 4) and cannot exceed it.
         (, uint256 positionNetMinted) = uAsset.mintingStatusTable(address(position));
         assertLe(wrapDebt, positionNetMinted, "Invariant violation: wrapUAssetDebt > position net minted");
     }
@@ -454,12 +456,12 @@ contract OutrunStakingPositionInvariantTest is StdInvariant, Test {
             }
         }
 
-        // position 合约的净铸币(按 minter 账本)。读 mintingStatusTable[address(position)]
-        // 而非 totalSupply() —— handler 在 redeem/keepRedeem 时直接 mint uAsset 给 actor/keeper
-        // 补 burn 余额,会污染 totalSupply;per-minter 账本隔离了 position 合约的净额。
+        // The position contract's net minted amount (per-minter ledger). Read mintingStatusTable[address(position)]
+        // instead of totalSupply() — the handler mints uAsset directly to actor/keeper on redeem/keepRedeem
+        // to top up burned balances, which would pollute totalSupply; the per-minter ledger isolates the position's net amount.
         (, uint256 positionNetMinted) = uAsset.mintingStatusTable(address(position));
 
-        // position 合约的净铸币必须等于当前 outstanding 的 position debt + wrap debt。
+        // The position contract's net minted amount must equal the currently outstanding position debt + wrap debt.
         assertEq(
             positionNetMinted,
             totalPositionDebt + position.wrapUAssetDebt(),
