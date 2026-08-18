@@ -77,7 +77,7 @@ docs/review/<YYYY-MM-DD>-codebase-multiround-review.md
 
 ## 停止条件
 
-- 单批停止：该批内连续两轮「跨轮去重后且验真为真、过滤误报后」的新确认 finding 数均为 0。仅一轮为 0 不足以停止；中间任一轮出现新问题即重新计数。新确认 finding 计数只统计 Blocking/Major/Minor；Info（已证明但可忽略）不重置计数。
+- 单批停止：该批内连续两轮「跨轮去重后且验真为真、过滤误报后」的新确认 finding 数均为 0。仅一轮为 0 不足以停止；中间任一轮出现新问题即重新计数。新确认 finding 计数只统计 Blocking/Major/Minor；**Info（已证明但可忽略，对产品以及代码逻辑无实际影响）**不重置计数。
 - 该批收敛后，进入下一批；Phase 0 对新模块重新建模。
 - 全部批次收敛后，再跑一轮全库 cross-batch：以所有已确认 finding 为输入，专门寻找跨模块交互（调用方 / 被调用方 / 共享状态 / 共享 token）引入的新问题。该轮同样适用误报过滤。连续两轮 cross-batch 无新 finding 即整体停止（同样只统计 Blocking/Major/Minor）。
 - 不得机械跑固定轮数；每轮须比上一轮深化，寻找前轮遗漏的新问题。
