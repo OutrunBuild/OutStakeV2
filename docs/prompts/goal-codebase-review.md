@@ -3,10 +3,15 @@
 核心铁律：Review-only，严禁修复。全程不得 Edit/Write 任何 `src/test/script/docs/spec` 代码或 `.harness` 配置；不得 `git add/commit/push`；唯一允许写入的是下述审查报告文档本身。被派发的 subagent 同样只读、不改文件、不跑修复命令。
 
 审查单位与分批策略：
-- 审查以「模块」为批次单位。仓库模块即 `src/` 的顶层子目录：`common / credit / governance / interoperation / polend / swap / token / verse / yield`。
-- 每批覆盖一个或一组紧耦合模块（如 `polend` 与其 `test`、`docs/spec/polend` 一批；`swap` 与 `docs/spec/swap` 一批），以最小化跨批上下文重建。
-- 批次顺序由依赖底向上：先 `common`，再 `token`，再各业务模块（`polend`、`swap`、`verse`、`yield`、`credit`、`governance`、`interoperation`）。每批独立多轮收敛。
-- 批内主审查对象是 `src/<module>/**`；为核对影响，主会话与 subagent 可只读查看任何与之直接相关的既有 `src/`、`test/`、`docs/spec/`、接口、调用方与配置。
+- 审查以「模块」为批次单位，但模块清单必须以当前 HEAD 的实际目录为真源：先枚举 `src/` 的顶层目录及其已提交文件，再确定批次；不得从本提示词中的预设名称反推不存在的模块，也不得为不存在的目录创建空批次。缺失的预设模块记录为“当前仓库无对应目录”。
+- 每批覆盖一个或一组紧耦合模块，以及与之直接相关的 `test/`、`script/`、`docs/spec/`、接口、调用方和配置；例如外部协议 ABI 仅作为 `yield` adapter 的直接依赖时，与 `yield` 放在同一批，避免重复建模和跨批上下文丢失。
+- 当前仓库的实际分批与顺序为：
+  1. `src/libraries/` + `src/assets/`：common foundations、TokenHelper、uAsset、OFT、oracle libraries；
+  2. `src/position/`：staking position、keeper、uAsset/SY accounting；
+  3. `src/router/`：Router registry、token/SY/position/genesis 组合入口；
+  4. `src/yield/` + `src/integrations/`：SY base、全部 yield adapters 及其外部协议 interfaces。
+- 上述顺序按当前代码依赖与状态承载关系从基础层到组合层排列；若枚举结果或依赖图发生变化，先更新本批文件清单和 Phase 0，再决定顺序，不沿用过时的固定模块名。每批独立多轮收敛，全部批次结束后再运行 cross-batch Review。
+- 批内主审查对象是实际存在的 `src/<module>/**`；为核对影响，主会话与 subagent 可只读查看任何与之直接相关的既有 `src/`、`test/`、`docs/spec/`、接口、调用方与配置。
 - 既有缺陷必须作为 finding 报告：可独立复现或能以严密状态推导证明的正确性、产品语义、不变量、权限、资金流或安全缺陷，一律纳入，不因「原本就这样」排除。
 
 ## Phase 0 — 全局建模（首轮前置，跨批复用）
@@ -51,6 +56,7 @@
 - 本轮去重：多个角度命中同一问题的合并为一，保留贡献角度列表。
 - 逐条核对证据：贴出基线代码片段，给出可验证的触发路径或状态推导，锚定 `文件::符号名`。
 - 影响评判：按 docs/prompts/finding-impact-scheme.md 锚表定维度、定档（Blocking/Major/Minor/Info），再按 Reachability（无条件/有条件/高门槛/假设路径）修正，只降不升。确认前必须写出 Impact Statement（谁 × 什么状态下 × 哪个维度 × 程度多大）；写不出 → 丢弃。命中排除清单（个人风格、行数削减、投机性 Gas、无证明的理论影响、不掩盖真实 bug 的测试覆盖缺口等）→ 丢弃并记录理由。既有缺陷（预存问题）与本批新引入的问题适用同一评判，不因位于基线而降档或丢弃。
+- Info 二次筛选：Info 不是“低严重度占位符”。只有经过独立复核、存在可验证的低程度但真实影响，并且属于产品功能、架构/升级兼容、集成可用性、数据/事件语义或明确的安全/工程最佳实践约束，才可进入正式 finding 列表。以下候选直接放入 rejected/备注，不作为 finding：纯注释/文案偏好；未来维护者“可能误改”的假设；只改善错误诊断或 ABI 解码便利、但没有具体消费者；无差分 benchmark 的微小 Gas；无效输入的参数提示；测试/evidence ergonomics；与产品、架构、调用方均无实际影响的建议。正式 finding 的 Impact Statement 必须写出真实受影响方、可达状态与结果；只有可读性、维护、文档或事件 API 提示且缺乏实质影响时，明确标记为 `Info 备注（不计正式 finding）`；证据不足的候选标记 UNPROVEN 或 rejected，不得用 Info 掩盖证据不足。
 - 误报过滤：对每条候选主动构造反驳——是否真违反不变量？触发路径是否可达？是否被上游检查 / 权限 / 已有断言阻断？是否只是风格偏好而无具体可证明的影响？
   - 无法自证为真、证据矛盾、无法建立触发路径、或仅凭风格偏好的候选，丢弃并记录理由。
   - Gas 候选必须给出实际节省证据（存储槽差、操作数差），否则丢弃。
@@ -77,7 +83,7 @@ docs/review/<YYYY-MM-DD>-codebase-multiround-review.md
 
 ## 停止条件
 
-- 单批停止：该批内连续两轮「跨轮去重后且验真为真、过滤误报后」的新确认 finding 数均为 0。仅一轮为 0 不足以停止；中间任一轮出现新问题即重新计数。新确认 finding 计数只统计 Blocking/Major/Minor；**Info（已证明但可忽略，对产品以及代码逻辑无实际影响）**不重置计数。
+- 单批停止：该批内连续两轮「跨轮去重后且验真为真、过滤误报后」的新确认 finding 数均为 0。仅一轮为 0 不足以停止；中间任一轮出现新问题即重新计数。新确认 finding 数只统计 Blocking/Major/Minor；只有通过 Info 二次筛选、且确有低程度真实影响的 Info 才属于 finding，Info 不重置计数；被过滤或标记 UNPROVEN 的 Info 不进入 finding 列表。
 - 该批收敛后，进入下一批；Phase 0 对新模块重新建模。
 - 全部批次收敛后，再跑一轮全库 cross-batch：以所有已确认 finding 为输入，专门寻找跨模块交互（调用方 / 被调用方 / 共享状态 / 共享 token）引入的新问题。该轮同样适用误报过滤。连续两轮 cross-batch 无新 finding 即整体停止（同样只统计 Blocking/Major/Minor）。
 - 不得机械跑固定轮数；每轮须比上一轮深化，寻找前轮遗漏的新问题。
@@ -95,6 +101,8 @@ docs/review/<YYYY-MM-DD>-codebase-multiround-review.md
 - 每个模块的资金流图、数学模型、状态机、路径空间、不变量清单，或标注「缺口」。
 
 ### 累积 finding 列表（跨批跨轮混合，不分组）
+
+- 列表只保留通过影响评判与 Info 二次筛选的正式 finding；经过审查但缺乏实质影响的低优先项，可在同一报告中明确标注为 `Info 备注（不计正式 finding）` 以保留审查痕迹；rejected 候选和 UNPROVEN 候选不混入累积列表。
 
 每条 finding：
 - 编号；
